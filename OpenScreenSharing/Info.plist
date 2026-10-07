@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- What only the Server tab needs is in DEBUG || SIDELOAD blocks: App Store builds leave the tab out (see ServerFeature) and ask for none of it. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>vnc URL</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vnc</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Screen Sharing sends your voice to the Mac.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_rfb._tcp</string>
+		<string>_device-info._tcp</string>
+#if DEBUG || SIDELOAD
+		<string>_remotepairing._tcp</string>
+		<string>_remotepairing-pairable-host._tcp</string>
+#endif
+	</array>
+#if DEBUG || SIDELOAD
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).pairing.*</string>
+	</array>
+#endif
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Screen Sharing saves screenshots to your photo library.</string>
+#if DEBUG || SIDELOAD
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Screen Sharing gets your approximate location only to keep sharing this device’s screen while you use other apps or the device is locked. It doesn’t keep your location or send it anywhere.</string>
+#endif
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+#if DEBUG || SIDELOAD
+		<string>location</string>
+#endif
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Screen Sharing finds and connects to Macs on your local network.</string>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

@@ -1,0 +1,222 @@
+package coredevice
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/netip"
+	"sync"
+
+	"github.com/google/uuid"
+	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/pairing"
+	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/rsd"
+	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/tunnel"
+	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
+)
+
+const checkinLabel = "open-screen-sharing"
+
+type DeviceInfo struct {
+	UDID         string
+	ProductType  string
+	OSVersion    string
+	BuildVersion string
+	DeviceClass  string
+	ECID         uint64
+	Properties   map[string]any
+}
+
+type Device struct {
+	tunnel    *tunnel.Tunnel
+	session   *pairing.Session
+	rsdConn   *xpc.Conn
+	services  map[string]uint16
+	info      DeviceInfo
+	logger    *slog.Logger
+	done      chan struct{}
+	closeOnce sync.Once
+	err       error
+}
+
+func newDevice(ctx context.Context, tun *tunnel.Tunnel, session *pairing.Session, identity uuid.UUID, logger *slog.Logger) (*Device, error) {
+	d := &Device{
+		tunnel:  tun,
+		session: session,
+		logger:  logger,
+		done:    make(chan struct{}),
+	}
+	err := d.handshake(ctx, identity)
+	if err != nil {
+		d.fail(err)
+		return nil, err
+	}
+	go d.watch()
+	return d, nil
+}
+
+func (d *Device) handshake(ctx context.Context, identity uuid.UUID) error {
+	port := d.tunnel.Parameters().ServerRSDPort
+	if port == 0 {
+		port = rsd.Port
+	}
+	conn, err := d.tunnel.DialTCP(ctx, port)
+	if err != nil {
+		return fmt.Errorf("connect to RSD: %w", err)
+	}
+	d.rsdConn, err = xpc.NewConn(ctx, conn, d.logger)
+	if err != nil {
+		return fmt.Errorf("connect to RSD: %w", err)
+	}
+	peer, err := rsd.Handshake(ctx, d.rsdConn, identity)
+	if err != nil {
+		return err
+	}
+	d.services = peer.Services
+	properties := peer.Properties
+	d.info = DeviceInfo{Properties: properties}
+	d.info.UDID, _ = properties["UniqueDeviceID"].(string)
+	d.info.ProductType, _ = properties["ProductType"].(string)
+	d.info.OSVersion, _ = properties["OSVersion"].(string)
+	d.info.BuildVersion, _ = properties["BuildVersion"].(string)
+	d.info.DeviceClass, _ = properties["DeviceClass"].(string)
+	switch ecid := properties["UniqueChipID"].(type) {
+	case uint64:
+		d.info.ECID = ecid
+	case int64:
+		d.info.ECID = uint64(ecid)
+	}
+	d.logger.Debug("connected to device",
+		slog.String("udid", d.info.UDID),
+		slog.String("product_type", d.info.ProductType),
+		slog.String("os_version", d.info.OSVersion),
+		slog.Uint64("protocol_version", peer.MessagingProtocolVersion),
+		slog.Int("services", len(d.services)))
+	return nil
+}
+
+func (d *Device) watch() {
+	if d.session != nil {
+		go func() {
+			err := d.session.Wait()
+			d.fail(fmt.Errorf("remote pairing connection closed: %w", err))
+		}()
+	}
+	go func() {
+		for {
+			message, err := d.rsdConn.ReceiveMessage(context.Background())
+			if err != nil {
+				select {
+				case <-d.done:
+				default:
+					d.logger.Debug("RSD connection closed", slog.Any("error", err))
+				}
+				return
+			}
+			// iPad17,1 on iPadOS 27.2 (24B5099f) sent StartTls with
+			// YesNo=false and TlsPolicy=1 in the captured RSD exchange.
+			if message.Body["MessageType"] == "StartTls" && message.Body["YesNo"] == true {
+				d.logger.Warn("the device asks for TLS on the RSD connection, which is not supported", slog.Any("body", message.Body))
+				continue
+			}
+			d.logger.Debug("RSD message", slog.Any("flags", message.Flags), slog.Any("body", message.Body))
+		}
+	}()
+	select {
+	case <-d.tunnel.Done():
+		d.fail(fmt.Errorf("tunnel closed: %w", d.tunnel.Err()))
+	case <-d.done:
+	}
+}
+
+func (d *Device) fail(err error) {
+	d.closeOnce.Do(func() {
+		d.logger.Debug("device connection closed", slog.Any("error", err))
+		d.err = err
+		close(d.done)
+		if d.rsdConn != nil {
+			d.rsdConn.Close()
+		}
+		if d.session != nil {
+			d.session.Close()
+		}
+		d.tunnel.Close()
+	})
+}
+
+func (d *Device) Address() netip.Addr {
+	return d.tunnel.Parameters().ServerAddress
+}
+
+func (d *Device) LocalAddress() netip.Addr {
+	return d.tunnel.Parameters().ClientAddress
+}
+
+func (d *Device) Info() DeviceInfo {
+	return d.info
+}
+
+func (d *Device) HasService(name string) bool {
+	_, found := d.services[name]
+	return found
+}
+
+func (d *Device) DialService(ctx context.Context, name string) (net.Conn, error) {
+	port, found := d.services[name]
+	if !found {
+		return nil, fmt.Errorf("the device does not offer %s", name)
+	}
+	conn, err := d.tunnel.DialTCP(ctx, port)
+	if err != nil {
+		return nil, fmt.Errorf("connect to %s: %w", name, err)
+	}
+	return conn, nil
+}
+
+func (d *Device) DialXPC(ctx context.Context, name string) (*xpc.Conn, error) {
+	conn, err := d.DialService(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	xpcConn, err := xpc.NewConn(ctx, conn, d.logger)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return xpcConn, nil
+}
+
+func (d *Device) DialShim(ctx context.Context, name string) (*rsd.PlistConn, error) {
+	conn, err := d.DialService(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	plistConn := rsd.NewPlistConn(conn)
+	err = plistConn.Checkin(ctx, checkinLabel)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return plistConn, nil
+}
+
+func (d *Device) ListenUDP(port uint16) (*tunnel.UDPConn, error) {
+	return d.tunnel.ListenUDP(port)
+}
+
+func (d *Device) Close() error {
+	d.fail(net.ErrClosed)
+	return nil
+}
+
+func (d *Device) Done() <-chan struct{} {
+	return d.done
+}
+
+func (d *Device) Err() error {
+	select {
+	case <-d.done:
+		return d.err
+	default:
+		return nil
+	}
+}

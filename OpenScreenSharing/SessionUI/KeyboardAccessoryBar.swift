@@ -1,0 +1,286 @@
+import SwiftUI
+
+struct KeyboardAccessoryBar: View {
+    @ObservedObject var controller: SessionController
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            GlassEffectContainerCompat(spacing: 10) {
+                HStack(spacing: 10) {
+                    if let composing = controller.composingText {
+                        group {
+                            Text(verbatim: composing)
+                                .underline()
+                                .padding(.horizontal, 8)
+                                .frame(minHeight: 44)
+                        }
+                    }
+                    if controller.usesHardwareKeyboard {
+                        group {
+                            if let source = controller.keyboardSource {
+                                inputSourceMenu(source)
+                            } else {
+                                key("Globe Key", systemImage: "globe") { controller.sendChord(.globe) }
+                            }
+                        }
+                    }
+                    group {
+                        key("Escape", text: "esc", key: .escape)
+                        key("Tab", systemImage: "arrow.right.to.line", key: .tab)
+                        ForEach(ModifierKey.allCases, id: \.self) { modifier in
+                            ModifierKeyButton(controller: controller, modifier: modifier)
+                        }
+                    }
+                    group {
+                        key("Left Arrow", systemImage: "arrowtriangle.left.fill", key: .left)
+                        key("Up Arrow", systemImage: "arrowtriangle.up.fill", key: .up)
+                        key("Down Arrow", systemImage: "arrowtriangle.down.fill", key: .down)
+                        key("Right Arrow", systemImage: "arrowtriangle.right.fill", key: .right)
+                    }
+                    group {
+                        functionKeysMenu
+                        moreKeysMenu
+                    }
+                    if UIDevice.current.userInterfaceIdiom == .phone {
+                        group {
+                            key("Hide Keyboard", systemImage: "keyboard.chevron.compact.down") {
+                                controller.setKeyboardVisible(false)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.plain)
+        .font(.body.weight(.medium))
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .frame(height: 64)
+    }
+
+    private func group(@ViewBuilder content: () -> some View) -> some View {
+        HStack(spacing: 2) {
+            content()
+        }
+        .padding(.horizontal, 6)
+        .glassEffectCompat(in: Capsule())
+    }
+
+    private func key(_ title: String.LocalizationValue, systemImage: String, key: MacKey) -> some View {
+        self.key(title, systemImage: systemImage) { controller.typeKey(key) }
+    }
+
+    private func key(_ title: String.LocalizationValue, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(String(localized: title), systemImage: systemImage)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .hoverEffect()
+        .accessibilityShowsLargeContentViewer()
+    }
+
+    private func key(_ title: String.LocalizationValue, text: String, key: MacKey) -> some View {
+        Button {
+            controller.typeKey(key)
+        } label: {
+            Text(verbatim: text)
+                .font(.subheadline.weight(.semibold))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(String(localized: title)))
+        .hoverEffect()
+        .accessibilityShowsLargeContentViewer()
+    }
+
+    private func inputSourceMenu(_ current: MacInputSource) -> some View {
+        Menu {
+            Picker(
+                "Mac Input Source",
+                selection: Binding(get: { current }, set: { controller.selectKeyboardSource($0) })
+            ) {
+                ForEach(controller.keyboardSources) { source in
+                    Text(source.title).tag(source)
+                }
+            }
+            .pickerStyle(.inline)
+            Section {
+                Button {
+                    controller.sendChord(.globe)
+                } label: { Label("Globe Key", systemImage: "globe") }
+            }
+        } label: {
+            Group {
+                if let label = current.label {
+                    Text(verbatim: label)
+                        .font(.subheadline.weight(.semibold))
+                } else {
+                    Image(systemName: "globe")
+                }
+            }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+        } primaryAction: {
+            controller.switchKeyboardSource()
+        }
+        .disabled(controller.info.secureInput)
+        .accessibilityLabel(Text("Mac Input Source"))
+        .accessibilityValue(Text(current.title))
+        .accessibilityHint(Text("Switches the Mac to its previous input source."))
+        .hoverEffect()
+        .accessibilityShowsLargeContentViewer()
+    }
+
+    private var functionKeysMenu: some View {
+        Menu {
+            ForEach(1...12, id: \.self) { number in
+                Button("F\(number)") {
+                    controller.typeKey(.function(number))
+                }
+            }
+        } label: {
+            Text(verbatim: "F1–F12")
+                .font(.subheadline.weight(.semibold))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text("Function Keys"))
+        .hoverEffect()
+        .accessibilityShowsLargeContentViewer()
+    }
+
+    private var moreKeysSymbol: String {
+        if #available(iOS 16, *) { "arrow.up.and.down.text.horizontal" } else { "ellipsis" }
+    }
+
+    private var moreKeysMenu: some View {
+        Menu {
+            Section {
+                Button { controller.typeKey(.home) } label: { Label("Home", systemImage: "arrow.up.to.line") }
+                Button { controller.typeKey(.end) } label: { Label("End", systemImage: "arrow.down.to.line") }
+                Button { controller.typeKey(.pageUp) } label: { Label("Page Up", systemImage: "arrow.up.to.line.compact") }
+                Button { controller.typeKey(.pageDown) } label: { Label("Page Down", systemImage: "arrow.down.to.line.compact") }
+            }
+            Section {
+                Button { controller.typeKey(.forwardDelete) } label: { Label("Forward Delete", systemImage: "delete.right") }
+            }
+        } label: {
+            Label("More Keys", systemImage: moreKeysSymbol)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .hoverEffect()
+        .accessibilityShowsLargeContentViewer()
+    }
+}
+
+struct ModifierKeyButton: View {
+    private static let holdDelay: TimeInterval = 0.3
+    private static let doubleTapInterval: TimeInterval = 0.35
+
+    @ObservedObject var controller: SessionController
+    let modifier: ModifierKey
+
+    @GestureState private var isTouching = false
+    @State private var isHolding = false
+    @State private var moved = false
+    @State private var holdTask: Task<Void, Never>?
+    @State private var lastTap = Date.distantPast
+
+    private var isLocked: Bool { controller.lockedModifiers.contains(modifier) }
+    private var isActive: Bool {
+        isLocked || controller.pressedModifiers.contains(modifier) || controller.stickyModifiers.contains(modifier)
+    }
+
+    private var face: some View {
+        Label(String(localized: modifier.title), systemImage: modifier.systemImage)
+            .frame(width: 44, height: 44)
+            .foregroundStyle(isActive ? Color.white : Color.primary)
+            .background {
+                if isActive {
+                    Circle().fill(Color.accentColor).frame(width: 38, height: 38)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if isLocked {
+                    Capsule().fill(Color.white).frame(width: 12, height: 3).padding(.bottom, 9)
+                }
+            }
+            .contentShape(Circle())
+            .opacity(controller.isControlling ? 1 : 0.4)
+    }
+
+    var body: some View {
+        face
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($isTouching) { _, state, _ in state = true }
+                    .onChanged { value in
+                        if hypot(value.translation.width, value.translation.height) > 10 {
+                            moved = true
+                        }
+                    }
+                    .onEnded { _ in
+                        guard !isHolding, !moved else { return }
+                        tapped()
+                    }
+            )
+            .onChangeCompat(of: isTouching) { touching in
+                touching ? touchBegan() : touchEnded()
+            }
+            .allowsHitTesting(controller.isControlling)
+            .selectionFeedbackCompat(trigger: isActive)
+            .hoverEffect()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(String(localized: modifier.title)))
+            .accessibilityValue(Text(String(localized: accessibilityValue)))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(isActive ? AccessibilityTraits.isSelected : [])
+            .accessibilityHint(Text("Applies to the next key or click."))
+            .accessibilityAction { controller.toggleSticky(modifier) }
+            .accessibilityAction(named: Text(isLocked ? "Unlock" : "Lock")) { controller.setModifier(modifier, locked: !isLocked) }
+            .accessibilityShowsLargeContentViewer {
+                Label(String(localized: modifier.title), systemImage: modifier.systemImage)
+            }
+            .disabled(!controller.isControlling)
+    }
+
+    private var accessibilityValue: String.LocalizationValue {
+        if isLocked { return "Locked" }
+        if isActive { return "On" }
+        return "Off"
+    }
+
+    private func touchBegan() {
+        moved = false
+        holdTask = Task {
+            try? await Task.sleep(seconds: Self.holdDelay)
+            guard !Task.isCancelled, !moved else { return }
+            isHolding = true
+            controller.setModifier(modifier, pressed: true)
+        }
+    }
+
+    private func touchEnded() {
+        holdTask?.cancel()
+        holdTask = nil
+        guard isHolding else { return }
+        isHolding = false
+        controller.setModifier(modifier, pressed: false)
+    }
+
+    private func tapped() {
+        let now = Date()
+        if isLocked {
+            controller.setModifier(modifier, locked: false)
+        } else if now.timeIntervalSince(lastTap) < Self.doubleTapInterval, controller.stickyModifiers.contains(modifier) {
+            controller.setModifier(modifier, locked: true)
+        } else {
+            controller.toggleSticky(modifier)
+        }
+        lastTap = now
+    }
+}

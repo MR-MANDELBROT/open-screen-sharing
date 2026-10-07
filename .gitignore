@@ -1,0 +1,10 @@
+/.idea/
+/Frameworks/
+xcuserdata/
+.DS_Store
+/build/
+CLAUDE.md
+AGENTS.md
+/.claude/
+/.mcp.json
+/screenshots/

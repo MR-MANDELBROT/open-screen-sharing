@@ -1,0 +1,216 @@
+package media
+
+import (
+	"encoding/binary"
+	"math"
+	"time"
+)
+
+const (
+	rtcpFullIntraRequest = 192
+	rtcpSenderReport     = 200
+	rtcpReceiverReport   = 201
+	rtcpApplication      = 204
+	maxReportBlocks      = 8
+)
+
+type receptionStats struct {
+	started          bool
+	baseSequence     uint32
+	highestSequence  uint32
+	received         uint32
+	expectedPrior    uint32
+	receivedPrior    uint32
+	jitter           float64
+	lastTransit      float64
+	lastSenderReport uint32
+	senderReportAt   time.Time
+	lastPacketAt     time.Time
+}
+
+func (r *receptionStats) record(sequence uint16, timestamp uint32, clockRate float64, arrival time.Time) uint32 {
+	r.lastPacketAt = arrival
+	if !r.started {
+		r.started = true
+		r.baseSequence = uint32(sequence)
+		r.highestSequence = uint32(sequence)
+		r.received = 1
+		r.lastTransit = float64(arrival.UnixNano())/1e9*clockRate - float64(timestamp)
+		return 1
+	}
+	previousHighest := r.highestSequence
+	cycles := r.highestSequence &^ 0xffff
+	highest := uint16(r.highestSequence)
+	if sequenceNewer(sequence, highest) {
+		if sequence < highest {
+			cycles += 1 << 16
+		}
+		r.highestSequence = cycles | uint32(sequence)
+	}
+	r.received++
+	transit := float64(arrival.UnixNano())/1e9*clockRate - float64(timestamp)
+	difference := math.Abs(transit - r.lastTransit)
+	r.lastTransit = transit
+	if difference < clockRate*10 {
+		r.jitter += (difference - r.jitter) / 16
+	}
+	return r.highestSequence - previousHighest
+}
+
+func (r *receptionStats) appendBlock(out []byte, ssrc uint32, now time.Time) []byte {
+	expected := r.highestSequence - r.baseSequence + 1
+	lost := int64(expected) - int64(r.received)
+	lost = min(max(lost, -0x800000), 0x7fffff)
+	expectedInterval := expected - r.expectedPrior
+	receivedInterval := r.received - r.receivedPrior
+	r.expectedPrior = expected
+	r.receivedPrior = r.received
+	var fraction uint8
+	if expectedInterval > 0 && expectedInterval > receivedInterval {
+		fraction = uint8(uint64(expectedInterval-receivedInterval) * 256 / uint64(expectedInterval))
+	}
+	var delaySinceReport uint32
+	if !r.senderReportAt.IsZero() {
+		delaySinceReport = uint32(now.Sub(r.senderReportAt).Seconds() * 65536)
+	}
+	out = binary.BigEndian.AppendUint32(out, ssrc)
+	out = binary.BigEndian.AppendUint32(out, uint32(fraction)<<24|uint32(lost)&0xffffff)
+	out = binary.BigEndian.AppendUint32(out, r.highestSequence)
+	out = binary.BigEndian.AppendUint32(out, uint32(r.jitter))
+	out = binary.BigEndian.AppendUint32(out, r.lastSenderReport)
+	out = binary.BigEndian.AppendUint32(out, delaySinceReport)
+	return out
+}
+
+func appendReceiverReport(out []byte, sender uint32, sources map[uint32]*receptionStats, now time.Time) []byte {
+	start := len(out)
+	out = append(out, make([]byte, 8)...)
+	count := 0
+	for ssrc, stats := range sources {
+		if count == maxReportBlocks || now.Sub(stats.lastPacketAt) > 5*time.Second {
+			continue
+		}
+		out = stats.appendBlock(out, ssrc, now)
+		count++
+	}
+	report := out[start:]
+	report[0] = 0x80 | byte(count)
+	report[1] = rtcpReceiverReport
+	binary.BigEndian.PutUint16(report[2:], uint16(len(report)/4-1))
+	binary.BigEndian.PutUint32(report[4:], sender)
+	return out
+}
+
+// AVConference checks the first RTCP header before SRTCP authentication. With
+// reduced-size RTCP disabled, only SR, RR or APP may lead a datagram; a bare FIR
+// is rejected. Verified in RTCPParseVCPacket on macOS 27.0.1 (26A434),
+// 0x1c0ebf404–0x1c0ebf53c, and 27.2 (26B5101f), 0x1c0539ae4–0x1c0539c1c.
+func appendKeyframeRequest(out []byte, sender uint32, sources map[uint32]*receptionStats, now time.Time) []byte {
+	return appendFullIntraRequest(appendReceiverReport(out, sender, sources, now), sender)
+}
+
+// iShareScreen sends the LTR acknowledgment as APP with a 32-bit value 5
+// in the name slot followed by the picture identifier (e6db321, protocol/rtcp.py).
+func appendReferenceAcknowledgment(out []byte, sender uint32, order uint16) []byte {
+	out = append(out, 0x80, rtcpApplication, 0, 3)
+	out = binary.BigEndian.AppendUint32(out, sender)
+	out = binary.BigEndian.AppendUint32(out, 5)
+	return binary.BigEndian.AppendUint32(out, uint32(order))
+}
+
+func appendFullIntraRequest(out []byte, sender uint32) []byte {
+	// AVConference RTPSendRTCP writes PT 192, length 1 and the sender SSRC when
+	// the legacy FIR entry count is zero: macOS 27.0.1 (26A434), 0x1c0eba838,
+	// and 27.2 (26B5101f), 0x1c0534f18.
+	out = append(out, 0x80, rtcpFullIntraRequest, 0, 1)
+	return binary.BigEndian.AppendUint32(out, sender)
+}
+
+func rtcpPackets(compound []byte, fn func(packet []byte)) {
+	for len(compound) >= 8 {
+		length := 4 * (int(binary.BigEndian.Uint16(compound[2:])) + 1)
+		if length > len(compound) {
+			return
+		}
+		fn(compound[:length])
+		compound = compound[length:]
+	}
+}
+
+func senderReports(compound []byte, fn func(ssrc uint32, ntpMiddle uint32)) {
+	rtcpPackets(compound, func(packet []byte) {
+		if packet[1] == rtcpSenderReport && len(packet) >= 28 {
+			fn(binary.BigEndian.Uint32(packet[4:]), binary.BigEndian.Uint32(packet[10:]))
+		}
+	})
+}
+
+type rateFeedback struct {
+	epoch           time.Time
+	haveSample      bool
+	sampleTimestamp uint32
+	sampleArrival   time.Time
+	sampleReceived  uint32
+	received        uint32
+	delay           owrdEstimator
+	burstLoss       uint32
+	highest         map[uint32]uint16
+	videoArrived    bool
+}
+
+func newRateFeedback(now time.Time) rateFeedback {
+	return rateFeedback{epoch: now, highest: make(map[uint32]uint16)}
+}
+
+func (f *rateFeedback) record(ssrc uint32, sequence uint16, timestamp uint32, arrival time.Time) {
+	if highest, seen := f.highest[ssrc]; !seen {
+		if len(f.highest) >= maxTrackedVideoSSRC {
+			clear(f.highest)
+		}
+		f.highest[ssrc] = sequence
+	} else if step := sequence - highest; step != 0 && step <= 0x7ffe {
+		f.burstLoss = max(f.burstLoss, uint32(step)-1)
+		f.highest[ssrc] = sequence
+	}
+	if !f.haveSample || f.sampleTimestamp-timestamp > 0x7ffffffe {
+		f.haveSample = true
+		f.sampleTimestamp = timestamp
+		f.sampleArrival = arrival
+		f.sampleReceived = f.received
+		milliseconds := uint32(uint64(arrival.Sub(f.epoch).Milliseconds()))
+		f.delay.sample(timestamp, videoClockRate, milliseconds)
+	}
+	f.received++
+}
+
+func (f *rateFeedback) restart() {
+	*f = newRateFeedback(f.epoch)
+}
+
+func (f *rateFeedback) appendReport(out []byte, sender uint32, now time.Time) ([]byte, bool) {
+	if !f.haveSample || !f.videoArrived {
+		return out, false
+	}
+	// AVConference sendRateControlFeedback uses serializer configuration
+	// {2,1,1,1,0,0,0,0} and RTP >> 8 for low-precision echo
+	// (macOS 27.0.1 26A434, 0x1c1189ec8; 27.2 26B5101f, 0x1c0806670).
+	// On 26A434 the clock uses 1024 ticks per second, and the serializer returned
+	// 85000004123400000000007e0081040035670000 for echo=0x1234, loss=3,
+	// count=0x567, arrival=126, clock=129, packed delay=1024.
+	start := len(out)
+	out = append(out, make([]byte, 32)...)
+	report := out[start:]
+	copy(report, []byte{0x80, rtcpApplication, 0, 7})
+	binary.BigEndian.PutUint32(report[4:], sender)
+	copy(report[8:], "RCTL")
+	copy(report[12:], []byte{0x85, 0, 0, 4})
+	binary.BigEndian.PutUint16(report[16:], uint16(f.sampleTimestamp>>8))
+	sinceArrival := min(max(now.Sub(f.sampleArrival)/time.Millisecond, 0), math.MaxUint16)
+	binary.BigEndian.PutUint16(report[22:], uint16(sinceArrival))
+	clock := int64(now.Sub(f.epoch).Seconds() * 1024)
+	binary.BigEndian.PutUint16(report[24:], uint16(clock))
+	binary.BigEndian.PutUint16(report[26:], uint16(min(saturatingUint32(f.delay.value*8192), math.MaxUint16)))
+	binary.BigEndian.PutUint16(report[28:], uint16(min(f.burstLoss, 15)<<12|f.sampleReceived&0xfff))
+	f.burstLoss = 0
+	return out, true
+}

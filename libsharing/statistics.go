@@ -1,0 +1,91 @@
+package libsharing
+
+import (
+	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+)
+
+type Statistics struct {
+	RoundTripMilliseconds float64
+
+	ReceivedBytes int64
+
+	Encoding string
+
+	HighPerformance bool
+
+	VideoPackets         int64
+	VideoPacketsExpected int64
+
+	VideoBytes int64
+
+	VideoAccessUnits int64
+	VideoFrames      int64
+	VideoLosses      int64
+
+	KeyframeRequests int64
+
+	QueueDelayMilliseconds float64
+
+	PlayoutDelayMilliseconds float64
+
+	LateVideoPackets int64
+}
+
+func (s *Session) Statistics() *Statistics {
+	statistics := &Statistics{}
+	if encoding := s.pictureEncoding.Load(); encoding != 0 {
+		statistics.Encoding = encodingName(rfb.Encoding(encoding - 1))
+	}
+	client, err := s.connected()
+	if err != nil {
+		return statistics
+	}
+	info, known := client.ConnectionInfo()
+	if known {
+		statistics.RoundTripMilliseconds = float64(info.RoundTrip.Microseconds()) / 1000
+		statistics.ReceivedBytes = int64(info.ReceivedBytes)
+	}
+	stream := client.MediaStream()
+	if stream == nil {
+		return statistics
+	}
+	streamStatistics := stream.Stats()
+	statistics.ReceivedBytes += int64(streamStatistics.VideoBytes + streamStatistics.AudioBytes)
+	statistics.HighPerformance = true
+	statistics.VideoPackets = int64(streamStatistics.VideoPackets)
+	statistics.VideoPacketsExpected = int64(streamStatistics.VideoPacketsExpected)
+	statistics.VideoBytes = int64(streamStatistics.VideoBytes)
+	statistics.VideoAccessUnits = int64(streamStatistics.VideoAccessUnitsReceived)
+	statistics.VideoFrames = int64(streamStatistics.VideoFrames)
+	statistics.VideoLosses = int64(streamStatistics.VideoLosses)
+	statistics.KeyframeRequests = int64(streamStatistics.KeyframeRequests)
+	statistics.QueueDelayMilliseconds = float64(streamStatistics.OneWayDelay.Microseconds()) / 1000
+	statistics.PlayoutDelayMilliseconds = float64(streamStatistics.VideoPlayoutDelay.Microseconds()) / 1000
+	statistics.LateVideoPackets = int64(streamStatistics.VideoLatePackets)
+	return statistics
+}
+
+func encodingName(encoding rfb.Encoding) string {
+	switch encoding {
+	case rfb.EncodingRaw:
+		return "Raw"
+	case rfb.EncodingCopyRect:
+		return "CopyRect"
+	case rfb.EncodingHextile:
+		return "Hextile"
+	case rfb.EncodingZlib:
+		return "Zlib"
+	case rfb.EncodingZRLE:
+		return "ZRLE"
+	case rfb.EncodingAppleHalftone:
+		return "Halftone"
+	case rfb.EncodingAppleGray:
+		return "Gray"
+	case rfb.EncodingAppleThousands:
+		return "Thousands"
+	case rfb.EncodingMVS:
+		return "MVS"
+	default:
+		return encoding.String()
+	}
+}

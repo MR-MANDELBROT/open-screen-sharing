@@ -1,0 +1,342 @@
+import CoreGraphics
+import CoreVideo
+import Foundation
+
+nonisolated enum ScreenPicture: Equatable {
+    case none
+    case previous(PictureChange)
+    case current
+}
+
+nonisolated enum PictureChange: Equatable {
+    case reconnection
+    case resize
+    case videoStart
+    case videoEnd
+}
+
+nonisolated final class DisplayPipeline: @unchecked Sendable {
+    struct Snapshot {
+        var pixelBuffer: CVPixelBuffer?
+        var strips: [CVPixelBuffer?] = []
+        var stripHeight: Int = 0
+        var canvasHeight: Int = 0
+        var width: Int
+        var height: Int
+        var cursor: CursorShape?
+        var cursorPosition: CGPoint
+        var cursorVisible: Bool
+        var generation: Int
+        var pictureGeneration: Int?
+        var presentationEpoch: Int
+        var turns = PictureTurns.none
+    }
+
+    private struct Held {
+        var pixelBuffer: CVPixelBuffer?
+        var strips: [CVPixelBuffer?]
+        var canvasHeight: Int
+        var width: Int
+        var height: Int
+        var turns: PictureTurns
+        var change: PictureChange
+    }
+
+    private struct Shown: Equatable {
+        var picture = ScreenPicture.none
+        var width = 0
+        var height = 0
+        var turns = PictureTurns.none
+    }
+
+    private let lock = NSLock()
+    private var framebuffer: Framebuffer?
+    private var framebufferUpdated = false
+    private var framebufferHasPicture = false
+    private var expectsVideo = false
+    private var holdsVideo = false
+    private var waitsForDisplay = false
+    private var held: Held?
+    private var videoFrame: CVPixelBuffer?
+    private var strips: [CVPixelBuffer?] = []
+    private var canvasHeight = 0
+    private var videoTurns = PictureTurns.none
+    private var isVideo = false
+    private var width = 0
+    private var height = 0
+    private var cursor: CursorShape?
+    private var cursorPosition = CGPoint.zero
+    private var cursorVisible = true
+    private var generation = 0
+    private var pictureGeneration = 0
+    private var presentationEpoch = 0
+    private var dirty = false
+    private var wakeHandler: (@Sendable () -> Void)?
+    private var shown = Shown()
+    private var shownHandler: (@Sendable () -> Void)?
+
+    func setWakeHandler(_ handler: (@Sendable () -> Void)?) {
+        lock.lock()
+        wakeHandler = handler
+        lock.unlock()
+    }
+
+    func setShownHandler(_ handler: (@Sendable () -> Void)?) {
+        lock.lock()
+        shownHandler = handler
+        lock.unlock()
+    }
+
+    var screenSize: (width: Int, height: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (width, height)
+    }
+
+    var currentPicture: (picture: ScreenPicture, width: Int, height: Int, turns: PictureTurns) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (shown.picture, shown.width, shown.height, shown.turns)
+    }
+
+    func isCurrentPresentation(epoch: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return epoch == presentationEpoch
+    }
+
+    func holdPicture() {
+        update {
+            presentationEpoch &+= 1
+            hold(.reconnection)
+            framebufferUpdated = false
+            framebufferHasPicture = false
+            videoFrame = nil
+            strips = []
+        }
+    }
+
+    func attachFramebuffer(_ framebuffer: Framebuffer) {
+        update {
+            presentationEpoch &+= 1
+            hold(.resize)
+            self.framebuffer = framebuffer
+            framebufferUpdated = false
+            framebufferHasPicture = false
+            isVideo = false
+            videoFrame = nil
+            strips = []
+            width = framebuffer.width
+            height = framebuffer.height
+        }
+    }
+
+    func beginVideo() {
+        update {
+            presentationEpoch &+= 1
+            hold(.videoStart)
+            isVideo = true
+            videoFrame = nil
+            strips = []
+            videoTurns = .none
+        }
+    }
+
+    func endVideo() {
+        update {
+            presentationEpoch &+= 1
+            hold(.videoEnd)
+            isVideo = false
+            videoFrame = nil
+            strips = []
+            framebufferUpdated = false
+            framebufferHasPicture = false
+            if let framebuffer {
+                width = framebuffer.width
+                height = framebuffer.height
+            }
+        }
+    }
+
+    @discardableResult
+    func setVideoFrame(_ frame: DecodedVideoFrame) -> Int? {
+        var taken: Int?
+        update {
+            guard isVideo else { return }
+            pictureGeneration &+= 1
+            taken = pictureGeneration
+            videoFrame = frame.pixelBuffer
+            strips = frame.strips.map { Optional($0) }
+            canvasHeight = frame.canvasHeight
+            videoTurns = frame.turns
+        }
+        return taken
+    }
+
+    @discardableResult
+    func markDirty() -> Int? {
+        var taken: Int?
+        update {
+            guard !isVideo else { return }
+            framebufferUpdated = true
+            guard framebufferHasPicture || !expectsVideo else { return }
+            pictureGeneration &+= 1
+            taken = pictureGeneration
+            framebufferHasPicture = true
+        }
+        return taken
+    }
+
+    func setExpectsVideo(_ expects: Bool) {
+        update {
+            expectsVideo = expects
+            guard !expects, !isVideo, framebufferUpdated, !framebufferHasPicture else { return }
+            pictureGeneration &+= 1
+            framebufferHasPicture = true
+        }
+    }
+
+    func setHoldsVideo(_ holds: Bool) {
+        update { holdsVideo = holds }
+    }
+
+    func setWaitsForDisplay(_ waits: Bool) {
+        update {
+            if waits {
+                hold(.resize)
+            }
+            waitsForDisplay = waits
+        }
+    }
+
+    func setCursor(_ cursor: CursorShape?) {
+        update { self.cursor = cursor }
+    }
+
+    func setCursorPosition(_ position: CGPoint, visible: Bool) {
+        update {
+            cursorPosition = position
+            cursorVisible = visible
+        }
+    }
+
+    func consume() -> Snapshot? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard dirty else { return nil }
+        dirty = false
+        return snapshotLocked()
+    }
+
+    func snapshot() -> Snapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return snapshotLocked()
+    }
+
+    func makeImage() -> CGImage? {
+        let snapshot = snapshot()
+        if let pixelBuffer = snapshot.pixelBuffer {
+            return PixelBufferImage.makeImage(pixelBuffer, turns: snapshot.turns)
+        }
+        return PixelBufferImage.compose(
+            strips: snapshot.strips, stripHeight: snapshot.stripHeight, canvasHeight: snapshot.canvasHeight, turns: snapshot.turns)
+    }
+
+    func makeThumbnail(maxWidth: CGFloat = 1280) -> Data? {
+        lock.lock()
+        let snapshot = shownLocked().picture == .none ? nil : snapshotLocked()
+        lock.unlock()
+        guard let snapshot else { return nil }
+        if let pixelBuffer = snapshot.pixelBuffer {
+            return PixelBufferImage.makeThumbnail(pixelBuffer, turns: snapshot.turns, maxWidth: maxWidth)
+        }
+        return PixelBufferImage.makeThumbnail(
+            strips: snapshot.strips, stripHeight: snapshot.stripHeight, canvasHeight: snapshot.canvasHeight, turns: snapshot.turns,
+            maxWidth: maxWidth)
+    }
+
+    private var hasPicture: Bool {
+        guard !waitsForDisplay else { return false }
+        return isVideo
+            ? !holdsVideo && (videoFrame != nil || !strips.isEmpty && strips.allSatisfy { $0 != nil }) : framebufferHasPicture
+    }
+
+    private var turns: PictureTurns {
+        isVideo ? videoTurns : .none
+    }
+
+    private func hold(_ change: PictureChange) {
+        guard hasPicture else { return }
+        held = Held(
+            pixelBuffer: isVideo ? videoFrame : framebuffer?.pixelBuffer, strips: isVideo ? strips : [],
+            canvasHeight: canvasHeight, width: width, height: height, turns: turns, change: change)
+    }
+
+    private func shownLocked() -> Shown {
+        if hasPicture {
+            Shown(picture: .current, width: width, height: height, turns: turns)
+        } else if let held {
+            Shown(picture: .previous(held.change), width: held.width, height: held.height, turns: held.turns)
+        } else {
+            Shown(picture: .none, width: width, height: height, turns: turns)
+        }
+    }
+
+    private static func stripHeight(_ strips: [CVPixelBuffer?]) -> Int {
+        strips.compactMap { $0 }.first.map { CVPixelBufferGetHeight($0) } ?? 0
+    }
+
+    private func snapshotLocked() -> Snapshot {
+        if !hasPicture, let held {
+            return Snapshot(
+                pixelBuffer: held.pixelBuffer,
+                strips: held.strips,
+                stripHeight: Self.stripHeight(held.strips),
+                canvasHeight: held.canvasHeight,
+                width: held.width, height: held.height, cursor: cursor, cursorPosition: cursorPosition,
+                cursorVisible: cursorVisible, generation: generation, pictureGeneration: nil, presentationEpoch: presentationEpoch,
+                turns: held.turns
+            )
+        }
+        guard hasPicture else {
+            return Snapshot(
+                width: width, height: height, cursor: cursor, cursorPosition: cursorPosition, cursorVisible: cursorVisible,
+                generation: generation, pictureGeneration: nil, presentationEpoch: presentationEpoch, turns: turns
+            )
+        }
+        let stripHeight = Self.stripHeight(strips)
+        return Snapshot(
+            pixelBuffer: isVideo ? videoFrame : framebuffer?.pixelBuffer,
+            strips: isVideo ? strips : [],
+            stripHeight: stripHeight,
+            canvasHeight: canvasHeight,
+            width: width, height: height, cursor: cursor, cursorPosition: cursorPosition,
+            cursorVisible: cursorVisible, generation: generation, pictureGeneration: hasPicture ? pictureGeneration : nil,
+            presentationEpoch: presentationEpoch, turns: turns
+        )
+    }
+
+    private func update(_ body: () -> Void) {
+        lock.lock()
+        body()
+        if hasPicture {
+            held = nil
+        }
+        generation &+= 1
+        let wasDirty = dirty
+        dirty = true
+        let handler = wakeHandler
+        let newShown = shownLocked()
+        let shownChanged = newShown != shown
+        shown = newShown
+        let shownHandler = self.shownHandler
+        lock.unlock()
+        if !wasDirty {
+            handler?()
+        }
+        if shownChanged {
+            shownHandler?()
+        }
+    }
+}

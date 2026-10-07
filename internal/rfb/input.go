@@ -1,0 +1,249 @@
+package rfb
+
+import (
+	"encoding/binary"
+	"errors"
+	"math"
+)
+
+const (
+	ButtonLeft   uint8 = 0x01
+	ButtonMiddle uint8 = 0x02
+	ButtonRight  uint8 = 0x04
+	wheelUp      uint8 = 0x08
+	wheelDown    uint8 = 0x10
+	wheelLeft    uint8 = 0x20
+	wheelRight   uint8 = 0x40
+)
+
+const (
+	KeysymShiftLeft    uint32 = 0xffe1
+	KeysymShiftRight   uint32 = 0xffe2
+	KeysymControlLeft  uint32 = 0xffe3
+	KeysymControlRight uint32 = 0xffe4
+	KeysymCapsLock     uint32 = 0xffe5
+	KeysymMetaLeft     uint32 = 0xffe7
+	KeysymMetaRight    uint32 = 0xffe8
+	KeysymAltLeft      uint32 = 0xffe9
+	KeysymAltRight     uint32 = 0xffea
+	KeysymSuperLeft    uint32 = 0xffeb
+	KeysymSuperRight   uint32 = 0xffec
+)
+
+var errObserving = errors.New("input is not sent while observing")
+
+func (c *Client) sendInput(message []byte, motion bool) error {
+	c.access.Lock()
+	if !c.inputReady {
+		if motion && c.heldMotion {
+			c.heldInput[len(c.heldInput)-1] = message
+		} else {
+			c.heldInput = append(c.heldInput, message)
+		}
+		c.heldMotion = motion
+		c.access.Unlock()
+		return nil
+	}
+	c.access.Unlock()
+	return c.outbox.push(message, motion)
+}
+
+func (c *Client) releaseInput() error {
+	c.access.Lock()
+	defer c.access.Unlock()
+	held := c.heldInput
+	c.heldInput = nil
+	c.inputReady = true
+	for _, message := range held {
+		err := c.send(message)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) SendPointer(x, y int, buttons uint8) error {
+	c.access.Lock()
+	if c.mode == ModeObserve {
+		c.access.Unlock()
+		return errObserving
+	}
+	motion := buttons == c.buttons
+	c.buttons = buttons
+	wireX, wireY := c.wirePositionLocked(x, y)
+	c.access.Unlock()
+	return c.sendInput(pointerEventMessage(c.wireButtons(buttons), wireX, wireY), motion)
+}
+
+func (c *Client) wirePositionLocked(x, y int) (int, int) {
+	if c.info.Dialect != DialectApple || c.scale == 1 {
+		return x, y
+	}
+	return int(math.Round(float64(x) / c.scale)), int(math.Round(float64(y) / c.scale))
+}
+
+// ScreensharingAgent 756.36.5.2 arm64e passes each button-mask bit index as the
+// CGMouseButton: PostMouseEventIntoSession 0x10002328c..0x1000232f8 and
+// 0x1000233d0..0x1000233d4, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3.
+func (c *Client) wireButtons(buttons uint8) uint8 {
+	if c.info.Dialect != DialectApple {
+		return buttons
+	}
+	swapped := buttons &^ (ButtonMiddle | ButtonRight)
+	if buttons&ButtonMiddle != 0 {
+		swapped |= ButtonRight
+	}
+	if buttons&ButtonRight != 0 {
+		swapped |= ButtonMiddle
+	}
+	return swapped
+}
+
+const (
+	applePointsPerPulse    = 2
+	standardPointsPerPulse = 20
+	maximumPulses          = 64
+)
+
+func (c *Client) SendScroll(x, y int, deltaX, deltaY float64) error {
+	c.access.Lock()
+	if c.mode == ModeObserve {
+		c.access.Unlock()
+		return errObserving
+	}
+	buttons := c.wireButtons(c.buttons)
+	wireX, wireY := c.wirePositionLocked(x, y)
+	apple := c.info.Dialect == DialectApple
+	if c.info.Accepts(0x17) {
+		c.access.Unlock()
+		c.StopScrollMomentum()
+		return c.sendInput(scrollWheelMessage(wireX, wireY, deltaX, deltaY, scrollEvent{}), false)
+	}
+	pointsPerPulse := float64(standardPointsPerPulse)
+	if apple {
+		pointsPerPulse = applePointsPerPulse
+	}
+	c.scrollRemainderX += deltaX / pointsPerPulse
+	c.scrollRemainderY += deltaY / pointsPerPulse
+	pulsesX := int(c.scrollRemainderX)
+	pulsesY := int(c.scrollRemainderY)
+	c.scrollRemainderX -= float64(pulsesX)
+	c.scrollRemainderY -= float64(pulsesY)
+	c.access.Unlock()
+	var messages []byte
+	pulse := func(count int, positive, negative uint8) {
+		bit := positive
+		if count < 0 {
+			bit, count = negative, -count
+		}
+		for i := 0; i < min(count, maximumPulses); i++ {
+			if apple {
+				// screensharingd 756.36.5.2 arm64e scrolls only for masks exactly 8 or 16:
+				// HandlePointerEventMessage 0x100038d84..0x100038d9c,
+				// UUID 44908B06-F788-3822-ABC4-2285001F6A8D.
+				messages = append(messages, pointerEventMessage(bit, wireX, wireY)...)
+			} else {
+				messages = append(messages, pointerEventMessage(buttons|bit, wireX, wireY)...)
+			}
+			messages = append(messages, pointerEventMessage(buttons, wireX, wireY)...)
+		}
+	}
+	pulse(pulsesY, wheelUp, wheelDown)
+	if !apple {
+		pulse(pulsesX, wheelLeft, wheelRight)
+	}
+	if len(messages) == 0 {
+		return nil
+	}
+	return c.sendInput(messages, false)
+}
+
+type scrollEvent struct {
+	phase      GesturePhase
+	momentum   uint32
+	continuous bool
+}
+
+func scrollWheelMessage(x, y int, deltaX, deltaY float64, event scrollEvent) []byte {
+	const pointsPerLine = 10
+	whole := func(points float64) uint16 {
+		lines := math.Round(points / pointsPerLine)
+		if lines == 0 && points != 0 && !event.continuous {
+			lines = math.Copysign(1, points)
+		}
+		return uint16(int16(clampFloat(lines, math.MinInt16, math.MaxInt16)))
+	}
+	fixed := func(points float64) uint32 {
+		return uint32(int32(clampFloat(points/pointsPerLine*65536, math.MinInt32, math.MaxInt32)))
+	}
+	rounded := func(points float64) uint32 {
+		return uint32(int32(clampFloat(math.Round(points), math.MinInt32, math.MaxInt32)))
+	}
+	count, flags := uint32(1), uint32(0)
+	if event.continuous {
+		count, flags = 0, 2
+	}
+	body := binary.BigEndian.AppendUint16(nil, whole(deltaX))
+	body = binary.BigEndian.AppendUint16(body, whole(deltaY))
+	body = binary.BigEndian.AppendUint16(body, 0)
+	body = binary.BigEndian.AppendUint32(body, fixed(deltaX))
+	body = binary.BigEndian.AppendUint32(body, fixed(deltaY))
+	body = binary.BigEndian.AppendUint32(body, 0)
+	body = binary.BigEndian.AppendUint32(body, rounded(deltaX))
+	body = binary.BigEndian.AppendUint32(body, rounded(deltaY))
+	body = binary.BigEndian.AppendUint32(body, 0)
+	body = binary.BigEndian.AppendUint32(body, uint32(event.phase))
+	body = binary.BigEndian.AppendUint32(body, event.momentum)
+	body = binary.BigEndian.AppendUint32(body, count)
+	body = binary.BigEndian.AppendUint32(body, flags)
+	return eventMessage(1, eventScrollWheel, appendPosition(body, x, y))
+}
+
+func clampFloat(value, low, high float64) float64 {
+	return math.Min(math.Max(value, low), high)
+}
+
+func (c *Client) SendKey(keysym uint32, down bool) error {
+	if c.observing() {
+		return errObserving
+	}
+	if c.info.Dialect == DialectApple {
+		keysym = appleKeysym(keysym)
+	}
+	return c.sendKeyboard(keyEventMessage(down, keysym))
+}
+
+func appleKeysym(keysym uint32) uint32 {
+	switch keysym {
+	case KeysymAltLeft:
+		return KeysymMetaLeft
+	case KeysymAltRight:
+		return KeysymMetaRight
+	default:
+		return keysym
+	}
+}
+
+func (c *Client) SendText(text string) error {
+	var messages []byte
+	for _, character := range text {
+		keysym := uint32(character)
+		switch {
+		case character == '\n' || character == '\r':
+			keysym = 0xff0d
+		case character == '\t':
+			keysym = 0xff09
+		case character == '\b':
+			keysym = 0xff08
+		case character > 0xff:
+			keysym = 0x01000000 | uint32(character)
+		}
+		messages = append(messages, keyEventMessage(true, keysym)...)
+		messages = append(messages, keyEventMessage(false, keysym)...)
+	}
+	if c.observing() {
+		return errObserving
+	}
+	return c.sendKeyboard(messages)
+}

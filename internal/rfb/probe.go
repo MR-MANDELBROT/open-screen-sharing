@@ -1,0 +1,80 @@
+package rfb
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net"
+	"time"
+)
+
+func dial(ctx context.Context, options Options) (net.Conn, error) {
+	dialer := net.Dialer{
+		Timeout: options.DialTimeout,
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     5 * time.Second,
+			Interval: 5 * time.Second,
+			Count:    3,
+		},
+	}
+	return dialer.DialContext(ctx, "tcp", options.Address)
+}
+
+func Probe(ctx context.Context, options Options) (ServerInfo, error) {
+	return exchange(ctx, options, func(h *handshake) error {
+		err := h.negotiateVersion()
+		if err != nil {
+			return err
+		}
+		err = h.readSecurityTypes()
+		if err != nil {
+			return err
+		}
+		h.logger.Debug("probe", "version", h.info.Version.String(), "offered", fmt.Sprint(h.info.SecurityTypes))
+		return nil
+	})
+}
+
+func CheckLogin(ctx context.Context, options Options) (ServerInfo, error) {
+	return exchange(ctx, options, func(h *handshake) error {
+		err := h.negotiateVersion()
+		if err != nil {
+			return err
+		}
+		err = h.authenticate()
+		if err != nil {
+			return err
+		}
+		return h.initialize()
+	})
+}
+
+func exchange(ctx context.Context, options Options, steps func(h *handshake) error) (ServerInfo, error) {
+	logger := options.Logger
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
+	if options.DialTimeout == 0 {
+		options.DialTimeout = 15 * time.Second
+	}
+	conn, err := dial(ctx, options)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() {
+		conn.Close()
+	})
+	conn.SetDeadline(time.Now().Add(options.DialTimeout))
+	h := &handshake{conn: conn, stream: newStream(conn), options: &options, logger: logger}
+	err = steps(h)
+	if !stop() {
+		err = errors.Join(ctx.Err(), err)
+	}
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	return h.info, nil
+}

@@ -1,0 +1,519 @@
+package deviceserver
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
+	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/display"
+	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/hid"
+	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+)
+
+const (
+	startInterval     = time.Second
+	startBackoffLimit = 10 * time.Second
+	// Recorded iPad streams send RTCP sender reports about once a second (iPadOS 27.2, 24B5089g).
+	silenceLimit     = 3 * time.Second
+	parkedAudioLimit = 5 * time.Second
+	idleDelay        = time.Second
+)
+
+var errVideoSilent = errors.New("the device stopped sending video")
+
+type streamManager struct {
+	logger      *slog.Logger
+	onStreaming func(bool)
+
+	slot chan struct{}
+
+	access     sync.Mutex
+	open       map[*deviceStream]struct{}
+	closing    []*deviceStream
+	lastStart  time.Time
+	failures   int
+	parked     *deviceStream
+	streaming  bool
+	idle       *time.Timer
+	generation uint64
+	readyAt    time.Time
+}
+
+type deviceStream struct {
+	device  *coredevice.Device
+	stream  *display.Stream
+	video   bool
+	partner *deviceStream
+	closed  bool
+}
+
+func newStreamManager(logger *slog.Logger, onStreaming func(bool)) *streamManager {
+	return &streamManager{
+		logger:      logger,
+		onStreaming: onStreaming,
+		slot:        make(chan struct{}, 1),
+		open:        make(map[*deviceStream]struct{}),
+	}
+}
+
+func (m *streamManager) acquire(ctx context.Context) error {
+	select {
+	case m.slot <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (m *streamManager) release() {
+	<-m.slot
+}
+
+func (m *streamManager) stopClosing() {
+	for {
+		m.access.Lock()
+		closing := m.closing
+		m.closing = nil
+		m.access.Unlock()
+		if len(closing) == 0 {
+			return
+		}
+		for _, stream := range closing {
+			m.stop(stream.stream)
+		}
+	}
+}
+
+func (m *streamManager) stop(stream *display.Stream) {
+	err := stream.Close()
+	info := stream.Info()
+	if err != nil {
+		m.logger.Debug("stop the device's stream", "type", info.Type, "ssrc", info.SSRC, "error", err)
+	} else {
+		m.logger.Debug("stopped the device's stream", "type", info.Type, "ssrc", info.SSRC)
+	}
+}
+
+func (m *streamManager) retire(stream *deviceStream) {
+	m.access.Lock()
+	m.retireLocked(stream)
+	m.access.Unlock()
+	go func() {
+		_ = m.acquire(context.Background())
+		defer m.release()
+		m.stopClosing()
+	}()
+}
+
+func (m *streamManager) retireLocked(stream *deviceStream) {
+	if stream.closed {
+		return
+	}
+	stream.closed = true
+	delete(m.open, stream)
+	m.closing = append(m.closing, stream)
+	switch {
+	case m.parked == stream:
+		m.parked = nil
+	case m.parked != nil && m.parked.partner == stream:
+		parked := m.parked
+		m.parked = nil
+		m.retireLocked(parked)
+	}
+	if stream.video {
+		m.videoStoppedLocked()
+	}
+}
+
+func (m *streamManager) stopDevice(device *coredevice.Device) {
+	m.retireDevice(device)
+	_ = m.acquire(context.Background())
+	defer m.release()
+	m.retireDevice(device)
+	m.stopClosing()
+}
+
+func (m *streamManager) retireDevice(device *coredevice.Device) {
+	m.access.Lock()
+	defer m.access.Unlock()
+	for stream := range m.open {
+		if stream.device == device {
+			m.retireLocked(stream)
+		}
+	}
+}
+
+func (m *streamManager) videoStoppedLocked() {
+	for stream := range m.open {
+		if stream.video {
+			return
+		}
+	}
+	m.generation++
+	m.readyAt = time.Time{}
+	if m.idle != nil || !m.streaming {
+		return
+	}
+	m.idle = time.AfterFunc(idleDelay, func() {
+		m.access.Lock()
+		m.idle = nil
+		if !m.streaming {
+			m.access.Unlock()
+			return
+		}
+		for stream := range m.open {
+			if stream.video {
+				m.access.Unlock()
+				return
+			}
+		}
+		m.streaming = false
+		m.access.Unlock()
+		m.onStreaming(false)
+	})
+}
+
+func (m *streamManager) videoStartedLocked(now time.Time) bool {
+	m.generation++
+	m.readyAt = now.Add(hid.StreamWarmup)
+	if m.idle != nil {
+		m.idle.Stop()
+		m.idle = nil
+	}
+	if m.streaming {
+		return false
+	}
+	m.streaming = true
+	return true
+}
+
+func (m *streamManager) inputState() (running bool, wait time.Duration, generation uint64) {
+	m.access.Lock()
+	defer m.access.Unlock()
+	if m.readyAt.IsZero() {
+		return false, 0, m.generation
+	}
+	return true, time.Until(m.readyAt), m.generation
+}
+
+func (m *streamManager) videoRunning() bool {
+	m.access.Lock()
+	defer m.access.Unlock()
+	return !m.readyAt.IsZero()
+}
+
+func (m *streamManager) takeParked() *deviceStream {
+	m.access.Lock()
+	defer m.access.Unlock()
+	parked := m.parked
+	m.parked = nil
+	if parked != nil {
+		parked.partner = nil
+	}
+	return parked
+}
+
+func (m *streamManager) startDelay() time.Duration {
+	m.access.Lock()
+	defer m.access.Unlock()
+	if m.lastStart.IsZero() {
+		return 0
+	}
+	return time.Until(m.lastStart.Add(min(startInterval<<min(m.failures, 4), startBackoffLimit)))
+}
+
+func (m *streamManager) retireAll() {
+	m.access.Lock()
+	for stream := range m.open {
+		m.retireLocked(stream)
+	}
+	m.access.Unlock()
+	m.stopClosing()
+}
+
+func (s *Server) openVideo(ctx context.Context, request media.ServerVideoRequest) (media.ServerVideoSource, error) {
+	a, err := s.waitDevice(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m := s.streams
+	if err = m.acquire(ctx); err != nil {
+		return nil, err
+	}
+	type started struct {
+		source *videoSource
+		err    error
+	}
+	result := make(chan started, 1)
+	go func() {
+		defer m.release()
+		source, err := s.startVideo(ctx, a, request)
+		result <- started{source: source, err: err}
+	}()
+	select {
+	case r := <-result:
+		if r.err != nil {
+			return nil, r.err
+		}
+		return r.source, nil
+	case <-ctx.Done():
+		go func() {
+			if r := <-result; r.source != nil {
+				_ = r.source.Close()
+			}
+		}()
+		return nil, ctx.Err()
+	}
+}
+
+func (s *Server) startVideo(ctx context.Context, a *attachment, request media.ServerVideoRequest) (*videoSource, error) {
+	m := s.streams
+	m.retireAll()
+	if err := sleep(ctx, m.startDelay()); err != nil {
+		return nil, err
+	}
+	if a.ctx.Err() != nil {
+		return nil, errors.New("the device connection ended")
+	}
+	device := a.device
+	sessionID := uuid.New()
+	var audio *display.Stream
+	var err error
+	if s.options.Audio && !s.options.RFB.Media.DisableAudioLeg {
+		// The iPadOS 27.2 (24B5089g) capture returned a nonzero video SyncStreamToken with audio, zero without it.
+		audio, err = a.display.StartAudio(ctx, display.StreamOptions{SessionID: sessionID})
+		if err != nil {
+			s.logger.Warn("start the device's sound", "error", err)
+		}
+	}
+	m.access.Lock()
+	m.lastStart = time.Now()
+	m.access.Unlock()
+	video, err := a.display.StartVideo(ctx, display.StreamOptions{
+		SessionID:      sessionID,
+		SSRC:           request.ClientSSRC,
+		Mode:           deviceMode(request.Mode),
+		TilesPerFrame:  request.TilesPerFrame,
+		MaximumBitrate: uint64(max(request.MaximumBitrate, 0)),
+		PixelFormats:   uint32(request.PixelFormats),
+	})
+	if err != nil {
+		if audio != nil {
+			m.stop(audio)
+		}
+		if ctx.Err() == nil {
+			m.access.Lock()
+			m.failures++
+			m.access.Unlock()
+			s.setVideoProblem(err)
+		}
+		return nil, fmt.Errorf("start the device's video: %w", err)
+	}
+	if ctx.Err() != nil {
+		m.stop(video)
+		if audio != nil {
+			m.stop(audio)
+		}
+		return nil, ctx.Err()
+	}
+	info := video.Info()
+	now := time.Now()
+	source := &videoSource{server: s, stream: &deviceStream{device: device, stream: video, video: true}}
+	source.lastHeard.Store(now.UnixNano())
+	source.info = media.ServerVideoInfo{
+		SSRC:          info.DeviceSSRC,
+		ReceiverSSRC:  info.SSRC,
+		Width:         info.Width,
+		Height:        info.Height,
+		LTRP:          info.LTRP,
+		FrameRate:     info.FrameRate,
+		PixelFormat:   pixelFormat(info.PixelFormat),
+		TilesPerFrame: info.TilesPerFrame,
+	}
+	m.access.Lock()
+	m.failures = 0
+	m.open[source.stream] = struct{}{}
+	if audio != nil {
+		parked := &deviceStream{device: device, stream: audio, partner: source.stream}
+		m.open[parked] = struct{}{}
+		m.parked = parked
+		time.AfterFunc(parkedAudioLimit, func() {
+			m.access.Lock()
+			unclaimed := m.parked == parked
+			m.access.Unlock()
+			if unclaimed {
+				m.retire(parked)
+			}
+		})
+	}
+	started := m.videoStartedLocked(now)
+	m.access.Unlock()
+	s.logger.Info("device video started", "ssrc", info.SSRC, "device_ssrc", info.DeviceSSRC,
+		"width", info.Width, "height", info.Height, "frame_rate", info.FrameRate, "ltrp", info.LTRP,
+		"mode", request.Mode, "tiles", info.TilesPerFrame, "pixel_format", source.info.PixelFormat, "maximum_bitrate", request.MaximumBitrate,
+		"sound", audio != nil, "sync_token", info.SyncToken)
+	if started {
+		s.streamingChanged(true)
+	}
+	s.setVideoProblem(nil)
+	s.videoSize(info.Width, info.Height)
+	s.checkDisplay()
+	return source, nil
+}
+
+func (s *Server) openAudio() (media.ServerAudioSource, error) {
+	parked := s.streams.takeParked()
+	if parked == nil {
+		return nil, media.ErrAudioUnsupported
+	}
+	info := parked.stream.Info()
+	return &audioSource{
+		manager: s.streams,
+		stream:  parked,
+		info:    media.ServerAudioInfo{SSRC: info.DeviceSSRC, ReceiverSSRC: info.SSRC},
+	}, nil
+}
+
+func deviceMode(mode media.VideoMode) display.Mode {
+	switch mode {
+	case media.VideoModeNearby:
+		return display.ModeNearby
+	case media.VideoModeCoreDevice:
+		return display.ModeCoreDevice
+	}
+	return display.ModeRemoteDesktop
+}
+
+func pixelFormat(format uint32) media.PixelFormats {
+	switch format {
+	case 0x34323076: // iPad17,1 on 24B5099f replied with this format in mode 9.
+		return media.PixelFormat420VideoRange
+	case 0x34323066: // iPad17,1 on 24B5099f replied with this format in mode 5.
+		return media.PixelFormat420FullRange
+	case 0x34343476:
+		return media.PixelFormat444VideoRange
+	case 0x34343466: // iPad17,1 on 24B5099f replied with this format in mode 7.
+		return media.PixelFormat444FullRange
+	}
+	return 0
+}
+
+type videoSource struct {
+	server    *Server
+	stream    *deviceStream
+	info      media.ServerVideoInfo
+	lastHeard atomic.Int64
+
+	readContext                 context.Context
+	pictureWidth, pictureHeight int
+}
+
+func (v *videoSource) Info() media.ServerVideoInfo {
+	return v.info
+}
+
+func (v *videoSource) ReadPacket(ctx context.Context, buffer []byte) (int, bool, error) {
+	if v.readContext == nil {
+		readContext, cancel := context.WithCancelCause(ctx)
+		v.readContext = readContext
+		v.watchSilence(readContext, cancel)
+	}
+	n, rtcp, err := v.stream.stream.ReadPacket(v.readContext, buffer)
+	if err != nil {
+		if ctx.Err() != nil {
+			return 0, false, ctx.Err()
+		}
+		if errors.Is(context.Cause(v.readContext), errVideoSilent) {
+			v.server.logger.Warn("the device's video went silent; another client such as Xcode's Device Hub may have taken the screen")
+			v.server.setVideoProblem(&Error{Problem: ProblemScreenInUse, Err: errVideoSilent})
+			return 0, false, errVideoSilent
+		}
+		return 0, false, err
+	}
+	v.lastHeard.Store(time.Now().UnixNano())
+	if !rtcp {
+		if sps := hevcSPS(rtpPayload(buffer[:n])); sps != nil {
+			v.checkPictureSize(sps)
+		}
+	}
+	return n, rtcp, nil
+}
+
+func (v *videoSource) checkPictureSize(sps []byte) {
+	width, height, ok := media.HEVCPictureSize(sps)
+	if !ok || width == 0 || height == 0 || width > largestPicture || height > largestPicture {
+		return
+	}
+	if v.pictureWidth == 0 {
+		v.pictureWidth, v.pictureHeight = width, height
+		v.server.logger.Debug("video size in its parameter sets", "width", width, "height", height,
+			"start_width", v.info.Width, "start_height", v.info.Height)
+		return
+	}
+	if width == v.pictureWidth && height == v.pictureHeight {
+		return
+	}
+	v.pictureWidth, v.pictureHeight = width, height
+	v.server.logger.Info("the device's video changed size", "width", width, "height", height)
+	v.server.checkDisplay()
+	v.server.videoSize(width, height)
+}
+
+func (v *videoSource) watchSilence(readContext context.Context, cancel context.CancelCauseFunc) {
+	if readContext.Err() != nil {
+		return
+	}
+	wait := time.Until(time.Unix(0, v.lastHeard.Load()).Add(silenceLimit))
+	if wait <= 0 {
+		cancel(errVideoSilent)
+		return
+	}
+	time.AfterFunc(wait, func() { v.watchSilence(readContext, cancel) })
+}
+
+func (v *videoSource) PacketArrival() time.Time {
+	return v.stream.stream.Arrival()
+}
+
+func (v *videoSource) WriteRTCP(packet []byte) error {
+	return v.stream.stream.WriteRTCP(packet)
+}
+
+func (v *videoSource) RequestKeyFrame() error {
+	return v.stream.stream.RequestKeyFrame()
+}
+
+func (v *videoSource) Close() error {
+	v.server.streams.retire(v.stream)
+	return nil
+}
+
+type audioSource struct {
+	manager *streamManager
+	stream  *deviceStream
+	info    media.ServerAudioInfo
+}
+
+func (a *audioSource) Info() media.ServerAudioInfo {
+	return a.info
+}
+
+func (a *audioSource) ReadPacket(ctx context.Context, buffer []byte) (int, bool, error) {
+	return a.stream.stream.ReadPacket(ctx, buffer)
+}
+
+func (a *audioSource) WriteRTCP(packet []byte) error {
+	return a.stream.stream.WriteRTCP(packet)
+}
+
+func (a *audioSource) Close() error {
+	a.manager.retire(a.stream)
+	return nil
+}
