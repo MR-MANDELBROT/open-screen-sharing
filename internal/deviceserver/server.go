@@ -111,8 +111,8 @@ type Server struct {
 	displaySize  [2]int
 	videoProblem error
 
-	listening bool
-	relisted  bool
+	listener net.Listener
+	relisted bool
 }
 
 type attachment struct {
@@ -430,30 +430,33 @@ func (s *Server) setVideoProblem(err error) {
 	}
 }
 
+// When the screen locks while the app is suspended, iOS defuncts the app's sockets.
+// A defunct listener stays open but never reports a connection or an error.
 func (s *Server) listen() error {
-	if s.listening {
-		return nil
-	}
-	media := s.options.RFB.Media
-	for _, port := range []uint16{media.VideoPort, media.AudioPort} {
-		if port == media.AudioPort && media.DisableAudioLeg {
-			continue
+	if s.listener == nil {
+		media := s.options.RFB.Media
+		for _, port := range []uint16{media.VideoPort, media.AudioPort} {
+			if port == media.AudioPort && media.DisableAudioLeg {
+				continue
+			}
+			conn, err := media.ListenUDP(port)
+			if err != nil {
+				return &Error{Problem: ProblemListen, Err: fmt.Errorf("media port %d: %w", port, err)}
+			}
+			_ = conn.Close()
 		}
-		conn, err := media.ListenUDP(port)
-		if err != nil {
-			return &Error{Problem: ProblemListen, Err: fmt.Errorf("media port %d: %w", port, err)}
-		}
-		_ = conn.Close()
+	} else {
+		_ = s.listener.Close()
 	}
 	listener, err := net.Listen("tcp", s.options.Listen)
 	if err != nil {
 		return &Error{Problem: ProblemListen, Err: err}
 	}
-	s.listening = true
+	s.listener = listener
 	s.logger.Info("listening", "address", listener.Addr().String())
 	go func() {
 		err := s.rfb.Serve(listener)
-		if err != nil && !errors.Is(err, rfb.ErrServerClosed) {
+		if err != nil && !errors.Is(err, rfb.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
 			s.logger.Error("serve", "error", err)
 		}
 	}()
