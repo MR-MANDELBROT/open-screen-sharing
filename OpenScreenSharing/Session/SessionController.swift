@@ -441,6 +441,7 @@ final class SessionController: ObservableObject {
         highPerformanceStartPending = usesHighPerformance
         hasPicture = false
         pipeline.setExpectsVideo(mayUseHighPerformance)
+        pipeline.setSchedulesPresentation(networkConfiguration.schedulesPresentation)
         let configuration = SessionConfiguration(
             address: route.address,
             displayName: route.name,
@@ -1923,9 +1924,9 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         decoder = VideoDecoder(
             output: { [weak self, pipeline] frame in
                 guard let self, !self.isDetached else { return }
-                let picture = pipeline.setVideoFrame(frame)
-                if let picture {
-                    self.pictureReady(picture, arrival: frame.timing.arrival, hold: frame.timing.libraryHold, decode: frame.timing.decode)
+                let timing = frame.timing
+                pipeline.setVideoFrame(frame) { [weak self] picture, held in
+                    self?.pictureReady(picture, arrival: timing.arrival, hold: timing.libraryHold + held, decode: timing.decode)
                 }
                 self.showedLife()
             },

@@ -46,6 +46,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
         var startedAt: CFTimeInterval
         var arrival: CFTimeInterval
         var hold: TimeInterval
+        var capture: CFTimeInterval
         var turns: PictureTurns
         var completedAt: CFTimeInterval?
         var submittedMask = 0
@@ -190,7 +191,8 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
                 return
             }
             pending.append(PendingFrame(
-                id: unit.frameID, startedAt: received, arrival: unit.arrival, hold: unit.libraryHold, turns: unit.turns,
+                id: unit.frameID, startedAt: received, arrival: unit.arrival, hold: unit.libraryHold, capture: unit.presentationTime.seconds,
+                turns: unit.turns,
                 latestTickets: Array(repeating: nil, count: bands), strips: Array(repeating: nil, count: bands)))
             lastSubmittedFrameID = unit.frameID
             lastSubmissionEnded = false
@@ -283,7 +285,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
                     turns: first.turns,
                     timing: FrameTiming(
                         arrival: first.arrival, libraryHold: first.hold,
-                        decode: max((first.completedAt ?? CACurrentMediaTime()) - first.startedAt, 0)))
+                        decode: max((first.completedAt ?? CACurrentMediaTime()) - first.startedAt, 0), capture: first.capture))
                 output(frame)
                 guard generation == epoch else { return }
             }

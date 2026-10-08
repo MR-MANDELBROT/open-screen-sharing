@@ -280,6 +280,7 @@ nonisolated struct FrameTiming: Sendable {
     var arrival: CFTimeInterval
     var libraryHold: TimeInterval
     var decode: TimeInterval
+    var capture: CFTimeInterval
 }
 
 nonisolated struct DecodedVideoFrame: @unchecked Sendable {

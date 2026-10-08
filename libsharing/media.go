@@ -82,6 +82,8 @@ type HighPerformanceOptions struct {
 	VideoMode int32
 
 	MaximumBitrate int64
+
+	ImmediatePlayout bool
 }
 
 func NewHighPerformanceOptions() *HighPerformanceOptions {
@@ -200,6 +202,8 @@ func offerOptions(options *HighPerformanceOptions) (media.OfferOptions, error) {
 		VideoMode:      media.VideoMode(options.VideoMode),
 		PixelFormats:   media.PixelFormatsSDR420,
 		MaximumBitrate: options.MaximumBitrate,
+
+		ImmediatePlayout: options.ImmediatePlayout,
 	}
 	if options.PixelFormats != 0 {
 		if options.PixelFormats < 0 || options.PixelFormats&^0xff != 0 {

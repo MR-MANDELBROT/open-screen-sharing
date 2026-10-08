@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreVideo
 import Foundation
+import QuartzCore
 
 nonisolated enum ScreenPicture: Equatable {
     case none
@@ -42,12 +43,25 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         var change: PictureChange
     }
 
+    private struct Scheduled {
+        var frame: DecodedVideoFrame
+        var due: CFTimeInterval
+        var arrivedAt: CFTimeInterval
+        var ready: @Sendable (_ picture: Int, _ held: TimeInterval) -> Void
+    }
+
     private struct Shown: Equatable {
         var picture = ScreenPicture.none
         var width = 0
         var height = 0
         var turns = PictureTurns.none
     }
+
+    private static let presentationWindow: CFTimeInterval = 2
+    private static let presentationQuantile = 0.9
+    private static let presentationAllowance: TimeInterval = 0.001
+    private static let maxPresentationSkew: TimeInterval = 0.5
+    private static let maxScheduled = 4
 
     private let lock = NSLock()
     private var framebuffer: Framebuffer?
@@ -74,6 +88,13 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     private var wakeHandler: (@Sendable () -> Void)?
     private var shown = Shown()
     private var shownHandler: (@Sendable () -> Void)?
+    private var schedulesPresentation = false
+    private var scheduled: [Scheduled] = []
+    private var consumedThrough: CFTimeInterval = 0
+    private var presentationLatency: TimeInterval?
+    private var latencySamples: [TimeInterval] = []
+    private var latencyWindowSince: CFTimeInterval = 0
+    private var latencyWarmingUp = false
 
     func setWakeHandler(_ handler: (@Sendable () -> Void)?) {
         lock.lock()
@@ -108,6 +129,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     func holdPicture() {
         update {
             presentationEpoch &+= 1
+            resetPresentation()
             hold(.reconnection)
             framebufferUpdated = false
             framebufferHasPicture = false
@@ -119,6 +141,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     func attachFramebuffer(_ framebuffer: Framebuffer) {
         update {
             presentationEpoch &+= 1
+            resetPresentation()
             hold(.resize)
             self.framebuffer = framebuffer
             framebufferUpdated = false
@@ -134,6 +157,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     func beginVideo() {
         update {
             presentationEpoch &+= 1
+            resetPresentation()
             hold(.videoStart)
             isVideo = true
             videoFrame = nil
@@ -145,6 +169,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     func endVideo() {
         update {
             presentationEpoch &+= 1
+            resetPresentation()
             hold(.videoEnd)
             isVideo = false
             videoFrame = nil
@@ -158,19 +183,96 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         }
     }
 
+    var isSchedulingPresentation: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return isVideo && schedulesPresentation
+    }
+
+    func setSchedulesPresentation(_ schedules: Bool) {
+        lock.lock()
+        schedulesPresentation = schedules
+        resetPresentation()
+        lock.unlock()
+    }
+
+    func setVideoFrame(_ frame: DecodedVideoFrame, ready: @escaping @Sendable (_ picture: Int, _ held: TimeInterval) -> Void) {
+        let now = CACurrentMediaTime()
+        lock.lock()
+        guard isVideo else {
+            lock.unlock()
+            return
+        }
+        let due = schedulesPresentation ? presentationDue(capture: frame.timing.capture, at: now) : now
+        scheduled.append(Scheduled(frame: frame, due: due, arrivedAt: now, ready: ready))
+        let handler = wakeHandler
+        let horizon = max(now, consumedThrough)
+        lock.unlock()
+        if !promote(upTo: horizon) {
+            handler?()
+        }
+    }
+
+    private func presentationDue(capture: CFTimeInterval, at now: CFTimeInterval) -> CFTimeInterval {
+        let offset = now - capture
+        if let latency = presentationLatency, abs(offset - latency) <= Self.maxPresentationSkew {
+            latencySamples.append(offset)
+            let windowEnded = now - latencyWindowSince >= Self.presentationWindow
+            if windowEnded || latencyWarmingUp {
+                latencySamples.sort()
+                presentationLatency =
+                    latencySamples[Int(Double(latencySamples.count - 1) * Self.presentationQuantile)] + Self.presentationAllowance
+            }
+            if windowEnded {
+                latencySamples.removeAll(keepingCapacity: true)
+                latencyWindowSince = now
+                latencyWarmingUp = false
+            }
+        } else {
+            presentationLatency = offset
+            latencySamples.removeAll(keepingCapacity: true)
+            latencyWindowSince = now
+            latencyWarmingUp = true
+        }
+        return capture + (presentationLatency ?? offset)
+    }
+
+    private func resetPresentation() {
+        scheduled.removeAll()
+        presentationLatency = nil
+        latencySamples.removeAll()
+    }
+
+    private func dueCount(upTo time: CFTimeInterval) -> Int {
+        max(scheduled.prefix { $0.due <= time }.count, scheduled.count - Self.maxScheduled)
+    }
+
     @discardableResult
-    func setVideoFrame(_ frame: DecodedVideoFrame) -> Int? {
-        var taken: Int?
+    private func promote(upTo time: CFTimeInterval) -> Bool {
+        lock.lock()
+        let pending = dueCount(upTo: time)
+        lock.unlock()
+        guard pending > 0 else { return false }
+        var promoted: [(Scheduled, Int)] = []
         update {
-            guard isVideo else { return }
-            pictureGeneration &+= 1
-            taken = pictureGeneration
+            let count = dueCount(upTo: time)
+            guard count > 0 else { return }
+            for item in scheduled.prefix(count) {
+                pictureGeneration &+= 1
+                promoted.append((item, pictureGeneration))
+            }
+            let frame = scheduled[count - 1].frame
+            scheduled.removeFirst(count)
             videoFrame = frame.pixelBuffer
             strips = frame.strips.map { Optional($0) }
             canvasHeight = frame.canvasHeight
             videoTurns = frame.turns
         }
-        return taken
+        let now = CACurrentMediaTime()
+        for (item, picture) in promoted {
+            item.ready(picture, now - item.arrivedAt)
+        }
+        return !promoted.isEmpty
     }
 
     @discardableResult
@@ -220,9 +322,11 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         }
     }
 
-    func consume() -> Snapshot? {
+    func consume(through time: CFTimeInterval) -> Snapshot? {
+        promote(upTo: time)
         lock.lock()
         defer { lock.unlock() }
+        consumedThrough = max(consumedThrough, time)
         guard dirty else { return nil }
         dirty = false
         return snapshotLocked()

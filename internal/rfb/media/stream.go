@@ -498,7 +498,7 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 			bands = s.answer.Video.TilesPerFrame
 		}
 		s.access.Unlock()
-		*assembler = newVideoAssembler(codec, bands, s.config.Sink, func() {
+		*assembler = newVideoAssembler(codec, bands, s.config.Offer.options.ImmediatePlayout, s.config.Sink, func() {
 			s.requestKeyframe(video, *assembler)
 		})
 		if answer != nil && answer.Video.SSRC != 0 {

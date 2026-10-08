@@ -37,6 +37,8 @@ nonisolated struct NetworkConfiguration: Equatable, Sendable {
 
     var bands: Int { usesCoreDevice ? 1 : 4 }
 
+    var schedulesPresentation: Bool { quality == .localNetwork }
+
     var maximumFrameRate: MaximumFrameRate {
         quality == .localNetwork ? .sixty : internetMaximumFrameRate
     }

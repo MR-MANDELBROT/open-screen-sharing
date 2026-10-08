@@ -30,6 +30,7 @@ type videoAssembler struct {
 	decodeOrders bool
 	sink         Sink
 	onLoss       func()
+	immediate    bool
 
 	depacketizers map[uint32]*ssrcDepacketizer
 	lastSeen      map[uint32]int64
@@ -84,13 +85,14 @@ type videoOutput struct {
 	due    int64
 }
 
-func newVideoAssembler(codec Codec, bands int, sink Sink, onLoss func()) *videoAssembler {
+func newVideoAssembler(codec Codec, bands int, immediate bool, sink Sink, onLoss func()) *videoAssembler {
 	return &videoAssembler{
 		codec:         codec,
 		bands:         bands,
 		decodeOrders:  bands > 1,
 		sink:          sink,
 		onLoss:        onLoss,
+		immediate:     immediate,
 		depacketizers: make(map[uint32]*ssrcDepacketizer),
 		lastSeen:      make(map[uint32]int64),
 		awaitingSync:  true,
@@ -473,6 +475,9 @@ func (a *videoAssembler) deliver(unit *accessUnit) {
 			a.targetAnchorAt = a.offsets[int(float64(len(a.offsets)-1)*playoutQuantile)] + int64(playoutAllowance)
 			a.windowSince, a.offsets = a.now, append(a.offsets[:0], offset)
 		}
+	}
+	if a.immediate {
+		due = a.now
 	}
 	a.playoutDelay = due - a.now
 	a.outbox = append(a.outbox, videoOutput{due: due, unit: VideoAccessUnit{

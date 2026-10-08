@@ -28,7 +28,10 @@ final class RemoteScreenUIView: UIView {
     private unowned let controller: SessionController
     private var renderer: ScreenRenderer?
     private var displayLink: CADisplayLink?
+    private var presentationTimer: DispatchSourceTimer?
+    private var presentationTick: CFTimeInterval = 0
     private var needsRender = true
+    private var renderedThisFrame = false
     private var idleFrames = 0
     private var lastSnapshot: DisplayPipeline.Snapshot?
     private var lastPresentation: (epoch: Int, generation: Int, time: CFTimeInterval)?
@@ -79,7 +82,7 @@ final class RemoteScreenUIView: UIView {
         }
         accessibilityCustomActions = input.accessibilityActions()
         controller.pipeline.setWakeHandler { [weak self] in
-            DispatchQueue.main.async { self?.wake() }
+            DispatchQueue.main.async { self?.contentChanged() }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(sceneWillDeactivate(_:)), name: UIScene.willDeactivateNotification, object: nil)
     }
@@ -91,6 +94,7 @@ final class RemoteScreenUIView: UIView {
     deinit {
         MainActor.assumeIsolated {
             displayLink?.invalidate()
+            presentationTimer?.cancel()
             controller.pipeline.setWakeHandler(nil)
         }
     }
@@ -113,6 +117,8 @@ final class RemoteScreenUIView: UIView {
         } else {
             displayLink?.invalidate()
             displayLink = nil
+            presentationTimer?.cancel()
+            presentationTimer = nil
             controller.releaseAllKeys()
         }
         windowTracker.windowDidChange()
@@ -156,11 +162,25 @@ final class RemoteScreenUIView: UIView {
     }
 
     fileprivate func tick() {
+        renderedThisFrame = false
         guard !controller.sceneInBackground else {
             displayLink?.isPaused = true
             return
         }
-        let snapshot = controller.pipeline.consume()
+        if let displayLink, controller.pipeline.isSchedulingPresentation {
+            if presentationTimer == nil {
+                let timer = DispatchSource.makeTimerSource(queue: .main)
+                timer.setEventHandler { [weak self] in
+                    MainActor.assumeIsolated { self?.presentScheduledFrames() }
+                }
+                timer.activate()
+                presentationTimer = timer
+            }
+            presentationTick = displayLink.targetTimestamp
+            let midpoint = (displayLink.timestamp + displayLink.targetTimestamp) / 2
+            presentationTimer?.schedule(deadline: .now() + max(midpoint - CACurrentMediaTime(), 0), leeway: .microseconds(100))
+        }
+        let snapshot = controller.pipeline.consume(through: displayLink?.timestamp ?? CACurrentMediaTime())
         if let snapshot {
             lastSnapshot = snapshot
         }
@@ -170,6 +190,22 @@ final class RemoteScreenUIView: UIView {
             return
         }
         idleFrames = 0
+        renderedThisFrame = true
+        needsRender = !render()
+    }
+
+    private func presentScheduledFrames() {
+        guard !controller.sceneInBackground, let snapshot = controller.pipeline.consume(through: presentationTick) else { return }
+        lastSnapshot = snapshot
+        idleFrames = 0
+        needsRender = !render()
+    }
+
+    private func contentChanged() {
+        wake()
+        guard !renderedThisFrame, !controller.sceneInBackground, let snapshot = controller.pipeline.consume(through: CACurrentMediaTime()) else { return }
+        lastSnapshot = snapshot
+        renderedThisFrame = true
         needsRender = !render()
     }
 

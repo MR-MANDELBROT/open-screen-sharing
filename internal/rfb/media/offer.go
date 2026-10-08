@@ -145,6 +145,7 @@ type OfferOptions struct {
 	TilesPerFrame       int
 	VideoMode           VideoMode
 	Audio               AudioMode
+	ImmediatePlayout    bool
 	Width               int
 	Height              int
 	DeviceModel         string

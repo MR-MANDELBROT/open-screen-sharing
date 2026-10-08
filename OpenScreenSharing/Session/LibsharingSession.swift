@@ -331,6 +331,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         options.cursorInVideo = false
         options.videoMode = network.usesCoreDevice ? LibsharingVideoModeCoreDevice : LibsharingVideoModeRemoteDesktop
         options.bands = Int32(network.bands)
+        options.immediatePlayout = network.schedulesPresentation
         return options
     }
 
