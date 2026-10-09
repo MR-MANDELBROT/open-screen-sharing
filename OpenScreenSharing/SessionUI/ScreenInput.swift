@@ -10,8 +10,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private static let tapDragWindow: TimeInterval = 0.25
     private static let secondTapHold: TimeInterval = 0.3
     private static let mouseCountsPerPoint: CGFloat = 2
-    private static let touchPressDelay: TimeInterval = 0.08
-    private static let touchPressDistance: CGFloat = 6
     private static let touchMargin: CGFloat = 24
     private static let doubleTapDistance: CGFloat = 40
     private static let wheelPointsPerZoomDoubling: CGFloat = 100
@@ -32,9 +30,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private var lastClickTime: TimeInterval = 0
     private var fingersTouchDirectly = false
     private var touchFinger: UITouch?
-    private var touchStart = CGPoint.zero
     private var touchPressed = false
-    private var touchPressTask: Task<Void, Never>?
 
     private var pointerTouches: Set<UITouch> = []
     private var lockedButtons: PointerButtons = []
@@ -460,74 +456,53 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
 
 
     private func touchBegan(_ touch: UITouch) {
-        guard fingers.count == 1 else {
-            liftTouch()
-            return
-        }
+        guard fingers.count == 1 else { return }
         let location = touch.location(in: view)
         guard view.imageRect.insetBy(dx: -Self.touchMargin, dy: -Self.touchMargin).contains(location) else { return }
         touchFinger = touch
-        touchStart = location
+        touchPressed = true
         controller.moveTouch(to: view.imagePoint(for: location))
-        guard touch.type != .pencil else {
-            pressTouch()
-            return
-        }
-        touchPressTask = Task { [weak self] in
-            try? await Task.sleep(seconds: Self.touchPressDelay)
-            guard !Task.isCancelled, let self, self.touchFinger === touch else { return }
-            self.pressTouch()
-        }
+        controller.press(.primary)
     }
 
     private func touchMoved(_ touch: UITouch) {
         guard touch === touchFinger else { return }
-        let location = touch.location(in: view)
-        guard touchPressed else {
-            if hypot(location.x - touchStart.x, location.y - touchStart.y) > Self.touchPressDistance { pressTouch() }
-            return
-        }
-        controller.moveTouch(to: view.imagePoint(for: location))
+        controller.moveTouch(to: view.imagePoint(for: touch.location(in: view)))
     }
 
     private func touchEnded(_ touch: UITouch, cancelled: Bool) {
         guard touch === touchFinger else { return }
-        if !cancelled {
-            if touchPressed {
-                controller.moveTouch(to: view.imagePoint(for: touch.location(in: view)))
-            } else {
-                pressTouch()
-            }
-        }
+        touchFinger = nil
+        if cancelled, isTransforming { return }
+        if !cancelled { controller.moveTouch(to: view.imagePoint(for: touch.location(in: view))) }
         liftTouch()
     }
 
-    private func pressTouch() {
-        touchPressTask?.cancel()
-        touchPressTask = nil
-        guard let touchFinger, !touchPressed else { return }
-        touchPressed = true
-        controller.moveTouch(to: view.imagePoint(for: touchStart))
-        controller.press(.primary)
-        let location = touchFinger.location(in: view)
-        if location != touchStart {
-            controller.moveTouch(to: view.imagePoint(for: location))
-        }
-    }
-
     private func liftTouch() {
-        touchPressTask?.cancel()
-        touchPressTask = nil
         touchFinger = nil
         guard touchPressed else { return }
         touchPressed = false
         controller.release(.primary)
     }
 
+    private var isTransforming: Bool {
+        let recognizers: [UIGestureRecognizer] = [pinchGesture, rotationGesture]
+        return recognizers.contains { [.began, .changed].contains($0.state) }
+    }
+
     private func touchGestureBegan(_ gesture: UIGestureRecognizer) {
         guard gesture.numberOfTouches > 0, fingersTouchDirectly else { return }
+        touchFinger = nil
+    }
+
+    private func touchGestureEnded() {
+        guard touchFinger == nil, !isTransforming else { return }
         liftTouch()
-        controller.moveTouch(to: view.imagePoint(for: gesture.location(in: view)))
+    }
+
+    private func gestureCenter(_ gesture: UIGestureRecognizer) -> CGPoint {
+        guard gesture.numberOfTouches > 0, fingersTouchDirectly else { return controller.pointerPosition }
+        return view.imagePoint(for: gesture.location(in: view))
     }
 
 
@@ -624,9 +599,9 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         case .changed:
             if !macPinchStarted {
                 macPinchStarted = true
-                controller.magnify(at: controller.pointerPosition, by: gesture.scale - 1, phase: .began)
+                controller.magnify(at: gestureCenter(gesture), by: gesture.scale - 1, phase: .began)
             } else {
-                controller.magnify(at: controller.pointerPosition, by: gesture.scale / previousPinchScale - 1, phase: .changed)
+                controller.magnify(at: gestureCenter(gesture), by: gesture.scale / previousPinchScale - 1, phase: .changed)
             }
             previousPinchScale = gesture.scale
         default:
@@ -634,6 +609,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
                 controller.magnify(at: controller.pointerPosition, by: 0, phase: gesture.state == .ended ? .ended : .cancelled)
             }
             macPinchStarted = false
+            touchGestureEnded()
         }
     }
 
@@ -652,13 +628,14 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             } else {
                 phase = .changed
             }
-            controller.rotate(at: controller.pointerPosition, degrees: -(gesture.rotation - previousRotation) * 180 / .pi, phase: phase)
+            controller.rotate(at: gestureCenter(gesture), degrees: -(gesture.rotation - previousRotation) * 180 / .pi, phase: phase)
             previousRotation = gesture.rotation
         default:
             if macRotationStarted {
                 controller.rotate(at: controller.pointerPosition, degrees: 0, phase: gesture.state == .ended ? .ended : .cancelled)
             }
             macRotationStarted = false
+            touchGestureEnded()
         }
     }
 

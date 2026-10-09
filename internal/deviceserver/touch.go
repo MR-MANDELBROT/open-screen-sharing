@@ -24,6 +24,7 @@ const (
 	tapHold       = 40 * time.Millisecond
 	doubleTapGap  = 80 * time.Millisecond
 	pinchGap      = 200.0
+	pinchOverlap  = 1.0
 	swipeFraction = 0.4
 	swipeSteps    = 10
 	swipeStep     = 12 * time.Millisecond
@@ -389,7 +390,7 @@ func (m *touchMapper) tap(ctx context.Context, at point, hold time.Duration) err
 }
 
 func (m *touchMapper) pinchGesture(ctx context.Context, event rfb.ViewerGesture) error {
-	if m.finger != nil || m.scroll != nil {
+	if m.scroll != nil {
 		return nil
 	}
 	finished := event.Phase&(rfb.PhaseEnded|rfb.PhaseCancelled) != 0
@@ -397,13 +398,30 @@ func (m *touchMapper) pinchGesture(ctx context.Context, event rfb.ViewerGesture)
 		if finished || event.Phase&(rfb.PhaseBegan|rfb.PhaseChanged) == 0 {
 			return nil
 		}
-		radius := m.geometry.points(pinchGap) / 2
-		radius = min(radius, float64(m.geometry.Width-1)/3, float64(m.geometry.Height-1)/3)
-		center := point{
-			clamp(float64(event.X), radius, float64(m.geometry.Width-1)-radius),
-			clamp(float64(event.Y), radius, float64(m.geometry.Height-1)-radius),
+		if finger := m.finger; finger != nil {
+			center := point{float64(event.X), float64(event.Y)}
+			dx, dy := center.X-finger.at.X, center.Y-finger.at.Y
+			radius := math.Hypot(dx, dy)
+			if radius < m.geometry.points(pinchOverlap) {
+				return nil
+			}
+			m.finger = nil
+			m.pinch = &pinchFingers{
+				center: center,
+				radius: radius,
+				scale:  1,
+				angle:  math.Atan2(-dy, dx) * 180 / math.Pi,
+				kinds:  make(map[rfb.GestureKind]bool),
+			}
+		} else {
+			radius := m.geometry.points(pinchGap) / 2
+			radius = min(radius, float64(m.geometry.Width-1)/3, float64(m.geometry.Height-1)/3)
+			center := point{
+				clamp(float64(event.X), radius, float64(m.geometry.Width-1)-radius),
+				clamp(float64(event.Y), radius, float64(m.geometry.Height-1)-radius),
+			}
+			m.pinch = &pinchFingers{center: center, radius: radius, scale: 1, kinds: make(map[rfb.GestureKind]bool)}
 		}
-		m.pinch = &pinchFingers{center: center, radius: radius, scale: 1, kinds: make(map[rfb.GestureKind]bool)}
 	}
 	pinch := m.pinch
 	if finished {
