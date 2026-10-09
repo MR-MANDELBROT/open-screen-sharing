@@ -2,7 +2,7 @@ import CoreGraphics
 import CoreImage
 import CoreVideo
 import Foundation
-import UIKit
+import ImageIO
 
 nonisolated final class Framebuffer: @unchecked Sendable {
     let pixelBuffer: CVPixelBuffer
@@ -80,7 +80,8 @@ nonisolated enum PixelBufferImage {
         guard image.extent.width > 0, image.extent.height > 0 else { return nil }
         let scale = min(1, maxWidth / image.extent.width)
         let scaled = image.applyingFilter("CILanczosScaleTransform", parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
-        guard let cgImage = context.createCGImage(scaled, from: scaled.extent, format: .BGRA8, colorSpace: colorSpace) else { return nil }
-        return UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.8)
+        guard let colorSpace else { return nil }
+        return context.jpegRepresentation(
+            of: scaled, colorSpace: colorSpace, options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.8])
     }
 }

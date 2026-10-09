@@ -17,6 +17,7 @@ struct KeyboardButton: View {
     }
 }
 
+#if os(iOS)
 struct ToolbarDock: Equatable {
     enum Edge {
         case left
@@ -165,3 +166,4 @@ struct FloatingToolbar: View {
         }
     }
 }
+#endif

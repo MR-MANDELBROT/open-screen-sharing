@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -13,11 +14,6 @@ struct RemoteScreenView: UIViewRepresentable {
         view.windowTracker.setTurnsLandscape(!controller.isTouchScreen)
         view.accessibilityValue = String(localized: controller.mode == .control ? "Controlling" : "Observing")
     }
-}
-
-struct Letterbox: Equatable {
-    var left: CGRect
-    var top: CGRect
 }
 
 final class RemoteScreenUIView: UIView {
@@ -648,3 +644,4 @@ private final class DisplayLinkTarget {
         view?.tick()
     }
 }
+#endif

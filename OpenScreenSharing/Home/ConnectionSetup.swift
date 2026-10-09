@@ -9,7 +9,8 @@ struct NewComputer: Hashable {
     var server: ServerAuthentication
 
     func signedIn(_ credentials: SessionCredentials, supportsHighPerformance: Bool) -> SignedInComputer {
-        var saved = Computer(name: name, address: address, username: credentials.username)
+        var saved = Computer(name: name, address: address, username: credentials.loginType == .account ? credentials.username : "")
+        saved.authenticates = credentials.loginType == .account
         saved.model = model ?? ""
         let decoder = DecoderCapabilities.current
         saved.serverType = supportsHighPerformance && (decoder.supportsHEVC || decoder.supportsH264) ? .apple : .vnc
@@ -137,7 +138,9 @@ struct SetupSignInView: View {
                 if asksForUsername {
                     TextField("User Name", text: $username)
                         .textContentType(.oneTimeCode)
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
+                        #endif
                         .autocorrectionDisabled()
                         .focused($focusedField, equals: .username)
                         .submitLabel(.next)
@@ -162,7 +165,11 @@ struct SetupSignInView: View {
             .disabled(task != nil)
         }
         .navigationTitle(computer.name)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .formStyle(.grouped)
+        #endif
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Next", action: signIn)
@@ -216,6 +223,8 @@ struct SetupProblem {
                 ? String(localized: "The user name or password is incorrect.") : String(localized: "The password is incorrect.")
         case .hostNotFound:
             summary = String(localized: "Can’t find “\(host)”.")
+        case .ownScreen:
+            summary = String(localized: "You can’t control your own screen.")
         default:
             summary = String(localized: "Can’t connect to “\(host)”.")
         }

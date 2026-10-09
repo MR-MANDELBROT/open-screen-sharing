@@ -16,11 +16,12 @@ import (
 const (
 	gomobileModule = "github.com/sagernet/gomobile"
 	iosVersion     = "15.0"
+	macOSVersion   = "14.0"
 	outputPath     = "Frameworks/Libsharing.xcframework"
 )
 
 func main() {
-	target := flag.String("target", "ios,iossimulator", "gomobile bind target")
+	target := flag.String("target", "ios,iossimulator,macos", "gomobile bind target")
 	flag.Parse()
 	binDirectory := filepath.Join(filepath.SplitList(build.Default.GOPATH)[0], "bin")
 	gomobileVersion := pinnedGomobileVersion()
@@ -45,6 +46,7 @@ func main() {
 		"-v",
 		"-target", *target,
 		"-iosversion", iosVersion,
+		"-macosversion", macOSVersion,
 		"-trimpath",
 		"-buildvcs=false",
 		"-tags", "badlinkname",

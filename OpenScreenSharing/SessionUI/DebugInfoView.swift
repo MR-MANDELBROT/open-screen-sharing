@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
+#endif
 
 struct DebugInfoView: View {
     @ObservedObject var controller: SessionController
@@ -17,7 +19,11 @@ struct DebugInfoView: View {
     private var fontSize: CGFloat { horizontalSizeClass == .compact ? 11 : 12 }
 
     private var width: CGFloat {
+        #if os(iOS)
         let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        #else
+        let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        #endif
         return ("0" as NSString).size(withAttributes: [.font: font]).width * CGFloat(Self.columns)
     }
 

@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 
 struct ComputerCard: View {
@@ -6,11 +7,31 @@ struct ComputerCard: View {
     let device: DeviceAppearance
     var thumbnail: Data? = nil
     var availability: ComputerAvailability? = nil
+    var isSelected = false
 
     private static let cornerRadius: CGFloat = 18
 
     @ScaledMetric(relativeTo: .headline) private var dotSize: CGFloat = 12
     @State private var isHovered = false
+    #if os(macOS)
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.controlActiveState) private var controlActiveState
+    #endif
+
+    private static var fill: Color {
+        #if os(iOS)
+        Color(uiColor: .quaternarySystemFill)
+        #else
+        Color(nsColor: .quaternarySystemFill)
+        #endif
+    }
+
+    private var selectionFill: Color {
+        #if os(macOS)
+        guard isFocused, controlActiveState == .key else { return Color(nsColor: .unemphasizedSelectedContentBackgroundColor) }
+        #endif
+        return Color.accentColor.opacity(0.2)
+    }
 
     private static var hoverShape: some Shape {
         RoundedRectangle(cornerRadius: cornerRadius).inset(by: -8)
@@ -19,7 +40,7 @@ struct ComputerCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             RoundedRectangle(cornerRadius: Self.cornerRadius)
-                .fill(Color(uiColor: .quaternarySystemFill))
+                .fill(Self.fill)
                 .aspectRatio(16 / 10, contentMode: .fit)
                 .overlay(alignment: .top) {
                     if let thumbnail {
@@ -42,13 +63,13 @@ struct ComputerCard: View {
         .contentShape(Rectangle())
         .background {
             Self.hoverShape
-                .fill(Color(uiColor: .quaternarySystemFill))
-                .opacity(isHovered ? 1 : 0)
+                .fill(isSelected ? selectionFill : Self.fill)
+                .opacity(isHovered || isSelected ? 1 : 0)
                 .animation(.smoothCompat(duration: 0.2), value: isHovered)
         }
         .onHover { isHovered = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -142,26 +163,30 @@ private struct ComputerThumbnail: View {
     let data: Data
     var dimmed = false
 
-    @State private var image: UIImage?
+    @State private var image: CGImage?
 
     init(data: Data, dimmed: Bool = false) {
         self.data = data
         self.dimmed = dimmed
-        _image = State(initialValue: UIImage(data: data))
+        _image = State(initialValue: Self.decode(data))
     }
 
     var body: some View {
         Group {
             if let image {
-                Image(uiImage: image)
+                Image(decorative: image, scale: 1)
                     .resizable()
-                    .aspectRatio(contentMode: image.size.height > image.size.width ? .fit : .fill)
+                    .aspectRatio(contentMode: image.height > image.width ? .fit : .fill)
                     .saturation(dimmed ? 0 : 1)
                     .opacity(dimmed ? 0.5 : 1)
             }
         }
-        .onChangeCompat(of: data) { image = UIImage(data: data) }
+        .onChangeCompat(of: data) { image = Self.decode(data) }
         .accessibilityHidden(true)
+    }
+
+    private static func decode(_ data: Data) -> CGImage? {
+        CGImageSourceCreateWithData(data as CFData, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }
     }
 }
 

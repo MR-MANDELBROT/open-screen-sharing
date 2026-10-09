@@ -4,13 +4,22 @@ import Combine
 import CoreGraphics
 import Foundation
 import SwiftUI
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 import UniformTypeIdentifiers
 
 enum ScaleMode: Equatable {
     case fit
     case actualSize
     case custom
+}
+
+struct Letterbox: Equatable {
+    var left: CGRect
+    var top: CGRect
 }
 
 struct CredentialPrompt: Identifiable {
@@ -87,12 +96,27 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var display: DisplaySelection?
     var usesHDR = false
     var remoteAudio = RemoteAudio.fromMac
+    var windowSize: CGSize?
+}
+
+private struct KeyboardSourceRequest {
+    enum Step {
+        case toggling
+        case selecting
+        case leaving
+        case returning
+    }
+
+    let id: String
+    var step: Step
 }
 
 final class SessionController: ObservableObject {
     let route: SessionRoute
     @Published private(set) var title: String
-    @Published private(set) var phase: SessionPhase = .idle
+    @Published private(set) var phase: SessionPhase = .idle {
+        didSet { SessionActivity.shared.set(self, active: phase.isActive) }
+    }
     @Published private(set) var mode: SessionMode = .control
     @Published private(set) var displays: [RemoteDisplay] = []
     @Published private(set) var displaySelection: DisplaySelection = .display(1)
@@ -128,7 +152,6 @@ final class SessionController: ObservableObject {
     @Published var isSystemPointerOverPicture = false
     @Published private(set) var isKeyboardVisible = false
     @Published private(set) var usesHardwareKeyboard = false
-    @Published private(set) var composingText: String?
     @Published var stickyModifiers: Set<ModifierKey> = []
     @Published private(set) var lockedModifiers: Set<ModifierKey> = []
     @Published private(set) var pressedModifiers: Set<ModifierKey> = []
@@ -142,28 +165,41 @@ final class SessionController: ObservableObject {
     @Published private(set) var lastRemoteText: String?
     let debugInfo = DebugInfoMonitor()
     private var lastRemoteClipboard: ClipboardContent?
-    private var syncedClipboardChangeCount = UIPasteboard.general.changeCount
+    private var syncedClipboardChangeCount = ClipboardAccess.changeCount
     private var readingClipboard = false
     private var decidedClipboardSharing = false
 
     let pipeline = DisplayPipeline()
+    #if os(iOS)
     weak var screen: RemoteScreenUIView?
+    #else
+    weak var screen: RemoteScreenNSView?
+    #endif
     var toolbarHandleFrame: CGRect?
     var toolbarBarFrame: CGRect?
     var lastSystemPointerLocation: CGPoint?
     private var pointerLockHasLocked = false
     private let store = ComputerStore.shared
+    #if os(iOS)
     private var miceChanges: AnyCancellable?
+    #endif
     var onClose: () -> Void = {}
 
     private var session: LibsharingRemoteSession?
     private var sink: SessionEventSink?
     private var credentials: SessionCredentials?
-    private var pressedKeys: [UIKeyboardHIDUsage: MacKey] = [:]
+    private var pressedKeys: [Int: MacKey] = [:]
     private var repeatTask: Task<Void, Never>?
     private var capsLockEngaged = false
     private var capsLockPressedAt: TimeInterval?
     private var capsLockActsOnPress = false
+    private var keyboardSourceRequest: KeyboardSourceRequest?
+    #if os(macOS)
+    private var inferredModifierKeys = Set<Int>()
+    #endif
+    private var previousKeyboardSource: String?
+    private var queuedKeyboardSource: MacInputSource?
+    private var keyboardSourceTimeout: Task<Void, Never>?
     private var keyboardType = MacKeyboardType.ansi
     private(set) var pointerPosition = CGPoint.zero
     private var pictureSize = CGSize.zero
@@ -173,13 +209,16 @@ final class SessionController: ObservableObject {
     private var lastPointerMoveTime: TimeInterval = 0
     private var pointerMovedSinceTouch = false
     private var displayArea = CGSize.zero
+    private(set) var windowSize: CGSize?
     private var displayScale: CGFloat = 2
     private var screenSize = CGSize.zero
     private var screenRefreshRate = 60
     private let virtualDisplayRequests = VirtualDisplayRequests()
     private(set) var sceneInBackground = false
     private var activeWhenBackgrounded = false
+    #if os(iOS)
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+    #endif
     private var returnedFromBackground: TimeInterval?
     private var resumeCheck: Task<Void, Never>?
     private var restartsHighPerformanceOnReturn = false
@@ -229,8 +268,11 @@ final class SessionController: ObservableObject {
         deviceType = route.deviceType ?? route.model.flatMap(DeviceType.init(model:))
         isTouchScreen = deviceType?.isTouchScreen ?? false
         isPhone = deviceType == .iPhone
+        windowSize = route.computerID.flatMap { store.stored($0) }?.memory.windowSize
         virtualDisplayRequests.onIdle = { [weak self] in self?.virtualDisplayDidSettle() }
+        #if os(iOS)
         miceChanges = PointerLock.mice.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        #endif
         pipeline.setShownHandler { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -311,8 +353,8 @@ final class SessionController: ObservableObject {
     func submitCredentials(_ credentials: SessionCredentials, remember: Bool) {
         credentialPrompt = nil
         switch credentials.loginType {
-        case .askForPermission, .none: passwordUpdate = .keep
-        case .account, .vncPassword: passwordUpdate = remember ? .save(credentials.password) : .delete
+        case .account: passwordUpdate = remember ? .save(credentials.password) : .delete
+        case .vncPassword, .askForPermission, .none: passwordUpdate = .keep
         }
         usedSavedPassword = false
         connect(with: credentials)
@@ -333,6 +375,7 @@ final class SessionController: ObservableObject {
         chosenDisplay = memory.display
         hdrEnabled = memory.usesHDR && DecoderCapabilities.current.supportsHDR
         remoteAudio = memory.remoteAudio
+        windowSize = memory.windowSize
         isRestoring = false
     }
 
@@ -345,7 +388,8 @@ final class SessionController: ObservableObject {
             resolutionScale: resolutionScale,
             display: chosenDisplay,
             usesHDR: hdrEnabled,
-            remoteAudio: remoteAudio
+            remoteAudio: remoteAudio,
+            windowSize: windowSize
         )
     }
 
@@ -445,7 +489,7 @@ final class SessionController: ObservableObject {
         let configuration = SessionConfiguration(
             address: route.address,
             displayName: route.name,
-            clientName: credentials.username.isEmpty ? UIDevice.current.name : credentials.username,
+            clientName: credentials.username.isEmpty ? Self.deviceName : credentials.username,
             credentials: credentials,
             quality: quality,
             startsInObserveMode: mode == .observe,
@@ -494,6 +538,7 @@ final class SessionController: ObservableObject {
     }
 
     func disconnect() {
+        isClosing = true
         releaseAllKeys()
         teardown()
         phase = .disconnected
@@ -501,7 +546,6 @@ final class SessionController: ObservableObject {
     }
 
     func close() {
-        isClosing = true
         disconnect()
         onClose()
     }
@@ -543,7 +587,6 @@ final class SessionController: ObservableObject {
         awaitsVirtualDisplay = false
         highPerformanceAwaitsDisplay = false
         abandonTransfers()
-        updateIdleTimer()
     }
 
 
@@ -592,16 +635,20 @@ final class SessionController: ObservableObject {
     }
 
     private func beginBackgroundTask() {
+        #if os(iOS)
         guard backgroundTask == .invalid else { return }
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Screen Sharing session") { [self] in
             endBackgroundTask()
         }
+        #endif
     }
 
     private func endBackgroundTask() {
+        #if os(iOS)
         guard backgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTask)
         backgroundTask = .invalid
+        #endif
     }
 
     private static let resumeWindow: TimeInterval = 5
@@ -744,7 +791,6 @@ final class SessionController: ObservableObject {
         default:
             break
         }
-        updateIdleTimer()
     }
 
     private func startHighPerformanceIfDisplayReady() {
@@ -860,27 +906,14 @@ final class SessionController: ObservableObject {
         releaseAllKeys()
         teardown()
         phase = .failed(SessionFailure(.highPerformance(failure.kind), message: failure.message))
-        updateIdleTimer()
     }
 
     fileprivate func handle(clipboard content: ClipboardContent) {
         guard content != lastRemoteClipboard else { return }
         lastRemoteClipboard = content
         guard !content.isEmpty else { return }
-        let items: [[String: Any]] = content.map { item in
-            var converted: [String: Any] = [:]
-            for (type, data) in item {
-                if type == UTType.utf8PlainText.identifier, let text = String(data: data, encoding: .utf8) {
-                    converted[type] = text
-                } else {
-                    converted[type] = data
-                }
-            }
-            return converted
-        }
-        UIPasteboard.general.setItems(items)
-        ClipboardAccess.shared.noteOwnWrite()
-        syncedClipboardChangeCount = UIPasteboard.general.changeCount
+        ClipboardAccess.shared.write(content)
+        syncedClipboardChangeCount = ClipboardAccess.changeCount
         lastRemoteText = content.lazy.compactMap { $0[UTType.utf8PlainText.identifier].flatMap { String(data: $0, encoding: .utf8) } }.first
     }
 
@@ -891,15 +924,38 @@ final class SessionController: ObservableObject {
     }
 
     fileprivate func handle(keyboardSource source: String?, secureInput: Bool) {
+        let current = info.keyboardSource
+        if let current, let source, source != current {
+            previousKeyboardSource = current
+        }
         info.keyboardSource = source
         info.secureInput = secureInput
         rememberKeyboardSource(source)
+        guard let source, let request = keyboardSourceRequest else { return }
+        switch request.step {
+        case .toggling where source == request.id:
+            advanceKeyboardSource(request.id, to: nil)
+        case .toggling where source != current:
+            advanceKeyboardSource(request.id, to: .selecting)
+        case .selecting where source == request.id:
+            advanceKeyboardSource(request.id, to: .leaving)
+        case .leaving where source != request.id:
+            advanceKeyboardSource(request.id, to: .returning)
+        case .returning where source == request.id:
+            advanceKeyboardSource(request.id, to: nil)
+        default:
+            break
+        }
     }
 
     fileprivate func handle(event: SessionEvent) {
         switch event {
         case .bell:
+            #if os(iOS)
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            #else
+            NSSound.beep()
+            #endif
         case .displaysAsleep, .displaysAwake, .userSessionChanged, .sessionEnding, .controlAllowed, .busy:
             break
         case .pointerVisible(let visible):
@@ -912,7 +968,19 @@ final class SessionController: ObservableObject {
 
 
     static var downloadsFolder: URL {
+        #if os(iOS)
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        #else
+        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        #endif
+    }
+
+    private static var deviceName: String {
+        #if os(iOS)
+        UIDevice.current.name
+        #else
+        Host.current().localizedName ?? ""
+        #endif
     }
 
     func uploadFiles(_ urls: [URL], to remoteFolder: String, temporary: Bool = false) {
@@ -1119,14 +1187,33 @@ final class SessionController: ObservableObject {
             if #available(iOS 17, *) {
                 granted = await AVAudioApplication.requestRecordPermission()
             } else {
+                #if os(iOS)
                 granted = await withCheckedContinuation { continuation in
                     AVAudioSession.sharedInstance().requestRecordPermission { @Sendable granted in
                         continuation.resume(returning: granted)
                     }
                 }
+                #else
+                granted = false
+                #endif
             }
             guard granted else {
+                #if os(iOS)
                 alert = AlertState(String(localized: "Can’t Use the Microphone"), errorMessage: String(localized: "Microphone access is turned off in Settings."))
+                #else
+                alert = AlertState(
+                    title: String(localized: "Can’t Use the Microphone"),
+                    message: String(localized: "Microphone access is turned off in System Settings."),
+                    actions: [
+                        AlertState.Action(label: String(localized: "Open System Settings"), role: nil) {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        },
+                        AlertState.Action(label: String(localized: "OK"), role: .cancel) {},
+                    ]
+                )
+                #endif
                 return
             }
             guard microphone == nil, isVideo, remoteAudio == .toMac, !sceneInBackground else { return }
@@ -1191,7 +1278,13 @@ final class SessionController: ObservableObject {
         displayArea = area
         displayScale = scale
         screenSize = screen
-        requestVirtualDisplay()
+        requestVirtualDisplay(holdingPicture: true)
+    }
+
+    func windowSizeDidChange(_ size: CGSize) {
+        guard size != windowSize else { return }
+        windowSize = size
+        rememberState()
     }
 
     func screenRefreshRateDidChange(_ rate: Int) {
@@ -1220,7 +1313,7 @@ final class SessionController: ObservableObject {
 
     @discardableResult
     func sendChangedClipboard(completion: @escaping (Bool) -> Void = { _ in }) -> Bool {
-        let changeCount = UIPasteboard.general.changeCount
+        let changeCount = ClipboardAccess.changeCount
         guard clipboardSharing, phase == .connected, capabilities.contains(.clipboard), !readingClipboard,
             changeCount != syncedClipboardChangeCount
         else { return false }
@@ -1248,7 +1341,7 @@ final class SessionController: ObservableObject {
     }
 
     @discardableResult
-    private func sendClipboard(_ content: ClipboardContent, changeCount: Int = UIPasteboard.general.changeCount) -> Bool {
+    private func sendClipboard(_ content: ClipboardContent, changeCount: Int = ClipboardAccess.changeCount) -> Bool {
         do {
             guard let session else { throw MessageError("not connected") }
             try session.sendClipboard(content)
@@ -1290,7 +1383,9 @@ final class SessionController: ObservableObject {
     }
 
     func setKeyboardVisible(_ visible: Bool) {
+        #if os(iOS)
         screen?.setKeyboardVisible(visible)
+        #endif
     }
 
     func toggleKeyboard() {
@@ -1305,16 +1400,16 @@ final class SessionController: ObservableObject {
         if uses != usesHardwareKeyboard { usesHardwareKeyboard = uses }
     }
 
-    func composingTextDidChange(_ text: String?) {
-        if text != composingText { composingText = text }
-    }
-
     func toggleToolbar() {
         withAnimation(.smoothCompat(duration: 0.25)) { isToolbarVisible.toggle() }
     }
 
     var canLockPointer: Bool {
+        #if os(iOS)
         mode.controls && isFullScreen
+        #else
+        mode.controls
+        #endif
     }
 
     func setPointerLock(_ on: Bool) {
@@ -1503,6 +1598,7 @@ final class SessionController: ObservableObject {
     }
 
 
+    #if os(iOS)
     func handlePress(_ key: UIKey, down: Bool) -> Bool {
         if down { setUsesHardwareKeyboard(true) }
         let usage = key.keyCode
@@ -1511,34 +1607,122 @@ final class SessionController: ObservableObject {
             if down { capsLockPressed() } else { capsLockReleased() }
             return true
         }
+        if down, isControlling {
+            keyboardType = keyboardType.learning(from: usage)
+            if let shortcut = KeyShortcut(key: key), let chord = KeyShortcuts.shared.chord(for: shortcut) {
+                performMapping(chord, held: heldModifiers(from: key.modifierFlags))
+                return true
+            }
+        }
+        return handleKey(id: usage.rawValue, down: down, held: heldModifiers(from: key.modifierFlags), repeats: true) { macKey(for: key) }
+    }
+    #else
+    func handleKeyEvent(_ event: NSEvent) -> Bool {
+        let id = Int(event.keyCode)
+        switch event.type {
+        case .flagsChanged:
+            if event.keyCode == MacKey.capsLock.keyCode {
+                if isControlling {
+                    setCapsLock(event.modifierFlags.contains(.capsLock))
+                }
+                return false
+            }
+            guard let key = Self.modifierKeys[event.keyCode] else { return false }
+            let flags = event.modifierFlags
+            let down = flags.rawValue & Self.deviceModifierMask == 0 ? flags.contains(key.flag) : flags.rawValue & key.deviceMask != 0
+            inferredModifierKeys.remove(id)
+            let handled = handleKey(id: id, down: down, held: [], repeats: false) {
+                MacKey(keyCode: event.keyCode, keysym: Keysym.special(forKeyCode: event.keyCode) ?? 0)
+            }
+            syncModifiers(flags)
+            return handled
+        case .keyDown where event.isARepeat:
+            guard let pressed = pressedKeys[id] else { return isControlling }
+            send(pressed, down: true)
+            return true
+        case .keyDown, .keyUp:
+            if event.type == .keyDown, isControlling {
+                keyboardType = .current
+            }
+            syncModifiers(event.modifierFlags)
+            if event.type == .keyDown, isControlling, let shortcut = KeyShortcut(event: event), let chord = KeyShortcuts.shared.chord(for: shortcut) {
+                performMapping(chord, held: heldModifiers(from: event.modifierFlags))
+                return true
+            }
+            return handleKey(id: id, down: event.type == .keyDown, held: heldModifiers(from: event.modifierFlags), repeats: false) {
+                MacKey(keyCode: event.keyCode, keysym: keysym(for: event) ?? 0)
+            }
+        default:
+            return false
+        }
+    }
+
+    func syncCapsLock(_ engaged: Bool) {
+        guard isControlling else { return }
+        setCapsLock(engaged)
+    }
+
+    func syncModifiers(_ flags: NSEvent.ModifierFlags) {
+        inferredModifierKeys.formIntersection(pressedKeys.keys)
+        guard isControlling else { return }
+        setCapsLock(flags.contains(.capsLock))
+        let held = heldModifiers(from: flags)
+        let latched = lockedModifiers.union(pressedModifiers)
+        for modifier in ModifierKey.allCases where !latched.contains(modifier) {
+            let sent = pressedKeys.keys.filter { id in UInt16(exactly: id).flatMap { Self.modifierKeys[$0]?.modifier } == modifier }
+            if !held.contains(modifier) {
+                for id in sent where inferredModifierKeys.contains(id) {
+                    inferredModifierKeys.remove(id)
+                    if let key = pressedKeys.removeValue(forKey: id) {
+                        send(key, down: false)
+                    }
+                }
+            } else if sent.isEmpty, let keyCode = modifier.macKey.keyCode {
+                pressedKeys[Int(keyCode)] = modifier.macKey
+                inferredModifierKeys.insert(Int(keyCode))
+                send(modifier.macKey, down: true)
+            }
+        }
+    }
+
+    private static let deviceModifierMask: UInt = 0x207f
+
+    private static let modifierKeys: [UInt16: (modifier: ModifierKey?, flag: NSEvent.ModifierFlags, deviceMask: UInt)] = [
+        59: (.control, .control, 0x01), 62: (.control, .control, 0x2000),
+        56: (.shift, .shift, 0x02), 60: (.shift, .shift, 0x04),
+        55: (.command, .command, 0x08), 54: (.command, .command, 0x10),
+        58: (.option, .option, 0x20), 61: (.option, .option, 0x40),
+        63: (nil, .function, NSEvent.ModifierFlags.function.rawValue),
+    ]
+    #endif
+
+    private func handleKey(id: Int, down: Bool, held: Set<ModifierKey>, repeats: Bool, mapping: () -> MacKey?) -> Bool {
         if !down {
-            guard let pressed = pressedKeys.removeValue(forKey: usage) else {
-                return isControlling && macKey(for: key) != nil
+            guard let pressed = pressedKeys.removeValue(forKey: id) else {
+                return isControlling && mapping() != nil
             }
             send(pressed, down: false)
             return true
         }
-        guard isControlling else { return false }
-        keyboardType = keyboardType.learning(from: usage)
-        guard let mapped = macKey(for: key) else { return false }
+        guard isControlling, let mapped = mapping() else { return false }
         if !mapped.isModifier { textCursorMayHaveMoved() }
         if info.secureInput, !Keysym.typesInSecureInput(mapped.keysym) {
             showSecureInputNotice()
             return true
         }
-        if let previous = pressedKeys.removeValue(forKey: usage) {
+        if let previous = pressedKeys.removeValue(forKey: id) {
             send(previous, down: false)
         }
-        let sticky = mapped.isModifier ? [] : stickyModifiers.subtracting(heldModifiers(from: key.modifierFlags))
+        let sticky = mapped.isModifier ? [] : stickyModifiers.subtracting(held)
         if !sticky.isEmpty {
             stickyModifiers.removeAll()
             tap(mapped, modifiers: sticky)
             return true
         }
-        pressedKeys[usage] = mapped
+        pressedKeys[id] = mapped
         send(mapped, down: true)
-        if !mapped.isModifier {
-            startRepeat(mapped, usage: usage)
+        if !mapped.isModifier, repeats {
+            startRepeat(mapped, id: id)
         }
         return true
     }
@@ -1663,7 +1847,20 @@ final class SessionController: ObservableObject {
     }
 
     private func textCursorMayHaveMoved() {
+        #if os(iOS)
         screen?.forgetTypedText()
+        #endif
+    }
+
+    private func performMapping(_ chord: KeyChord, held: Set<ModifierKey>) {
+        textCursorMayHaveMoved()
+        let wanted = Set(chord.modifiers)
+        let latched = held.union(lockedModifiers).union(pressedModifiers)
+        var releasing = Set(pressedKeys.values.filter { key in ModifierKey(keysym: key.keysym).map { !wanted.contains($0) } ?? false })
+        for modifier in lockedModifiers.union(pressedModifiers).subtracting(wanted) { releasing.insert(modifier.macKey) }
+        for key in releasing { send(key, down: false) }
+        tap(chord.key, modifiers: wanted.subtracting(latched))
+        for key in releasing { send(key, down: true) }
     }
 
     private func tap(_ key: MacKey, modifiers: Set<ModifierKey>) {
@@ -1729,13 +1926,63 @@ final class SessionController: ObservableObject {
     }
 
     func selectKeyboardSource(_ source: MacInputSource) {
-        guard isControlling, !info.secureInput, source.id != info.keyboardSource else { return }
-        session?.selectKeyboardSource(source.id)
-        if source.isInputMethod {
-            sendChord(.previousInputSource)
+        guard isControlling, !info.secureInput else { return }
+        guard keyboardSourceRequest == nil else {
+            queuedKeyboardSource = source
+            return
+        }
+        guard source.id != info.keyboardSource else { return }
+        advanceKeyboardSource(source.id, to: previousKeyboardSource == nil || previousKeyboardSource == source.id ? .toggling : .selecting)
+    }
+
+    private func advanceKeyboardSource(_ id: String, to step: KeyboardSourceRequest.Step?) {
+        keyboardSourceTimeout?.cancel()
+        guard let step else {
+            keyboardSourceRequest = nil
+            if let queued = queuedKeyboardSource {
+                queuedKeyboardSource = nil
+                selectKeyboardSource(queued)
+            }
+            return
+        }
+        if step == .selecting {
+            session?.selectKeyboardSource(id)
+        } else {
             sendChord(.previousInputSource)
         }
+        keyboardSourceRequest = KeyboardSourceRequest(id: id, step: step)
+        keyboardSourceTimeout = Task { [weak self] in
+            try? await Task.sleep(seconds: 0.5)
+            guard !Task.isCancelled, let self else { return }
+            switch step {
+            case .toggling:
+                self.advanceKeyboardSource(id, to: .selecting)
+            case .selecting:
+                self.advanceKeyboardSource(id, to: .leaving)
+            case .leaving:
+                self.advanceKeyboardSource(id, to: nil)
+            case .returning:
+                self.sendChord(.previousInputSource)
+                self.advanceKeyboardSource(id, to: nil)
+            }
+        }
     }
+
+    #if os(macOS)
+    func followKeyboardSource(_ id: String) {
+        let local = MacInputSource(id: id)
+        guard !info.secureInput, let current = keyboardSource, local != current else { return }
+        if keyboardSources.contains(local) {
+            selectKeyboardSource(local)
+        } else if local.isInputMethod != current.isInputMethod {
+            if let match = keyboardSources.last(where: { $0.isInputMethod == local.isInputMethod }) {
+                selectKeyboardSource(match)
+            } else {
+                switchKeyboardSource()
+            }
+        }
+    }
+    #endif
 
     private func rememberKeyboardSource(_ id: String?) {
         guard let id, !keyboardSources.contains(where: { $0.id == id }) else { return }
@@ -1806,6 +2053,7 @@ final class SessionController: ObservableObject {
         pressedModifiers.removeAll()
     }
 
+    #if os(iOS)
     private func heldModifiers(from flags: UIKeyModifierFlags) -> Set<ModifierKey> {
         var result = Set<ModifierKey>()
         if flags.contains(.control) { result.insert(.control) }
@@ -1814,7 +2062,32 @@ final class SessionController: ObservableObject {
         if flags.contains(.command) { result.insert(.command) }
         return result
     }
+    #else
+    private func heldModifiers(from flags: NSEvent.ModifierFlags) -> Set<ModifierKey> {
+        var result = Set<ModifierKey>()
+        if flags.contains(.control) { result.insert(.control) }
+        if flags.contains(.option) { result.insert(.option) }
+        if flags.contains(.shift) { result.insert(.shift) }
+        if flags.contains(.command) { result.insert(.command) }
+        return result
+    }
 
+    private func keysym(for event: NSEvent) -> UInt32? {
+        if let special = Keysym.special(forKeyCode: event.keyCode) { return special }
+        let flags = event.modifierFlags
+        let base = event.charactersIgnoringModifiers ?? ""
+        var text = event.characters ?? ""
+        if flags.contains(.command) || flags.contains(.control) {
+            text = flags.contains(.shift) ? base.uppercased() : base.lowercased()
+        } else if let scalar = text.unicodeScalars.first, scalar.value < 0x20 || scalar.value == 0x7f {
+            text = base
+        }
+        guard let scalar = text.unicodeScalars.first else { return nil }
+        return Keysym.character(scalar)
+    }
+    #endif
+
+    #if os(iOS)
     private func macKey(for key: UIKey) -> MacKey? {
         let typed = keysym(for: key)
         guard let keyCode = MacKey.keyCode(for: key.keyCode, type: keyboardType) else {
@@ -1855,12 +2128,14 @@ final class SessionController: ObservableObject {
         return Keysym.character(scalar)
     }
 
-    private func startRepeat(_ key: MacKey, usage: UIKeyboardHIDUsage) {
+    #endif
+
+    private func startRepeat(_ key: MacKey, id: Int) {
         stopRepeat()
         repeatTask = Task { [weak self] in
             try? await Task.sleep(seconds: 0.45)
             while !Task.isCancelled {
-                guard let self, self.pressedKeys[usage] == key else { return }
+                guard let self, self.pressedKeys[id] == key else { return }
                 self.send(key, down: true)
                 try? await Task.sleep(seconds: 0.04)
             }
@@ -1880,17 +2155,15 @@ final class SessionController: ObservableObject {
     func sampleDebugInfo() {
         debugInfo.sample(phase == .connected ? session?.statistics() : nil)
     }
-
-
-    private func updateIdleTimer() {
-        SessionActivity.shared.set(self, active: phase.isActive)
-    }
 }
 
 @MainActor
 final class SessionActivity {
     static let shared = SessionActivity()
     private var active = Set<ObjectIdentifier>()
+    #if os(macOS)
+    private var activity: (any NSObjectProtocol)?
+    #endif
 
     func set(_ controller: AnyObject, active isActive: Bool) {
         if isActive {
@@ -1898,7 +2171,16 @@ final class SessionActivity {
         } else {
             active.remove(ObjectIdentifier(controller))
         }
+        #if os(iOS)
         UIApplication.shared.isIdleTimerDisabled = !active.isEmpty
+        #else
+        if active.isEmpty, let activity {
+            ProcessInfo.processInfo.endActivity(activity)
+            self.activity = nil
+        } else if !active.isEmpty, activity == nil {
+            activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleDisplaySleepDisabled], reason: "Screen Sharing session")
+        }
+        #endif
     }
 }
 

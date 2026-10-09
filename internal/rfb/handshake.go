@@ -201,6 +201,10 @@ func (h *handshake) authenticate() error {
 	if err != nil {
 		return fmt.Errorf("read security result: %w", err)
 	}
+	return h.securityResult(result)
+}
+
+func (h *handshake) securityResult(result uint32) error {
 	if result == 0 {
 		return nil
 	}

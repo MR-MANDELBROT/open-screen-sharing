@@ -1,10 +1,10 @@
 import SwiftUI
-import UIKit
 
 struct AlertState {
     struct Action {
         var label: String
         var role: ButtonRole?
+        var isDefault = false
         var perform: () -> Void
     }
 
@@ -24,12 +24,11 @@ struct AlertState {
 
     init(_ failure: String, errorMessage: String, closeLabel: String = String(localized: "OK"), onClose: @escaping () -> Void = {}) {
         let message = errorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        var actions = [Action(label: closeLabel, role: .cancel, perform: onClose)]
+        var actions = [Action(label: closeLabel, role: .cancel, isDefault: true, perform: onClose)]
         if !message.isEmpty {
             actions.insert(
                 Action(label: String(localized: "Copy"), role: nil) {
-                    UIPasteboard.general.string = "\(failure)\n\(message)"
-                    ClipboardAccess.shared.noteOwnWrite()
+                    ClipboardAccess.shared.write("\(failure)\n\(message)")
                     onClose()
                 }, at: 0)
         }
@@ -46,7 +45,12 @@ extension View {
         ) { alert in
             ForEach(alert.actions.indices, id: \.self) { index in
                 let action = alert.actions[index]
+                #if os(macOS)
                 Button(action.label, role: action.role, action: action.perform)
+                    .keyboardShortcut(action.isDefault ? .defaultAction : nil)
+                #else
+                Button(action.label, role: action.role, action: action.perform)
+                #endif
             }
         } message: { alert in
             if !alert.message.isEmpty {

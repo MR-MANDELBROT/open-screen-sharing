@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Screen Sharing</title>
+    <pkg-ref id="io.nekohasekai.screensharing"/>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+    <choice id="default" title="Screen Sharing">
+        <pkg-ref id="io.nekohasekai.screensharing"/>
+    </choice>
+    <pkg-ref id="io.nekohasekai.screensharing" version="0" onConclusion="none">component.pkg</pkg-ref>
+</installer-gui-script>

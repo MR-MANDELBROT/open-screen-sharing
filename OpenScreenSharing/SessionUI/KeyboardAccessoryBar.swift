@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 
 struct KeyboardAccessoryBar: View {
@@ -7,35 +8,22 @@ struct KeyboardAccessoryBar: View {
         ScrollView(.horizontal, showsIndicators: false) {
             GlassEffectContainerCompat(spacing: 10) {
                 HStack(spacing: 10) {
-                    if let composing = controller.composingText {
-                        group {
-                            Text(verbatim: composing)
-                                .underline()
-                                .padding(.horizontal, 8)
-                                .frame(minHeight: 44)
-                        }
-                    }
-                    if controller.usesHardwareKeyboard {
-                        group {
-                            if let source = controller.keyboardSource {
-                                inputSourceMenu(source)
-                            } else {
-                                key("Globe Key", systemImage: "globe") { controller.sendChord(.globe) }
-                            }
-                        }
-                    }
                     group {
                         key("Escape", text: "esc", key: .escape)
-                        key("Tab", systemImage: "arrow.right.to.line", key: .tab)
+                        if !controller.usesHardwareKeyboard {
+                            key("Tab", systemImage: "arrow.right.to.line", key: .tab)
+                        }
                         ForEach(ModifierKey.allCases, id: \.self) { modifier in
                             ModifierKeyButton(controller: controller, modifier: modifier)
                         }
                     }
-                    group {
-                        key("Left Arrow", systemImage: "arrowtriangle.left.fill", key: .left)
-                        key("Up Arrow", systemImage: "arrowtriangle.up.fill", key: .up)
-                        key("Down Arrow", systemImage: "arrowtriangle.down.fill", key: .down)
-                        key("Right Arrow", systemImage: "arrowtriangle.right.fill", key: .right)
+                    if !controller.usesHardwareKeyboard {
+                        group {
+                            key("Left Arrow", systemImage: "arrowtriangle.left.fill", key: .left)
+                            key("Up Arrow", systemImage: "arrowtriangle.up.fill", key: .up)
+                            key("Down Arrow", systemImage: "arrowtriangle.down.fill", key: .down)
+                            key("Right Arrow", systemImage: "arrowtriangle.right.fill", key: .right)
+                        }
                     }
                     group {
                         functionKeysMenu
@@ -92,44 +80,6 @@ struct KeyboardAccessoryBar: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(String(localized: title)))
-        .hoverEffect()
-        .accessibilityShowsLargeContentViewer()
-    }
-
-    private func inputSourceMenu(_ current: MacInputSource) -> some View {
-        Menu {
-            Picker(
-                "Mac Input Source",
-                selection: Binding(get: { current }, set: { controller.selectKeyboardSource($0) })
-            ) {
-                ForEach(controller.keyboardSources) { source in
-                    Text(source.title).tag(source)
-                }
-            }
-            .pickerStyle(.inline)
-            Section {
-                Button {
-                    controller.sendChord(.globe)
-                } label: { Label("Globe Key", systemImage: "globe") }
-            }
-        } label: {
-            Group {
-                if let label = current.label {
-                    Text(verbatim: label)
-                        .font(.subheadline.weight(.semibold))
-                } else {
-                    Image(systemName: "globe")
-                }
-            }
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-        } primaryAction: {
-            controller.switchKeyboardSource()
-        }
-        .disabled(controller.info.secureInput)
-        .accessibilityLabel(Text("Mac Input Source"))
-        .accessibilityValue(Text(current.title))
-        .accessibilityHint(Text("Switches the Mac to its previous input source."))
         .hoverEffect()
         .accessibilityShowsLargeContentViewer()
     }
@@ -284,3 +234,4 @@ struct ModifierKeyButton: View {
         lastTap = now
     }
 }
+#endif

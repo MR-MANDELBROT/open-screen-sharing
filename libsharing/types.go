@@ -69,6 +69,8 @@ const (
 	ErrorSessionEnded int32 = 8
 
 	ErrorHostNotFound int32 = 9
+
+	ErrorOwnScreen int32 = 10
 )
 
 const (

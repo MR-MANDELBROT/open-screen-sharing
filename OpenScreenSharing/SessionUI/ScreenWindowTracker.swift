@@ -1,3 +1,4 @@
+#if os(iOS)
 import UIKit
 
 final class ScreenWindowTracker {
@@ -208,3 +209,4 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         SessionOrientation.supportedOrientations(for: window?.windowScene)
     }
 }
+#endif

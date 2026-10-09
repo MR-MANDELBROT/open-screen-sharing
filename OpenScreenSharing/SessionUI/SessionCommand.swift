@@ -4,7 +4,8 @@ enum SessionCommand: String, CaseIterable, Identifiable {
     case zoomMode, scale, displays, quality, resolution, hdr
     case audio
     case observe = "control"
-    case pointerLock, keyboard, missionControl, appWindows, showDesktop, launchpad, spotlight, commandTab
+    case pointerLock, keyboard, functionKeys, moreKeys
+    case missionControl, appWindows, showDesktop, launchpad, spotlight, commandTab
     case home, appSwitcher, lock, volumeUp, volumeDown
     case clipboard
     case debugInfo
@@ -23,6 +24,8 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .observe: "Observe Mode"
         case .pointerLock: "Pointer Lock"
         case .keyboard: "Keyboard"
+        case .functionKeys: "Function Keys"
+        case .moreKeys: "More Keys"
         case .missionControl, .appWindows, .showDesktop, .launchpad: systemCommand!.title
         case .spotlight: "Spotlight"
         case .commandTab: "Command-Tab"
@@ -48,6 +51,8 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .observe: "eye"
         case .pointerLock: "computermouse"
         case .keyboard: "keyboard"
+        case .functionKeys: "fn"
+        case .moreKeys: if #available(iOS 16, *) { "arrow.up.and.down.text.horizontal" } else { "ellipsis" }
         case .missionControl, .appWindows, .showDesktop, .launchpad: systemCommand!.systemImage
         case .spotlight: "magnifyingglass"
         case .commandTab: "command"
@@ -65,8 +70,8 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         switch self {
         case .zoomMode, .scale, .displays, .quality, .resolution, .hdr: .view
         case .audio: .sound
-        case .observe, .pointerLock, .keyboard, .missionControl, .appWindows, .showDesktop, .launchpad, .spotlight, .commandTab,
-            .home, .appSwitcher, .lock, .volumeUp, .volumeDown:
+        case .observe, .pointerLock, .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows, .showDesktop,
+            .launchpad, .spotlight, .commandTab, .home, .appSwitcher, .lock, .volumeUp, .volumeDown:
             .control
         case .clipboard: .clipboard
         case .debugInfo: .debug
@@ -88,7 +93,14 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .home, .appSwitcher, .lock, .volumeUp, .volumeDown: touchScreen
         case .displays, .quality, .resolution, .hdr, .missionControl, .appWindows, .showDesktop, .launchpad, .commandTab:
             !touchScreen
-        case .zoomMode, .scale, .audio, .observe, .pointerLock, .keyboard, .spotlight, .clipboard, .debugInfo: true
+        case .zoomMode, .scale, .audio, .observe, .pointerLock, .spotlight, .clipboard, .debugInfo: true
+        #if os(iOS)
+        case .keyboard: true
+        case .functionKeys, .moreKeys: false
+        #else
+        case .keyboard: false
+        case .functionKeys, .moreKeys: !touchScreen
+        #endif
         }
     }
 
@@ -107,8 +119,13 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .hdr:
             return controller.usesHighPerformance && controller.displaySupportsHDR && offers(.highPerformance)
                 && controller.networkSupportsHDR
-        case .observe, .keyboard, .spotlight, .commandTab, .lock, .volumeUp, .volumeDown: return offers(.control)
+        case .observe, .spotlight, .commandTab, .lock, .volumeUp, .volumeDown, .functionKeys, .moreKeys: return offers(.control)
+        case .keyboard: return offers(.control)
+        #if os(iOS)
         case .pointerLock: return offers(.control) && PointerLock.hasMouse
+        #else
+        case .pointerLock: return offers(.control)
+        #endif
         case .home: return !known || controller.canPerform(.showDesktop)
         case .appSwitcher: return !known || controller.canPerform(.missionControl)
         case .missionControl, .appWindows, .showDesktop, .launchpad:
@@ -126,8 +143,8 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .hdr: return controller.canUseHDR
         case .observe: return controller.capabilities.contains(.control)
         case .pointerLock: return controller.canLockPointer
-        case .keyboard, .missionControl, .appWindows, .showDesktop, .launchpad, .spotlight, .commandTab, .home, .appSwitcher, .lock,
-            .volumeUp, .volumeDown:
+        case .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows, .showDesktop, .launchpad, .spotlight, .commandTab, .home,
+            .appSwitcher, .lock, .volumeUp, .volumeDown:
             return controller.isControlling
         }
     }
@@ -213,7 +230,11 @@ struct SessionCommandView: View {
                 Button { controller.isShowingResolution = true } label: { label }
                     .resolutionPopover(controller: controller, isPresented: $controller.isShowingResolution)
             case .menuItem:
+                #if os(iOS)
                 Button { controller.isShowingResolution = true } label: { Label("Resolution…", systemImage: command.systemImage) }
+                #else
+                Menu { ResolutionOptions(controller: controller) } label: { label }
+                #endif
             }
         case .hdr:
             toggle(
@@ -232,6 +253,10 @@ struct SessionCommandView: View {
                     controller.toggleToolbar()
                 }
             }
+        case .functionKeys:
+            Menu { FunctionKeyItems(controller: controller) } label: { label }
+        case .moreKeys:
+            Menu { MoreKeyItems(controller: controller) } label: { label }
         case .missionControl, .appWindows, .showDesktop, .launchpad:
             let systemCommand = command.systemCommand!
             Button {
@@ -265,7 +290,11 @@ struct SessionCommandView: View {
     @ViewBuilder
     private func toggle(isOn: Binding<Bool>, subtitle: LocalizedStringKey? = nil) -> some View {
         switch style {
+        #if os(iOS)
         case .barItem: Toggle(isOn: isOn) { label }.toggleStyle(BarToggleStyle())
+        #else
+        case .barItem: Toggle(isOn: isOn) { label }.toggleStyle(.button)
+        #endif
         case .menuItem:
             Toggle(isOn: isOn) {
                 label

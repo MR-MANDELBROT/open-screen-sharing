@@ -76,6 +76,7 @@ func DetectLoopbackAddress(remotePairingPort int32) string {
 
 type DeviceServer struct {
 	pairingPort atomic.Uint32
+	port        int32
 	server      *deviceserver.Server
 }
 
@@ -100,7 +101,7 @@ func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) 
 	if connectLogger != nil {
 		connectLogger = connectLogger.With("component", "device")
 	}
-	s := &DeviceServer{}
+	s := &DeviceServer{port: options.Port}
 	s.setPairingPort(options.RemotePairingPort)
 	server, err := deviceserver.New(deviceserver.Options{
 		Connect: func(ctx context.Context) (*coredevice.Device, error) {
@@ -153,7 +154,14 @@ func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) 
 }
 
 func (s *DeviceServer) Start() error {
-	return s.server.Start()
+	err := s.server.Start()
+	if err != nil {
+		return err
+	}
+	servingDevices.access.Lock()
+	servingDevices.ports[s] = s.port
+	servingDevices.access.Unlock()
+	return nil
 }
 
 func (s *DeviceServer) SetRemotePairingPort(port int32) {
@@ -170,6 +178,9 @@ func (s *DeviceServer) setPairingPort(port int32) bool {
 }
 
 func (s *DeviceServer) Close() {
+	servingDevices.access.Lock()
+	delete(servingDevices.ports, s)
+	servingDevices.access.Unlock()
 	s.server.Close()
 }
 

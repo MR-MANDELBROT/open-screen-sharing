@@ -61,7 +61,7 @@ final class ComputerStore: ObservableObject {
         guard let computer = computer(id) else { return nil }
         return StoredComputer(
             username: computer.username,
-            password: computer.password,
+            password: computer.authenticates ? computer.password : "",
             memory: computer.memory,
             networkConfiguration: computer.networkConfiguration,
             device: computer.model.isEmpty ? nil : DeviceInfo(model: computer.model, enclosureColor: computer.enclosureColor),
@@ -104,11 +104,17 @@ final class ComputerStore: ObservableObject {
             if let username, computer.username != username {
                 computer.username = username
                 computer.password = ""
+                computer.authenticates = false
             }
             switch connection.password {
-            case .keep: break
-            case .save(let password): computer.password = password
-            case .delete: computer.password = ""
+            case .keep:
+                break
+            case .save(let password):
+                computer.password = password
+                computer.authenticates = true
+            case .delete:
+                computer.password = ""
+                computer.authenticates = false
             }
             computer.lastConnected = Date()
             computer.supportsHighPerformance = connection.supportsHighPerformance

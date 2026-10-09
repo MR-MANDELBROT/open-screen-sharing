@@ -3,11 +3,17 @@ import SwiftUI
 @main
 enum OpenScreenSharingMain {
     static func main() {
+        #if os(iOS)
         if #available(iOS 17, *) {
             MultiWindowApp.main()
         } else {
             SingleWindowApp.main()
         }
+        #else
+        // AppKit opens no default window whenever saved state exists, even if SwiftUI restores no window from it.
+        UserDefaults.standard.register(defaults: ["ApplePersistenceIgnoreState": true])
+        MacApp.main()
+        #endif
     }
 }
 
@@ -20,7 +26,7 @@ final class AppLaunch {
         _ = AppDatabase.shared
         nearby = Demo.current?.nearby ?? NearbyBrowser()
         availabilityMonitor = AvailabilityMonitor(nearby: nearby)
-        #if DEBUG || SIDELOAD
+        #if os(iOS) && (DEBUG || SIDELOAD)
         BadgeDots.install()
         if ServerFeature.isAvailable {
             ServerController.shared.resume()
@@ -29,6 +35,7 @@ final class AppLaunch {
     }
 }
 
+#if os(iOS)
 struct HomeScene: Scene {
     let launch: AppLaunch
 
@@ -68,6 +75,31 @@ struct MultiWindowApp: App {
         }
     }
 }
+#else
+struct MacApp: App {
+    private let launch = AppLaunch()
+
+    var body: some Scene {
+        Window(String(localized: "Connections"), id: "home") {
+            HomeView()
+                .providesSessionWindows()
+                .environmentObject(launch.nearby)
+                .environmentObject(launch.availabilityMonitor)
+        }
+        .defaultSize(width: 900, height: 560)
+        .commands {
+            AppCommands()
+            SidebarCommands()
+        }
+
+        WindowGroup(for: SessionRoute.self) { $route in
+            SessionWindow(route: route)
+                .environmentObject(launch.nearby)
+        }
+        .defaultSize(width: 1280, height: 800)
+    }
+}
+#endif
 
 @available(iOS 17, *)
 struct SessionWindow: View {
@@ -77,7 +109,7 @@ struct SessionWindow: View {
     var body: some View {
         if let route {
             SessionView(route: WindowPasswords.receive(route)) {
-                dismissWindow()
+                DispatchQueue.main.async { dismissWindow() }
             }
         } else {
             ContentUnavailableView("No Connection Open", systemImage: "desktopcomputer")
@@ -106,6 +138,9 @@ private struct SessionWindowOpener: ViewModifier {
     }
 
     private func open(_ route: SessionRoute) {
+        #if os(macOS)
+        if RemoteScreenNSView.focusWindow(showing: route) { return }
+        #endif
         openWindow(value: WindowPasswords.send(route))
     }
 }

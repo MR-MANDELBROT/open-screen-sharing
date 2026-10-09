@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
@@ -865,3 +866,4 @@ private final class TouchObserver: UIGestureRecognizer {
         state = .failed
     }
 }
+#endif

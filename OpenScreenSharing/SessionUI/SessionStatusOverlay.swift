@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
+#endif
 
 struct SessionStatusOverlay: View {
     @ObservedObject var controller: SessionController
@@ -66,7 +68,9 @@ struct SessionStatusOverlay: View {
                         Text(progressTitle)
                             .foregroundStyle(.white)
                     }
+                    #if os(iOS)
                     .controlSize(.large)
+                    #endif
                     if controller.phase == .waitingForPermission {
                         Button("Cancel", role: .cancel, action: onClose)
                             .glassButtonStyleCompat()
@@ -80,7 +84,11 @@ struct SessionStatusOverlay: View {
         .animation(.default, value: progressTitle)
         .onChangeCompat(of: progressTitle) { title in
             if let title {
+                #if os(iOS)
                 UIAccessibility.post(notification: .announcement, argument: title)
+                #else
+                AccessibilityNotification.Announcement(title).post()
+                #endif
             }
         }
         .alert(Binding(get: { failure.map(failureAlert) }, set: { _ in }))
@@ -130,6 +138,7 @@ struct SessionStatusOverlay: View {
         case .authenticationFailed: String(localized: "Couldn’t Sign In to “\(name)”")
         case .permissionDenied: String(localized: "“\(name)” Declined the Request")
         case .hostNotFound: String(localized: "Couldn’t Find “\(name)”")
+        case .ownScreen: String(localized: "You Can’t Control Your Own Screen")
         case .unreachable, .other: String(localized: "Couldn’t Connect to “\(name)”")
         case .connectionLost: String(localized: "Lost the Connection to “\(name)”")
         case .ended: String(localized: "Disconnected from “\(name)”")

@@ -2,8 +2,14 @@ import Foundation
 import GRDB
 
 enum AppDatabase {
-    private static let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Screen Sharing.sqlite")
+    private static let url: URL = {
+        #if os(iOS)
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        #else
+        let directory = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as! String)!
+        #endif
+        return directory.appendingPathComponent("Screen Sharing.sqlite")
+    }()
 
     static let shared: DatabaseQueue = Demo.current?.database ?? open()
 
@@ -29,6 +35,7 @@ enum AppDatabase {
                 t.column("port", .integer).notNull()
                 t.column("username", .text).notNull()
                 t.column("password", .text).notNull()
+                t.column("authenticates", .boolean).notNull()
                 t.column("model", .text).notNull()
                 t.column("enclosureColor", .text).notNull()
                 t.column("lastConnected", .datetime)
@@ -47,6 +54,8 @@ enum AppDatabase {
                 t.column("usesHDR", .boolean).notNull()
                 t.column("remoteAudio", .text).notNull()
                 t.column("keyboardSources", .text).notNull()
+                t.column("windowWidth", .double).notNull()
+                t.column("windowHeight", .double).notNull()
             }
             try db.create(table: "preferences") { t in
                 t.primaryKey("name", .text)

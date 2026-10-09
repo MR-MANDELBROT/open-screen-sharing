@@ -17,11 +17,15 @@ extension View {
     @ViewBuilder
     func phonePresentationDetents(_ detents: Set<SheetDetent>) -> some View {
         if #available(iOS 16, *) {
+            #if os(iOS)
             if UIDevice.current.userInterfaceIdiom == .phone {
                 presentationDetents(Set(detents.map(\.presentationDetent)))
             } else {
                 self
             }
+            #else
+            self
+            #endif
         } else {
             self
         }
@@ -30,6 +34,7 @@ extension View {
     @ViewBuilder
     func phonePresentationDetents(_ detents: Set<SheetDetent>, selection: Binding<SheetDetent>) -> some View {
         if #available(iOS 16, *) {
+            #if os(iOS)
             if UIDevice.current.userInterfaceIdiom == .phone {
                 presentationDetents(
                     Set(detents.map(\.presentationDetent)),
@@ -41,6 +46,9 @@ extension View {
             } else {
                 self
             }
+            #else
+            self
+            #endif
         } else {
             self
         }

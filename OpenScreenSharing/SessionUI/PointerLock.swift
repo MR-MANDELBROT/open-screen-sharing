@@ -1,3 +1,4 @@
+#if os(iOS)
 import Combine
 import GameController
 import ObjectiveC
@@ -168,3 +169,4 @@ private struct PointerLockRequest: UIViewRepresentable {
         }
     }
 }
+#endif

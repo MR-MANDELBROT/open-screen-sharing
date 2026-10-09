@@ -22,10 +22,10 @@ Open Screen Sharing aims to develop superior servers and clients based on the pr
 
 ## Roadmap
 
-* [ ] Add support for macOS
+* [x] Add support for macOS
+* [ ] Add support for RDP
 * [ ] Add support for other operating systems, such as Android, Windows, and Linux
-* [ ] Add support for other protocols, such as RDP
-* [ ] Lower the system version requirement and add a jailbreak-based server.
+* [ ] Add a jailbreak version to provide numerous privilege-based improvements
 * [ ] Create a protocol extension to support high refresh rates on Mac, touch passthrough on Mac (similar to Sidecar), Smaller scaling at native quality on Mac, multi-touch support on iOS, and further protocol optimizations
 
 Given the complexity of custom protocols, we are currently focusing on improving the existing experience and expanding support based entirely on the Apple VNC protocol

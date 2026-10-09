@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
+#endif
 
 struct NavigationStackCompat<Content: View>: View {
     private let content: Content
@@ -17,7 +19,9 @@ struct NavigationStackCompat<Content: View>: View {
             NavigationView {
                 content
             }
+            #if os(iOS)
             .navigationViewStyle(.stack)
+            #endif
         }
     }
 }
@@ -48,6 +52,7 @@ struct LabeledContentCompat<Label: View, Content: View>: View {
     }
 
     var body: some View {
+        #if os(iOS)
         if #available(iOS 16, *) {
             LabeledContent {
                 content
@@ -62,6 +67,14 @@ struct LabeledContentCompat<Label: View, Content: View>: View {
                     .foregroundStyle(.secondary)
             }
         }
+        #else
+        LabeledContent {
+            content
+                .labelsHidden()
+        } label: {
+            label
+        }
+        #endif
     }
 }
 
@@ -87,6 +100,13 @@ struct ContentUnavailableViewCompat<Label: View, Description: View>: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        ContentUnavailableView {
+            label
+        } description: {
+            description
+        }
+        #else
         if #available(iOS 17, *) {
             ContentUnavailableView {
                 label
@@ -105,6 +125,7 @@ struct ContentUnavailableViewCompat<Label: View, Description: View>: View {
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        #endif
     }
 }
 
@@ -152,7 +173,7 @@ extension View {
     func primaryActionsCompat(@ViewBuilder leading: () -> some View, @ViewBuilder trailing: () -> some View) -> some View {
         let leading = leading()
         let trailing = trailing()
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     leading
@@ -174,11 +195,12 @@ extension View {
         }
     }
 
+    #if os(iOS)
     @ViewBuilder
     func bottomBarCompat(@ViewBuilder leading: () -> some View, @ViewBuilder trailing: () -> some View) -> some View {
         let leading = leading()
         let trailing = trailing()
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             toolbar {
                 ToolbarItem(placement: .bottomBar) {
                     leading
@@ -198,24 +220,37 @@ extension View {
             }
         }
     }
+    #endif
 
     func onChangeCompat(of value: some Equatable, _ action: @escaping () -> Void) -> some View {
+        #if os(iOS)
         onChange(of: value) { _ in
             action()
         }
+        #else
+        onChange(of: value, action)
+        #endif
     }
 
     func onChangeCompat<V: Equatable>(of value: V, _ action: @escaping (_ newValue: V) -> Void) -> some View {
+        #if os(iOS)
         onChange(of: value, perform: action)
+        #else
+        onChange(of: value) { action($1) }
+        #endif
     }
 
     func onChangeCompat<V: Equatable>(of value: V, initial: Bool, _ action: @escaping (_ newValue: V) -> Void) -> some View {
+        #if os(iOS)
         onAppear {
             if initial {
                 action(value)
             }
         }
         .onChange(of: value, perform: action)
+        #else
+        onChange(of: value, initial: initial) { action($1) }
+        #endif
     }
 }
 
@@ -245,6 +280,7 @@ extension View {
         }
     }
 
+    #if os(iOS)
     @ViewBuilder
     func defersSystemGesturesCompat(on edges: Edge.Set) -> some View {
         if #available(iOS 16, *) {
@@ -253,6 +289,16 @@ extension View {
             self
         }
     }
+    #else
+    @ViewBuilder
+    func windowToolbarFullScreenVisibilityCompat() -> some View {
+        if #available(macOS 15, *) {
+            windowToolbarFullScreenVisibility(.onHover)
+        } else {
+            self
+        }
+    }
+    #endif
 
     @ViewBuilder
     func popoverOnCompact() -> some View {
@@ -268,19 +314,27 @@ extension View {
         if #available(iOS 17, *) {
             sensoryFeedback(.selection, trigger: trigger)
         } else {
+            #if os(iOS)
             onChange(of: trigger) { _ in
                 UISelectionFeedbackGenerator().selectionChanged()
             }
+            #else
+            self
+            #endif
         }
     }
 
     @ViewBuilder
     func hoverEffectDisabledCompat() -> some View {
+        #if os(iOS)
         if #available(iOS 17, *) {
             hoverEffectDisabled()
         } else {
             self
         }
+        #else
+        self
+        #endif
     }
 
     @ViewBuilder
@@ -294,7 +348,7 @@ extension View {
 
     @ViewBuilder
     func glassEffectCompat(tint: Color? = nil, in shape: some Shape) -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             glassEffect(tint.map { Glass.regular.tint($0) } ?? .regular, in: shape)
         } else {
             background(.regularMaterial, in: shape)
@@ -303,7 +357,7 @@ extension View {
 
     @ViewBuilder
     func glassButtonStyleCompat() -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             buttonStyle(.glass)
         } else {
             buttonStyle(.bordered)
@@ -321,7 +375,7 @@ struct GlassEffectContainerCompat<Content: View>: View {
     }
 
     var body: some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             GlassEffectContainer(spacing: spacing) {
                 content
             }
@@ -364,7 +418,7 @@ struct CloseButton: View {
     let action: () -> Void
 
     var body: some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             Button(role: .close, action: action)
         } else {
             Button("Close", action: action)
@@ -374,7 +428,7 @@ struct CloseButton: View {
 
 extension ButtonRole {
     static var confirmCompat: ButtonRole? {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             .confirm
         } else {
             nil
@@ -382,7 +436,7 @@ extension ButtonRole {
     }
 
     static var closeCompat: ButtonRole? {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             .close
         } else {
             nil

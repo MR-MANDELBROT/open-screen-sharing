@@ -3,9 +3,15 @@ import Foundation
 import SwiftUI
 
 final class ToolbarLayout: ObservableObject {
+    #if os(iOS)
     static let mac = ToolbarLayout(touchScreen: false, key: "SessionToolbar.v1", defaultBar: [.keyboard, .clipboard, .missionControl, .zoomMode, .scale, .displays])
     static let touchScreen = ToolbarLayout(
         touchScreen: true, key: "SessionToolbar.TouchScreen.v1", defaultBar: [.home, .appSwitcher, .keyboard, .clipboard, .zoomMode, .scale])
+    #else
+    static let mac = ToolbarLayout(touchScreen: false, key: "SessionToolbar.v1", defaultBar: [.scale, .displays, .observe, .missionControl, .clipboard])
+    static let touchScreen = ToolbarLayout(
+        touchScreen: true, key: "SessionToolbar.TouchScreen.v1", defaultBar: [.scale, .observe, .home, .appSwitcher, .clipboard])
+    #endif
 
     static func layout(for controller: SessionController) -> ToolbarLayout {
         controller.isTouchScreen ? touchScreen : mac

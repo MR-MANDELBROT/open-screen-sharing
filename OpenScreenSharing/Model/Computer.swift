@@ -10,6 +10,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var port = ComputerAddress.defaultPort
     var username = ""
     var password = ""
+    var authenticates = false
     var model = ""
     var enclosureColor = ""
     var lastConnected: Date?
@@ -29,6 +30,8 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var usesHDR = false
     var remoteAudio = RemoteAudio.fromMac
     var keyboardSources: [String] = []
+    var windowWidth: Double = 0
+    var windowHeight: Double = 0
 
     init(name: String, address: ComputerAddress, username: String = "") {
         self.name = name
@@ -91,7 +94,8 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
             resolutionScale: resolutionScale,
             display: displaySelection,
             usesHDR: usesHDR,
-            remoteAudio: remoteAudio
+            remoteAudio: remoteAudio,
+            windowSize: windowWidth > 0 && windowHeight > 0 ? CGSize(width: windowWidth, height: windowHeight) : nil
         )
     }
 
@@ -104,6 +108,8 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
         displaySelection = memory.display
         usesHDR = memory.usesHDR
         remoteAudio = memory.remoteAudio
+        windowWidth = memory.windowSize.map { Double($0.width) } ?? 0
+        windowHeight = memory.windowSize.map { Double($0.height) } ?? 0
     }
 
     mutating func apply(_ device: DeviceInfo) {

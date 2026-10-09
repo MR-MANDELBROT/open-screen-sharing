@@ -41,6 +41,8 @@ nonisolated enum ServerProber {
                     ))
             case LibsharingErrorHostNotFound:
                 return .failure(SessionFailure(.hostNotFound, message: message))
+            case LibsharingErrorOwnScreen:
+                return .failure(SessionFailure(.ownScreen, message: message))
             case LibsharingErrorNetwork:
                 return .failure(SessionFailure(.unreachable, message: message))
             case LibsharingErrorUnsupportedServer:
@@ -82,6 +84,8 @@ nonisolated enum ServerProber {
                 return .failure(SessionFailure(.authenticationFailed, message: message))
             case LibsharingErrorHostNotFound:
                 return .failure(SessionFailure(.hostNotFound, message: message))
+            case LibsharingErrorOwnScreen:
+                return .failure(SessionFailure(.ownScreen, message: message))
             case LibsharingErrorNetwork:
                 return .failure(SessionFailure(.unreachable, message: message))
             case LibsharingErrorUnsupportedServer:

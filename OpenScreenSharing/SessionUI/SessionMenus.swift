@@ -186,11 +186,39 @@ struct ClipboardMenuItems: View {
     var body: some View {
         Toggle(isOn: Binding(get: { controller.clipboardSharing }, set: { controller.setClipboardSharing($0) })) { Label("Sync Clipboard", systemImage: "arrow.up.arrow.down") }
         Section {
-            Button { controller.getClipboardFromMac() } label: { Label("Receive", systemImage: "doc.on.clipboard") }
+            Button { controller.getClipboardFromMac() } label: { Label("Receive Clipboard", systemImage: "doc.on.clipboard") }
                 .disabled(!controller.info.isMac)
-            Button { controller.sendClipboardToMac() } label: { Label("Send", systemImage: "arrow.up.doc.on.clipboard") }
+            Button { controller.sendClipboardToMac() } label: { Label("Send Clipboard", systemImage: "arrow.up.doc.on.clipboard") }
         }
         .disabled(controller.clipboardSharing)
+    }
+}
+
+struct FunctionKeyItems: View {
+    @ObservedObject var controller: SessionController
+
+    var body: some View {
+        ForEach(1...12, id: \.self) { number in
+            Button("F\(number)") {
+                controller.typeKey(.function(number))
+            }
+        }
+    }
+}
+
+struct MoreKeyItems: View {
+    @ObservedObject var controller: SessionController
+
+    var body: some View {
+        Section {
+            Button { controller.typeKey(.home) } label: { Label("Home", systemImage: "arrow.up.to.line") }
+            Button { controller.typeKey(.end) } label: { Label("End", systemImage: "arrow.down.to.line") }
+            Button { controller.typeKey(.pageUp) } label: { Label("Page Up", systemImage: "arrow.up.to.line.compact") }
+            Button { controller.typeKey(.pageDown) } label: { Label("Page Down", systemImage: "arrow.down.to.line.compact") }
+        }
+        Section {
+            Button { controller.typeKey(.forwardDelete) } label: { Label("Forward Delete", systemImage: "delete.right") }
+        }
     }
 }
 
@@ -214,6 +242,7 @@ extension SystemCommand {
     }
 }
 
+#if os(iOS)
 struct SessionMoreMenuContent: View {
     @ObservedObject var controller: SessionController
 
@@ -249,3 +278,4 @@ struct SessionMoreMenuContent: View {
         }
     }
 }
+#endif

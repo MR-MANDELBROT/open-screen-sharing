@@ -23,7 +23,7 @@ struct ConnectToView: View {
 
     private var found: [NearbyComputer] {
         nearby.computers.filter { found in
-            #if DEBUG || SIDELOAD
+            #if os(iOS) && (DEBUG || SIDELOAD)
             guard found.name != ServerController.shared.advertisedName else { return false }
             #endif
             return !store.computers.contains { saved in
@@ -36,8 +36,10 @@ struct ConnectToView: View {
         Form {
             Section {
                 TextField("Server Address", text: $text, prompt: Text("Hostname"))
+                    #if os(iOS)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
+                    #endif
                     .autocorrectionDisabled()
                     .focused($isFocused)
                     .submitLabel(.next)
@@ -65,9 +67,13 @@ struct ConnectToView: View {
                                 device: DeviceAppearance(model: computer.model ?? ""), availability: .available)
                             if checkedID == computer.id {
                                 ProgressView()
+                                    .controlSize(.small)
                             }
                         }
                     }
+                    #if os(macOS)
+                    .buttonStyle(.plain)
+                    #endif
                     .foregroundStyle(.primary)
                     .disabled(computer.address == nil || isChecking)
                     .contextMenu {
@@ -85,7 +91,11 @@ struct ConnectToView: View {
             }
         }
         .navigationTitle("New Connection")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .formStyle(.grouped)
+        #endif
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel", role: .cancel) {

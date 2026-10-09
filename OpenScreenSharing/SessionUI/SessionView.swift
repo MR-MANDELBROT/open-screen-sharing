@@ -4,13 +4,14 @@ import UniformTypeIdentifiers
 struct SessionView: View {
     @StateObject private var controller: SessionController
     @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var macToolbar = ToolbarLayout.mac
-    @ObservedObject private var touchScreenToolbar = ToolbarLayout.touchScreen
     private let hasOwnWindow: Bool
     private let onClose: () -> Void
+    @State private var isDropTargeted = false
+    #if os(iOS)
+    @ObservedObject private var macToolbar = ToolbarLayout.mac
+    @ObservedObject private var touchScreenToolbar = ToolbarLayout.touchScreen
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var isDropTargeted = false
     @State private var toolbarWidth: CGFloat = 0
     @ScaledMetric(relativeTo: .body) private var toolbarItemWidth: CGFloat = 44
 
@@ -28,6 +29,17 @@ struct SessionView: View {
         controller.isPointerLockOn && pointerLockAvailable && !pointerLockPaused && controller.pointerLockCanResume
             && (dock == nil || controller.isSystemPointerOverPicture)
     }
+    #else
+    @State private var showsPointerLockHint = false
+
+    private var locksPointer: Bool {
+        controller.isPointerLockOn && pointerLockAvailable && !pointerLockPaused
+    }
+
+    private var minimumWindowSize: CGSize {
+        controller.pictureMatchesWindow ? VirtualDisplayMode.minimumWindowPoints : CGSize(width: 320, height: 200)
+    }
+    #endif
 
     private var pointerLockAvailable: Bool {
         SessionCommand.pointerLock.isOffered(by: controller) && controller.canLockPointer
@@ -51,6 +63,7 @@ struct SessionView: View {
         self.onClose = onClose
     }
 
+    #if os(iOS)
     private var deviceScreen: CGSize? {
         guard let screen = controller.touchScreenSize else { return nil }
         let picture = controller.imageSize
@@ -143,6 +156,84 @@ struct SessionView: View {
                 }
             }
     }
+    #else
+    var body: some View {
+        screen
+            .background(Color.black)
+            .overlay(alignment: .topTrailing) {
+                if settings.showsDebugInfo, controller.phase.isActive {
+                    DebugInfoView(controller: controller)
+                        .padding(8)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(alignment: .top) {
+                if showsPointerLockHint {
+                    Text("Press \(EventModifiers(KeyShortcuts.shared.pointerRelease).symbols) to release the pointer")
+                        .font(.callout)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.top, 12)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
+            .frame(minWidth: minimumWindowSize.width, minHeight: minimumWindowSize.height)
+            .navigationTitle(controller.title)
+            .navigationSubtitle(controller.mode == .observe ? String(localized: "Observing") : "")
+            .toolbar {
+                SessionWindowToolbar(controller: controller, layout: .layout(for: controller))
+            }
+            .windowToolbarFullScreenVisibilityCompat()
+            .sheet(isPresented: $controller.isCustomizingToolbar) {
+                CustomizeToolbarView(controller: controller, slots: nil)
+            }
+            .preferredColorScheme(colorScheme)
+            .onChange(of: pointerLockAvailable) { _, available in
+                if !available { controller.setPointerLock(false) }
+            }
+            .onChange(of: locksPointer, initial: true) { _, locks in
+                controller.screen?.setLocksPointer(locks)
+            }
+            .task(id: controller.isPointerLocked) {
+                guard controller.isPointerLocked else {
+                    showsPointerLockHint = false
+                    return
+                }
+                withAnimation { showsPointerLockHint = true }
+                try? await Task.sleep(seconds: 3)
+                withAnimation { showsPointerLockHint = false }
+            }
+            .focusedSceneValue(\.sessionController, controller)
+            .alert($controller.alert)
+            .sheet(
+                item: Binding(
+                    get: { controller.credentialPrompt },
+                    set: { prompt in
+                        if prompt == nil, controller.credentialPrompt != nil {
+                            controller.cancelCredentials()
+                        }
+                    }),
+                onDismiss: {
+                    if controller.isClosing { onClose() }
+                }
+            ) { prompt in
+                CredentialsView(prompt: prompt, computerName: controller.title) { credentials, remember in
+                    controller.submitCredentials(credentials, remember: remember)
+                } onCancel: {
+                    controller.cancelCredentials()
+                }
+            }
+            .onAppear {
+                controller.onClose = onClose
+                controller.start()
+            }
+            .onDisappear {
+                controller.disconnect()
+            }
+    }
+    #endif
 
     private var screen: some View {
         ZStack {
@@ -222,6 +313,7 @@ private struct FileDropDelegate: DropDelegate {
     }
 }
 
+#if os(iOS)
 @available(iOS 26, *)
 private struct DeviceWindowShaper: UIViewRepresentable {
     let screen: CGSize?
@@ -363,3 +455,26 @@ private struct FullScreenReader: UIViewRepresentable {
         }
     }
 }
+#else
+private struct SessionWindowToolbar: ToolbarContent {
+    @ObservedObject var controller: SessionController
+    @ObservedObject var layout: ToolbarLayout
+
+    var body: some ToolbarContent {
+        ForEach(layout.plan(for: controller, slots: nil).inBar) { command in
+            ToolbarItem {
+                SessionCommandView(command: command, controller: controller, style: .barItem)
+                    .help(String(localized: command.title))
+            }
+        }
+        ToolbarItem {
+            Button {
+                controller.isCustomizingToolbar = true
+            } label: {
+                Label("Customize Toolbar…", systemImage: "slider.horizontal.3")
+            }
+            .help("Customize Toolbar")
+        }
+    }
+}
+#endif

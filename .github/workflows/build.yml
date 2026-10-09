@@ -16,8 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build_number: ${{ steps.outputs.outputs.build_number }}
-      library_key: ${{ steps.outputs.outputs.library_key }}
+      library_hash: ${{ steps.outputs.outputs.library_hash }}
       app_store: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATES_P12 != '' }}
+      developer_id: ${{ secrets.DEVELOPER_ID_CERTIFICATES_P12 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -32,19 +33,26 @@ jobs:
           fi
           echo "build_number=$((PREVIOUS + 1))"
           echo "build_number=$((PREVIOUS + 1))" >> "$GITHUB_OUTPUT"
-          echo "library_key=libsharing-ios-arm64-${{ hashFiles('go.mod', 'go.sum', 'libsharing/**', 'internal/**', 'cmd/internal/build_libsharing/**') }}" >> "$GITHUB_OUTPUT"
+          echo "library_hash=${{ hashFiles('go.mod', 'go.sum', 'libsharing/**', 'internal/**', 'cmd/internal/build_libsharing/**') }}" >> "$GITHUB_OUTPUT"
   build_apple_library:
-    name: Build Apple library
+    name: Build Apple library (${{ matrix.artifact }})
     runs-on: xcode-27
     needs:
       - calculate_version
+    strategy:
+      matrix:
+        include:
+          - artifact: ios-arm64
+            target: ios/arm64
+          - artifact: macos
+            target: macos
     steps:
       - name: Cache library
         id: library
         uses: actions/cache@v4
         with:
           path: Frameworks/Libsharing.xcframework
-          key: ${{ needs.calculate_version.outputs.library_key }}
+          key: libsharing-${{ matrix.artifact }}-${{ needs.calculate_version.outputs.library_hash }}
           lookup-only: true
       - name: Checkout
         if: steps.library.outputs.cache-hit != 'true'
@@ -69,11 +77,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/go-build
-          key: go-build-${{ needs.calculate_version.outputs.library_key }}
-          restore-keys: go-build-libsharing-ios-arm64-
+          key: go-build-libsharing-${{ matrix.artifact }}-${{ needs.calculate_version.outputs.library_hash }}
+          restore-keys: go-build-libsharing-${{ matrix.artifact }}-
       - name: Build library
         if: steps.library.outputs.cache-hit != 'true'
-        run: go run ./cmd/internal/build_libsharing -target ios/arm64
+        run: go run ./cmd/internal/build_libsharing -target ${{ matrix.target }}
   build_ios:
     name: Build iOS (App Store)
     if: needs.calculate_version.outputs.app_store == 'true'
@@ -149,7 +157,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: Frameworks/Libsharing.xcframework
-          key: ${{ needs.calculate_version.outputs.library_key }}
+          key: libsharing-ios-arm64-${{ needs.calculate_version.outputs.library_hash }}
           fail-on-cache-miss: true
       - name: Get Xcode version
         id: xcode
@@ -196,7 +204,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: Frameworks/Libsharing.xcframework
-          key: ${{ needs.calculate_version.outputs.library_key }}
+          key: libsharing-ios-arm64-${{ needs.calculate_version.outputs.library_hash }}
           fail-on-cache-miss: true
       - name: Get Xcode version
         id: xcode
@@ -218,15 +226,86 @@ jobs:
             build/OpenScreenSharing.ipa
             build/altstore
           if-no-files-found: error
+  build_macos:
+    name: Build macOS
+    if: needs.calculate_version.outputs.developer_id == 'true'
+    runs-on: xcode-27
+    needs:
+      - calculate_version
+      - build_apple_library
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 1
+      - name: Setup Apple certificates
+        run: |-
+          KEYCHAIN_PATH=$RUNNER_TEMP/apple-signing.keychain-db
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo -n "$APPLE_DEVELOPMENT_CERTIFICATES_P12" | base64 --decode -o "$RUNNER_TEMP/AppleDevelopment.p12"
+          echo -n "$DEVELOPER_ID_CERTIFICATES_P12" | base64 --decode -o "$RUNNER_TEMP/DeveloperID.p12"
+          security import "$RUNNER_TEMP/AppleDevelopment.p12" -P "$APPLE_DEVELOPMENT_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/DeveloperID.p12" -P "$DEVELOPER_ID_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v "$KEYCHAIN_PATH"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+        env:
+          APPLE_DEVELOPMENT_CERTIFICATES_P12: ${{ secrets.APPLE_DEVELOPMENT_CERTIFICATES_P12 }}
+          APPLE_DEVELOPMENT_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPMENT_P12_PASSWORD }}
+          DEVELOPER_ID_CERTIFICATES_P12: ${{ secrets.DEVELOPER_ID_CERTIFICATES_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+      - name: Setup notarization credentials
+        run: |-
+          ASC_KEY_PATH=$RUNNER_TEMP/ApiKey_$ASC_KEY_ID.p8
+          echo -n "$ASC_KEY" | base64 --decode -o "$ASC_KEY_PATH"
+          # store-credentials prompts for the issuer ID even when --issuer is absent;
+          # an empty answer selects individual key authentication.
+          printf '\n' | xcrun notarytool store-credentials "notarytool-password" \
+            --key "$ASC_KEY_PATH" \
+            --key-id "$ASC_KEY_ID" \
+            --keychain "$KEYCHAIN_PATH"
+        env:
+          ASC_KEY: ${{ secrets.ASC_KEY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      - name: Restore library
+        uses: actions/cache/restore@v4
+        with:
+          path: Frameworks/Libsharing.xcframework
+          key: libsharing-macos-${{ needs.calculate_version.outputs.library_hash }}
+          fail-on-cache-miss: true
+      - name: Get Xcode version
+        id: xcode
+        run: echo "build=$(xcodebuild -version | tail -1 | cut -d ' ' -f 3)" >> "$GITHUB_OUTPUT"
+      - name: Cache Swift compilation
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/CompilationCache
+          key: swift-macos-${{ steps.xcode.outputs.build }}-${{ hashFiles('OpenScreenSharing/**', 'OpenScreenSharing.xcodeproj/**', 'Frameworks/Libsharing.xcframework/macos-arm64_x86_64/Libsharing.framework/Versions/A/Headers/**', 'Frameworks/Libsharing.xcframework/macos-arm64_x86_64/Libsharing.framework/Versions/A/Modules/**') }}
+      - name: Build
+        run: make archive_macos export_macos build_macos_pkg notarize_macos_pkg
+        env:
+          XCODEBUILD_FLAGS: CURRENT_PROJECT_VERSION=${{ needs.calculate_version.outputs.build_number }} COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=${{ runner.temp }}/CompilationCache
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenScreenSharing-macOS-PKG
+          path: build/OpenScreenSharing.pkg
+          if-no-files-found: error
   publish_nightly:
     name: Publish nightly
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && !cancelled() && !failure()
     runs-on: ubuntu-latest
     permissions:
       contents: write
     needs:
       - calculate_version
       - build_ios_ipa
+      - build_macos
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -235,21 +314,29 @@ jobs:
       - name: Download builds
         uses: actions/download-artifact@v4
         with:
-          name: OpenScreenSharing-iOS-IPA
+          pattern: OpenScreenSharing-*
+          merge-multiple: true
           path: dist
       - name: Publish
         run: |-
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" tag -a -f nightly -m "$BUILD_NUMBER" "$GITHUB_SHA"
           git push -f origin refs/tags/nightly
-          NOTES="Built from [${GITHUB_SHA::7}](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA).
+          BUNDLE_ID=$(jq -r '.apps[0].bundleIdentifier' dist/altstore/altstore.json)
+          NOTES="Built from [${GITHUB_SHA::7}](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
 
-          AltStore source: \`https://github.com/$GITHUB_REPOSITORY/releases/download/nightly/altstore.json\`"
+          ---
+
+          <a href='https://altstore.io/source/github.com/$GITHUB_REPOSITORY/releases/download/nightly/altstore.json?app=$BUNDLE_ID'><img src='https://2606795771-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FAfe8qEztjcTjsjjaMBY2%2Fuploads%2FUjblMQb1NnujZg8y2vxZ%2FDownloadBadge_dark.png?alt=media&token=25419460-9af3-4229-961a-936451128bf9' alt='Download on AltStore' height='40'></a>"
           if gh release view nightly > /dev/null 2>&1; then
             gh release edit nightly --prerelease --title "Nightly build" --notes "$NOTES"
           else
             gh release create nightly --prerelease --title "Nightly build" --notes "$NOTES"
           fi
-          gh release upload nightly dist/OpenScreenSharing.ipa dist/altstore/altstore.json dist/altstore/icon.png --clobber
+          ASSETS=(dist/OpenScreenSharing.ipa dist/altstore/altstore.json dist/altstore/icon.png)
+          if [ -f dist/OpenScreenSharing.pkg ]; then
+            ASSETS+=(dist/OpenScreenSharing.pkg)
+          fi
+          gh release upload nightly "${ASSETS[@]}" --clobber
         env:
           BUILD_NUMBER: ${{ needs.calculate_version.outputs.build_number }}
           GH_TOKEN: ${{ github.token }}

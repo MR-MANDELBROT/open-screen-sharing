@@ -1,7 +1,7 @@
+import CoreGraphics
 import CoreVideo
 import Metal
 import QuartzCore
-import UIKit
 
 final class ScreenRenderer {
     private static let shaderSource = """

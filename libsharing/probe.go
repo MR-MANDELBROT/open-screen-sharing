@@ -36,6 +36,13 @@ type ServerProbe struct {
 
 func ProbeServer(host string, port int32, timeoutSeconds float64) *ServerProbe {
 	timeout := time.Duration(timeoutSeconds * float64(time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	err := checkOwnScreen(ctx, host, port)
+	if err != nil {
+		code, message := classifyError(err)
+		return &ServerProbe{ErrorCode: code, ErrorMessage: message}
+	}
 	info, err := rfb.Probe(context.Background(), rfb.Options{
 		Address:     net.JoinHostPort(host, strconv.Itoa(int(port))),
 		DialTimeout: timeout,
@@ -82,6 +89,13 @@ func CheckLogin(options *SessionOptions, timeoutSeconds float64) *LoginCheck {
 		return &LoginCheck{ErrorCode: code, ErrorMessage: message}
 	}
 	rfbOptions.DialTimeout = time.Duration(timeoutSeconds * float64(time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), rfbOptions.DialTimeout)
+	defer cancel()
+	err = checkOwnScreen(ctx, options.Host, options.Port)
+	if err != nil {
+		code, message := classifyError(err)
+		return &LoginCheck{ErrorCode: code, ErrorMessage: message}
+	}
 	info, err := rfb.CheckLogin(context.Background(), rfbOptions)
 	if err != nil {
 		code, message := classifyError(err)

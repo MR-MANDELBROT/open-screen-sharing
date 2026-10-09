@@ -13,13 +13,17 @@ struct ServerUnavailableView: View {
 
     var body: some View {
         ContentUnavailableViewCompat {
-            if isPad {
+            if ProcessInfo.processInfo.isiOSAppOnMac {
+                Label("Not Available on Mac", systemImage: "desktopcomputer")
+            } else if isPad {
                 Label("Unsupported iPadOS Version", systemImage: systemImage)
             } else {
                 Label("Unsupported iOS Version", systemImage: systemImage)
             }
         } description: {
-            if isPad {
+            if ProcessInfo.processInfo.isiOSAppOnMac {
+                Text("Use this app on an iPhone or iPad to share that device’s screen.")
+            } else if isPad {
                 Text("Sharing this iPad’s screen needs iPadOS 27 or later.")
             } else {
                 Text("Sharing this iPhone’s screen needs iOS 27 or later.")

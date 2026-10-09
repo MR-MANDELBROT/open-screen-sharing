@@ -42,7 +42,7 @@ final class NearbyBrowser: ObservableObject {
     /// NWBrowser can reach .ready before any results callback (observed on macOS 26A434).
     private static let searchTime: TimeInterval = 2
 
-    #if DEBUG
+    #if DEBUG || DEMO
     convenience init(fixed computers: [NearbyComputer]) {
         self.init()
         self.computers = computers
@@ -77,7 +77,9 @@ final class NearbyBrowser: ObservableObject {
             var names: [String] = []
             var models: [String: String] = [:]
             for result in results {
-                guard case let .service(name, _, _, _) = result.endpoint else { continue }
+                guard case let .service(name, _, _, _) = result.endpoint,
+                    !result.interfaces.contains(where: { $0.type == .loopback })
+                else { continue }
                 names.append(name)
                 if case let .bonjour(record) = result.metadata, let model = record["model"], !model.isEmpty {
                     models[name] = model

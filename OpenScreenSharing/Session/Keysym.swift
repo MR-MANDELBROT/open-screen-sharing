@@ -1,4 +1,7 @@
+import Foundation
+#if os(iOS)
 import UIKit
+#endif
 
 nonisolated enum Keysym {
     static let backSpace: UInt32 = 0xff08
@@ -59,6 +62,7 @@ nonisolated enum Keysym {
         (shiftLeft...0xffee).contains(keysym)
     }
 
+    #if os(iOS)
     static func special(for usage: UIKeyboardHIDUsage) -> UInt32? {
         switch usage {
         case .keyboardReturnOrEnter, .keyboardReturn: returnKey
@@ -118,6 +122,28 @@ nonisolated enum Keysym {
         }
         return nil
     }
+    #else
+    static func special(forKeyCode keyCode: UInt16) -> UInt32? {
+        specialKeyCodes[keyCode]
+    }
+
+    private static let specialKeyCodes: [UInt16: UInt32] = {
+        var table: [UInt16: UInt32] = [
+            36: returnKey, 53: escape, 51: backSpace, 48: tab, 49: space, 117: forwardDelete, 115: home, 119: end,
+            116: pageUp, 121: pageDown, 123: left, 124: right, 126: up, 125: down, 114: help, 110: menu, 71: numLock,
+            76: 0xff8d, 67: 0xffaa, 69: 0xffab, 78: 0xffad, 65: 0xffae, 75: 0xffaf, 81: 0xffbd,
+            82: 0xffb0, 83: 0xffb1, 84: 0xffb2, 85: 0xffb3, 86: 0xffb4, 87: 0xffb5, 88: 0xffb6, 89: 0xffb7, 91: 0xffb8, 92: 0xffb9,
+            56: shiftLeft, 60: shiftRight, 59: controlLeft, 62: controlRight, 58: optionLeft, 61: optionRight,
+            55: commandLeft, 54: commandRight,
+        ]
+        for number in 1...20 {
+            if let keyCode = MacKey.function(number).keyCode {
+                table[keyCode] = function(number)
+            }
+        }
+        return table
+    }()
+    #endif
 }
 
 nonisolated enum ModifierKey: CaseIterable, Hashable, Sendable {
@@ -125,6 +151,16 @@ nonisolated enum ModifierKey: CaseIterable, Hashable, Sendable {
     case option
     case shift
     case command
+
+    init?(keysym: UInt32) {
+        switch keysym {
+        case Keysym.controlLeft, Keysym.controlRight: self = .control
+        case Keysym.optionLeft, Keysym.optionRight: self = .option
+        case Keysym.shiftLeft, Keysym.shiftRight: self = .shift
+        case Keysym.commandLeft, Keysym.commandRight: self = .command
+        default: return nil
+        }
+    }
 
     var keysym: UInt32 {
         switch self {
@@ -155,10 +191,10 @@ nonisolated enum ModifierKey: CaseIterable, Hashable, Sendable {
 
     var title: String.LocalizationValue {
         switch self {
-        case .control: "Control"
-        case .option: "Option"
-        case .shift: "Shift"
-        case .command: "Command"
+        case .control: "Control Key"
+        case .option: "Option Key"
+        case .shift: "Shift Key"
+        case .command: "Command Key"
         }
     }
 }
@@ -181,7 +217,6 @@ extension KeyChord {
     static let spotlight = KeyChord(modifiers: [.command], key: .space)
     static let commandTab = KeyChord(modifiers: [.command], key: .tab)
     static let previousInputSource = KeyChord(modifiers: [.control], key: .space)
-    static let globe = KeyChord(modifiers: [], key: .function)
 
     static let sideButton = KeyChord(modifiers: [], key: MacKey(keyCode: nil, keysym: Keysym.powerOff))
     static let volumeUp = KeyChord(modifiers: [], key: MacKey(keyCode: nil, keysym: Keysym.raiseVolume))

@@ -20,20 +20,12 @@ struct CustomizeToolbarView: View {
         NavigationStackCompat {
             List {
                 Section {
-                    ToolbarPreview(plan: plan)
-                        .frame(maxWidth: .infinity)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
-                }
-                Section {
                     ForEach(layout.bar, id: \.shownRowID) { command in
-                        row(command, inMore: plan.overflow.contains(command))
+                        shownRow(command, inMore: plan.overflow.contains(command))
                             .modifier(ReorderActions(layout: layout, command: command))
                     }
                     .onMove { source, destination in layout.move(fromOffsets: source, toOffset: destination) }
                     .onDelete { offsets in layout.remove(atOffsets: offsets) }
-                } header: {
-                    Text("Shown in Toolbar")
                 }
                 ForEach(categories) { category in
                     Section {
@@ -76,17 +68,52 @@ struct CustomizeToolbarView: View {
                     }
                 }
             }
+            #if os(iOS)
             .environment(\.editMode, .constant(.active))
+            #endif
             .animation(.default, value: layout.bar)
             .navigationTitle("Customize Toolbar")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     CloseButton { dismiss() }
                 }
             }
+            #else
+            .frame(width: 420, height: 560)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    CloseButton { dismiss() }
+                }
+            }
+            #endif
         }
         .phonePresentationDetents([.medium, .large])
+    }
+
+    @ViewBuilder
+    private func shownRow(_ command: SessionCommand, inMore: Bool) -> some View {
+        #if os(iOS)
+        row(command, inMore: inMore)
+        #else
+        HStack(spacing: 12) {
+            Button {
+                layout.remove(command)
+            } label: {
+                Image(systemName: "minus.circle.fill")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .red)
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Remove from Toolbar"))
+            row(command, inMore: inMore)
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        #endif
     }
 
     private func row(_ command: SessionCommand, inMore: Bool) -> some View {
@@ -138,66 +165,3 @@ private struct ReorderActions: ViewModifier {
     }
 }
 
-private struct ToolbarPreview: View {
-    let plan: ToolbarPlan
-
-    var body: some View {
-        fittingBar
-            .padding(.vertical, 20)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
-            .background {
-                if #available(iOS 16, *) {
-                    RoundedRectangle(cornerRadius: 20).fill(.black.gradient)
-                } else {
-                    RoundedRectangle(cornerRadius: 20).fill(.black)
-                }
-            }
-            .environment(\.colorScheme, .dark)
-            .allowsHitTesting(false)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text("Toolbar Preview"))
-            .accessibilityValue(Text(plan.inBar.map { String(localized: $0.title) }.formatted(.list(type: .and))))
-    }
-
-    @ViewBuilder
-    private var fittingBar: some View {
-        if #available(iOS 16, *) {
-            ViewThatFits(in: .horizontal) {
-                bar(itemSize: 40)
-                bar(itemSize: 32)
-                bar(itemSize: 24)
-            }
-        } else {
-            bar(itemSize: 32)
-        }
-    }
-
-    private func bar(itemSize: CGFloat) -> some View {
-        GlassEffectContainerCompat(spacing: 0) {
-            HStack(spacing: ToolbarLayout.capsuleGroupSpacing) {
-                icon("xmark", size: itemSize)
-                    .glassEffectCompat(in: Circle())
-                if !plan.inBar.isEmpty {
-                    HStack(spacing: 0) {
-                        ForEach(plan.inBar) { command in
-                            icon(command.systemImage, size: itemSize)
-                        }
-                    }
-                    .padding(.horizontal, ToolbarLayout.capsuleGroupPadding)
-                    .glassEffectCompat(in: Capsule())
-                }
-                icon("ellipsis", size: itemSize)
-                    .glassEffectCompat(in: Circle())
-            }
-        }
-        .fixedSize()
-    }
-
-    private func icon(_ systemImage: String, size: CGFloat) -> some View {
-        Image(systemName: systemImage)
-            .font(.system(size: size * 0.4, weight: .medium))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-    }
-}

@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct CredentialsView: View {
     let prompt: CredentialPrompt
@@ -55,7 +54,9 @@ struct CredentialsView: View {
                         if asksForUsername {
                             TextField("User Name", text: $username)
                                 .textContentType(.oneTimeCode)
+                                #if os(iOS)
                                 .textInputAutocapitalization(.never)
+                                #endif
                                 .autocorrectionDisabled()
                                 .focused($focusedField, equals: .username)
                                 .submitLabel(.next)
@@ -70,8 +71,10 @@ struct CredentialsView: View {
                     } footer: {
                         message
                     }
-                    Section {
-                        Toggle("Remember Password", isOn: $remember)
+                    if asksForUsername {
+                        Section {
+                            Toggle("Remember Password", isOn: $remember)
+                        }
                     }
                     if allowsRequest {
                         Section {
@@ -82,7 +85,13 @@ struct CredentialsView: View {
                     }
                 }
                 .navigationTitle(computerName)
+                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #else
+                .formStyle(.grouped)
+                .frame(width: 420)
+                .fixedSize(horizontal: false, vertical: true)
+                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel", role: .cancel) {

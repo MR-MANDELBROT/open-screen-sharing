@@ -155,6 +155,11 @@ func rfbOptions(o *SessionOptions) (rfb.Options, error) {
 }
 
 func (s *Session) run(ctx context.Context, options rfb.Options) {
+	err := checkOwnScreen(ctx, s.options.Host, s.options.Port)
+	if err != nil {
+		s.finish(err)
+		return
+	}
 	events := &sessionEvents{session: s}
 	options.Prepare = s.prepare
 	client, err := rfb.Dial(ctx, options, events)
@@ -255,6 +260,7 @@ func (s *Session) finish(err error) {
 }
 
 func classifyError(err error) (int32, string) {
+	var ownScreen *ownScreenError
 	switch {
 	case err == nil:
 		return ErrorNone, ""
@@ -268,6 +274,8 @@ func classifyError(err error) (int32, string) {
 		return ErrorUnsupportedServer, err.Error()
 	case errors.Is(err, rfb.ErrUnverifiedServer):
 		return ErrorUnverifiedServer, err.Error()
+	case errors.As(err, &ownScreen):
+		return ErrorOwnScreen, err.Error()
 	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
 		return ErrorNetwork, err.Error()
 	}

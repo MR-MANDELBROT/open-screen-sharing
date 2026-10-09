@@ -170,6 +170,16 @@ func authenticateAppleRSA(h *handshake) ([]byte, error) {
 		if readErr != nil {
 			return nil, readErr
 		}
+		// screensharingd ends a rejected SRP exchange with an empty envelope
+		// followed by the security result.
+		// Observed in macOS 27.0.1 (26A434) screensharingd.
+		if len(reply) == 6 && binary.BigEndian.Uint16(reply[4:6]) == 0 {
+			result, readErr := h.stream.u32()
+			if readErr != nil {
+				return nil, readErr
+			}
+			return nil, h.securityResult(result)
+		}
 		return unwrapRSAReply(reply)
 	}, func(fields []byte) error {
 		envelope := binary.BigEndian.AppendUint16(nil, uint16(4+len(fields)))
@@ -235,14 +245,24 @@ func authenticateAppleSRP(h *handshake) ([]byte, error) {
 		return nil, err
 	}
 	return runSRP(h, func() ([]byte, error) {
-		reply, readErr := readSizedMessage(h, 1<<16)
+		size, readErr := h.stream.u32()
+		if readErr != nil {
+			return nil, readErr
+		}
+		// screensharingd sends the security result in place of the sized
+		// message after a rejected SRP proof.
+		// Observed in macOS 27.0.1 (26A434) screensharingd.
+		if size < 4 {
+			return nil, h.securityResult(size)
+		}
+		if size > 1<<16 {
+			return nil, fmt.Errorf("security message of %d bytes", size)
+		}
+		reply, readErr := h.stream.bytes(int(size))
 		if readErr != nil {
 			return nil, readErr
 		}
 		h.logger.Debug("type 36 reply", "bytes", len(reply), "head", fmt.Sprintf("%x", reply[:min(len(reply), 16)]))
-		if len(reply) < 4 {
-			return nil, errors.New("short type 36 reply")
-		}
 		return reply[4:], nil
 	}, func(fields []byte) error {
 		_, writeErr := h.conn.Write(srpEnvelope(fields))

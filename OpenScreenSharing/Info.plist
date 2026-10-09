@@ -16,10 +16,16 @@
 			</array>
 		</dict>
 	</array>
+#if MACOS
+	<key>AppGroupIdentifier</key>
+	<string>$(APP_GROUP_IDENTIFIER)</string>
+#endif
+#if !MACOS
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
+#endif
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Screen Sharing sends your voice to the Mac.</string>
 	<key>NSBonjourServices</key>
@@ -37,12 +43,17 @@
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).pairing.*</string>
 	</array>
 #endif
+#if !MACOS
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Screen Sharing saves screenshots to your photo library.</string>
+#endif
 #if DEBUG || SIDELOAD
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Screen Sharing gets your approximate location only to keep sharing this device’s screen while you use other apps or the device is locked. It doesn’t keep your location or send it anywhere.</string>
 #endif
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Screen Sharing finds and connects to Macs on your local network.</string>
+#if !MACOS
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
@@ -50,8 +61,6 @@
 		<string>location</string>
 #endif
 	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Screen Sharing finds and connects to Macs on your local network.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
@@ -59,5 +68,6 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<true/>
 	</dict>
+#endif
 </dict>
 </plist>

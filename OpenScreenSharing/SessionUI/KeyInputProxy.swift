@@ -1,3 +1,4 @@
+#if os(iOS)
 import GameController
 import SwiftUI
 import UIKit
@@ -180,7 +181,6 @@ final class KeyInputProxy: UIView, UITextInput {
                 dropTypedText()
             }
         }
-        controller?.composingTextDidChange(markedRange.map { (document as NSString).substring(with: $0) })
     }
 
     func forgetTypedText() {
@@ -394,3 +394,4 @@ private final class ComposingTextRange: UITextRange {
     override var end: UITextPosition { ComposingTextPosition(NSMaxRange(range)) }
     override var isEmpty: Bool { range.length == 0 }
 }
+#endif

@@ -27,7 +27,7 @@ final class AppSettings: ObservableObject {
     init(store: PreferenceStore = .shared) {
         self.store = store
         showsDebugInfo = store.value(Bool.self, for: Key.showsDebugInfo) ?? false
-        computerLayout = store.value(ComputerLayout.self, for: Key.computerLayout) ?? .list
+        computerLayout = store.value(ComputerLayout.self, for: Key.computerLayout) ?? .grid
         computerOrder = store.value([UUID].self, for: Key.computerOrder) ?? []
     }
 }

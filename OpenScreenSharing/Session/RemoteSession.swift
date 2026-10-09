@@ -27,6 +27,7 @@ nonisolated struct SessionFailure: Error, Equatable, Sendable {
         case authenticationFailed
         case permissionDenied
         case hostNotFound
+        case ownScreen
         case unreachable
         case connectionLost
         case closedByServer

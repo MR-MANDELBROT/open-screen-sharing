@@ -100,8 +100,10 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
     private func play() {
         guard !started else { return }
         do {
+            #if os(iOS)
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try AVAudioSession.sharedInstance().setActive(true)
+            #endif
             try engine.start()
             started = true
         } catch {

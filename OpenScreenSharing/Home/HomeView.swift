@@ -1,12 +1,26 @@
+import Combine
 import SwiftUI
 
 final class HomeActions {
     var newConnection: () -> Void = {}
 }
 
+#if os(macOS)
+final class HomeRequest: ObservableObject {
+    enum Pending: Equatable {
+        case newConnection
+        case settings
+    }
+
+    static let shared = HomeRequest()
+    @Published var pending: Pending?
+}
+#endif
+
 enum HomeTab: Hashable {
     case connections
     case server
+    case settings
 }
 
 struct HomeView: View {
@@ -22,17 +36,22 @@ struct HomeView: View {
     @State private var activeSession: SessionRoute?
     @State private var actions = HomeActions()
     @State private var isWatchingConnections = false
-    #if DEBUG || SIDELOAD
+    #if os(iOS) && (DEBUG || SIDELOAD)
     @ObservedObject private var server = ServerController.shared
+    #endif
+    #if os(macOS)
+    @ObservedObject private var homeRequest = HomeRequest.shared
     #endif
 
     var body: some View {
         layout
+            #if os(iOS)
             .fullScreenCover(item: $activeSession) { route in
                 SessionView(route: route, hasOwnWindow: false) {
                     activeSession = nil
                 }
             }
+            #endif
             .sheet(item: $editing) { computer in
                 ComputerEditor(computer: computer)
             }
@@ -48,55 +67,90 @@ struct HomeView: View {
             .onChangeCompat(of: activeSession == nil) { watchConnections() }
             .onChangeCompat(of: selection) { watchConnections() }
             .focusedSceneValue(\.homeActions, actions)
+            #if os(macOS)
+            .onChangeCompat(of: homeRequest.pending, initial: true) { pending in
+                guard let pending else { return }
+                homeRequest.pending = nil
+                switch pending {
+                case .newConnection: newConnection()
+                case .settings: selection = .settings
+                }
+            }
+            #endif
     }
 
     @ViewBuilder
     private var layout: some View {
-        if showsServerTab {
-            if #available(iOS 18, *) {
-                TabView(selection: $selection) {
-                    Tab("Connections", systemImage: "desktopcomputer", value: HomeTab.connections) {
-                        NavigationStackCompat {
-                            computersView
-                        }
-                    }
-                    #if DEBUG || SIDELOAD
-                    Tab("Server", systemImage: ServerFeature.systemImage, value: HomeTab.server) {
-                        NavigationStackCompat {
-                            serverView
-                        }
-                    }
-                    .badge(isServerRunning ? Text(verbatim: "") : nil)
-                    .accessibilityValue(Text("Running"), isEnabled: isServerRunning)
-                    #endif
-                }
-                .tabViewStyle(.sidebarAdaptable)
-            } else {
-                TabView(selection: $selection) {
+        #if os(iOS)
+        if #available(iOS 18, *) {
+            TabView(selection: $selection) {
+                Tab("Connections", systemImage: "desktopcomputer", value: HomeTab.connections) {
                     NavigationStackCompat {
                         computersView
                     }
-                    .tabItem { Label("Connections", systemImage: "desktopcomputer") }
-                    .tag(HomeTab.connections)
-                    #if DEBUG || SIDELOAD
+                }
+                #if DEBUG || SIDELOAD
+                Tab("Server", systemImage: ServerFeature.systemImage, value: HomeTab.server) {
                     NavigationStackCompat {
                         serverView
                     }
-                    .tabItem { Label("Server", systemImage: ServerFeature.systemImage) }
-                    .tag(HomeTab.server)
-                    .badge(isServerRunning ? Text(verbatim: "") : nil)
-                    .accessibilityValue(isServerRunning ? Text("Running") : Text(verbatim: ""))
-                    #endif
+                }
+                .badge(isServerRunning ? Text(verbatim: "") : nil)
+                .accessibilityValue(Text("Running"), isEnabled: isServerRunning)
+                #endif
+                Tab("Settings", systemImage: "gearshape", value: HomeTab.settings) {
+                    NavigationStackCompat {
+                        SettingsView()
+                    }
                 }
             }
+            .tabViewStyle(.sidebarAdaptable)
         } else {
-            NavigationStackCompat {
-                computersView
+            TabView(selection: $selection) {
+                NavigationStackCompat {
+                    computersView
+                }
+                .tabItem { Label("Connections", systemImage: "desktopcomputer") }
+                .tag(HomeTab.connections)
+                #if DEBUG || SIDELOAD
+                NavigationStackCompat {
+                    serverView
+                }
+                .tabItem { Label("Server", systemImage: ServerFeature.systemImage) }
+                .tag(HomeTab.server)
+                .badge(isServerRunning ? Text(verbatim: "") : nil)
+                .accessibilityValue(isServerRunning ? Text("Running") : Text(verbatim: ""))
+                #endif
+                NavigationStackCompat {
+                    SettingsView()
+                }
+                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tag(HomeTab.settings)
             }
         }
+        #else
+        NavigationSplitView {
+            List(selection: Binding(get: { selection }, set: { if let page = $0 { selection = page } })) {
+                Label("Connections", systemImage: "desktopcomputer")
+                    .tag(HomeTab.connections)
+                Label("Settings", systemImage: "gearshape")
+                    .tag(HomeTab.settings)
+            }
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
+        } detail: {
+            NavigationStack {
+                if selection == .settings {
+                    SettingsView()
+                } else {
+                    computersView
+                }
+            }
+            .id(selection)
+        }
+        #endif
     }
 
-    #if DEBUG || SIDELOAD
+    #if os(iOS) && (DEBUG || SIDELOAD)
     @ViewBuilder
     private var serverView: some View {
         if ServerFeature.isAvailable {
@@ -107,24 +161,21 @@ struct HomeView: View {
     }
     #endif
 
-    private var showsServerTab: Bool {
-        #if DEBUG || SIDELOAD
-        ServerFeature.isShown
-        #else
-        false
-        #endif
-    }
-
-    #if DEBUG || SIDELOAD
+    #if os(iOS) && (DEBUG || SIDELOAD)
     private var isServerRunning: Bool {
         server.phase.isRunning
     }
     #endif
 
     private var computersView: ComputersView {
-        ComputersView(
+        #if os(iOS)
+        let openInNewWindow = openSessionWindow
+        #else
+        let openInNewWindow: ((SessionRoute) -> Void)? = nil
+        #endif
+        return ComputersView(
             connect: { route in connect(route) },
-            openInNewWindow: openSessionWindow,
+            openInNewWindow: openInNewWindow,
             edit: { computer in editing = computer },
             newConnection: newConnection
         )
@@ -136,7 +187,7 @@ struct HomeView: View {
     }
 
     private func watchConnections() {
-        setWatchingConnections(scenePhase != .background && activeSession == nil && selection != .server)
+        setWatchingConnections(scenePhase != .background && activeSession == nil && selection == .connections)
     }
 
     private func setWatchingConnections(_ watching: Bool) {
@@ -152,11 +203,15 @@ struct HomeView: View {
     }
 
     private func connect(_ route: SessionRoute) {
+        #if os(iOS)
         if activeSession != nil, let openSessionWindow {
             openSessionWindow(route)
         } else {
             activeSession = route
         }
+        #else
+        openSessionWindow?(route)
+        #endif
     }
 
     private func openPendingRoute() {
@@ -166,6 +221,7 @@ struct HomeView: View {
     }
 
     private func newConnection() {
+        selection = .connections
         setup = SetupRequest()
     }
 

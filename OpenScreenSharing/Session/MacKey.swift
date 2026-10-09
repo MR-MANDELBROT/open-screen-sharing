@@ -1,4 +1,8 @@
+#if os(iOS)
 import UIKit
+#else
+import Carbon
+#endif
 
 nonisolated struct MacKey: Hashable, Sendable {
     var keyCode: UInt16?
@@ -65,6 +69,7 @@ nonisolated struct MacKey: Hashable, Sendable {
         return table
     }()
 
+    #if os(iOS)
     static func keyCode(for usage: UIKeyboardHIDUsage, type: MacKeyboardType) -> UInt16? {
         switch usage {
         case .keyboardGraveAccentAndTilde: return type == .iso ? 10 : 50
@@ -111,6 +116,7 @@ nonisolated struct MacKey: Hashable, Sendable {
         }
         return table
     }()
+    #endif
 
     static func usKeystroke(for character: Character) -> (key: MacKey, shift: Bool)? {
         guard let ascii = character.asciiValue else { return nil }
@@ -153,6 +159,7 @@ nonisolated enum MacKeyboardType: Sendable {
     case iso
     case jis
 
+    #if os(iOS)
     func learning(from usage: UIKeyboardHIDUsage) -> MacKeyboardType {
         switch usage {
         case .keyboardLANG1, .keyboardLANG2, .keyboardInternational1, .keyboardInternational3, .keypadComma:
@@ -163,6 +170,15 @@ nonisolated enum MacKeyboardType: Sendable {
             self
         }
     }
+    #else
+    static var current: MacKeyboardType {
+        switch KBGetLayoutType(Int16(LMGetKbdType())) {
+        case OSType(kKeyboardISO): .iso
+        case OSType(kKeyboardJIS): .jis
+        default: .ansi
+        }
+    }
+    #endif
 }
 
 extension ModifierKey {

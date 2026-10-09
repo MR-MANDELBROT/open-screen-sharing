@@ -32,9 +32,11 @@ nonisolated final class MicrophoneSender: @unchecked Sendable {
     }
 
     func start() throws {
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
         try session.setActive(true)
+        #endif
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
         guard let resampler = AVAudioConverter(from: inputFormat, to: pcmFormat) else {

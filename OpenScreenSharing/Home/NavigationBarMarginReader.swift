@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -50,3 +51,4 @@ struct NavigationBarMarginReader: UIViewRepresentable {
         }
     }
 }
+#endif
