@@ -55,8 +55,8 @@ var devices = []device{
 	{
 		name:       "iphone",
 		platform:   "iOS Simulator",
-		deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max",
-		sizes:      []size{{1320, 2868}, {1290, 2796}, {1260, 2736}},
+		deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+		sizes:      []size{{1206, 2622}, {1179, 2556}},
 	},
 	{
 		name:       "ipad",
