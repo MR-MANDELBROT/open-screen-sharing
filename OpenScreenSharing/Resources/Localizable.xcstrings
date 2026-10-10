@@ -896,19 +896,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. 前往「設定」>「私隱與保安」>「開發者模式」\n2. 點一下「Pair with %@」\n3. 輸入 Screen Sharing 顯示的配對碼"
+            "value" : "1. 前往「設定」>「私隱與保安」>「開發者模式」。\n2. 點一下「Pair with %@」。\n3. 輸入 Screen Sharing 顯示的配對碼。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. 前往“设置”>“隐私与安全性”>“开发者模式”\n2. 轻点“Pair with %@”\n3. 输入 Screen Sharing 显示的配对码"
+            "value" : "1. 前往“设置”>“隐私与安全性”>“开发者模式”。\n2. 轻点“Pair with %@”。\n3. 输入 Screen Sharing 显示的配对码。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. 前往「設定」>「隱私權與安全性」>「開發者模式」\n2. 點一下「Pair with %@」\n3. 輸入 Screen Sharing 顯示的配對碼"
+            "value" : "1. 前往「設定」>「隱私權與安全性」>「開發者模式」。\n2. 點一下「Pair with %@」。\n3. 輸入 Screen Sharing 顯示的配對碼。"
           }
         }
       }
@@ -4544,19 +4544,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "套用至下一次按鍵或點按"
+            "value" : "套用至下一次按鍵或點按。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "作用于下一次按键或点按"
+            "value" : "作用于下一次按键或点按。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "套用至下一次按鍵或點按"
+            "value" : "套用至下一次按鍵或點按。"
           }
         }
       }
@@ -6976,19 +6976,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此裝置的螢幕前，請先配對並輸入磁碟映像檔"
+            "value" : "共享此裝置的螢幕前，請先配對並輸入磁碟映像檔。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此设备的屏幕前，需要先配对并导入磁盘映像"
+            "value" : "共享此设备的屏幕前，需要先配对并导入磁盘映像。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此裝置的螢幕前，請先配對並輸入磁碟映像檔"
+            "value" : "共享此裝置的螢幕前，請先配對並輸入磁碟映像檔。"
           }
         }
       }
@@ -8800,19 +8800,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法連線到「%@」"
+            "value" : "無法連線到「%@」。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法连接到“%@”"
+            "value" : "无法连接到“%@”。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法連線到「%@」"
+            "value" : "無法連線到「%@」。"
           }
         }
       }
@@ -9104,19 +9104,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到「%@」"
+            "value" : "找不到「%@」。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到“%@”"
+            "value" : "找不到“%@”。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到「%@」"
+            "value" : "找不到「%@」。"
           }
         }
       }
@@ -10624,19 +10624,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按一下 %@ 以新增連線"
+            "value" : "按一下 %@ 以新增連線。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "点按 %@ 添加连接"
+            "value" : "点按 %@ 添加连接。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按一下 %@ 以新增連線"
+            "value" : "按一下 %@ 以新增連線。"
           }
         }
       }
@@ -19136,19 +19136,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法發佈配對服務（錯誤 %d）"
+            "value" : "無法發佈配對服務（錯誤 %d）。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法发布配对服务（错误 %d）"
+            "value" : "无法发布配对服务（错误 %d）。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無法發布配對服務（錯誤 %d）"
+            "value" : "無法發布配對服務（錯誤 %d）。"
           }
         }
       }
@@ -26743,19 +26743,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "請輸入名稱"
+            "value" : "請輸入名稱。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请输入名称"
+            "value" : "请输入名称。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "請輸入名稱"
+            "value" : "請輸入名稱。"
           }
         }
       }
@@ -27047,19 +27047,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "請輸入有效的伺服器地址"
+            "value" : "請輸入有效的伺服器地址。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请输入有效的服务器地址"
+            "value" : "请输入有效的服务器地址。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "請輸入有效的伺服器位址"
+            "value" : "請輸入有效的伺服器位址。"
           }
         }
       }
@@ -27351,19 +27351,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "輸入密碼以登入「%@」"
+            "value" : "輸入密碼以登入「%@」。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "输入密码以登录“%@”"
+            "value" : "输入密码以登录“%@”。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "輸入密碼以登入「%@」"
+            "value" : "輸入密碼以登入「%@」。"
           }
         }
       }
@@ -27655,19 +27655,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "輸入用户名稱和密碼以登入「%@」"
+            "value" : "輸入用户名稱和密碼以登入「%@」。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "输入用户名和密码以登录“%@”"
+            "value" : "输入用户名和密码以登录“%@”。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "輸入使用者名稱和密碼以登入「%@」"
+            "value" : "輸入使用者名稱和密碼以登入「%@」。"
           }
         }
       }
@@ -43463,19 +43463,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在「設定」中關閉咪高風取用權限"
+            "value" : "已在「設定」中關閉咪高風取用權限。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在“设置”中关闭麦克风访问权限"
+            "value" : "已在“设置”中关闭麦克风访问权限。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在「設定」中關閉麥克風取用權限"
+            "value" : "已在「設定」中關閉麥克風取用權限。"
           }
         }
       }
@@ -43767,19 +43767,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在「系統設定」中關閉咪高風取用權限"
+            "value" : "已在「系統設定」中關閉咪高風取用權限。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在“系统设置”中关闭麦克风访问权限"
+            "value" : "已在“系统设置”中关闭麦克风访问权限。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在「系統設定」中關閉麥克風取用權限"
+            "value" : "已在「系統設定」中關閉麥克風取用權限。"
           }
         }
       }
@@ -50151,19 +50151,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到回繞位址"
+            "value" : "找不到回繞位址。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未探测到回环地址"
+            "value" : "未探测到回环地址。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到回送位址"
+            "value" : "找不到回送位址。"
           }
         }
       }
@@ -60487,19 +60487,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "透過縮放提高解像度會降低清晰度，並增加頻寬用量與畫面延遲"
+            "value" : "透過縮放提高解像度會降低清晰度，並增加頻寬用量與畫面延遲。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通过裁切实现的分辨率增加将降低清晰度、增加带宽使用和画面延迟"
+            "value" : "通过裁切实现的分辨率增加将降低清晰度、增加带宽使用和画面延迟。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "透過縮放提高解析度會降低清晰度，並增加頻寬用量與畫面延遲"
+            "value" : "透過縮放提高解析度會降低清晰度，並增加頻寬用量與畫面延遲。"
           }
         }
       }
@@ -67175,19 +67175,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 無法在背景繼續等待「設定」"
+            "value" : "Screen Sharing 無法在背景繼續等待「設定」。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 无法在后台继续等待“设置”"
+            "value" : "Screen Sharing 无法在后台继续等待“设置”。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 無法在背景繼續等待「設定」"
+            "value" : "Screen Sharing 無法在背景繼續等待「設定」。"
           }
         }
       }
@@ -67783,19 +67783,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 需要在背景保持執行，才能持續共享此裝置的螢幕"
+            "value" : "Screen Sharing 需要在背景保持執行，才能持續共享此裝置的螢幕。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 需要保持后台以持续提供服务"
+            "value" : "Screen Sharing 需要保持后台以持续提供服务。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 需要在背景保持執行，才能持續共享此裝置的螢幕"
+            "value" : "Screen Sharing 需要在背景保持執行，才能持續共享此裝置的螢幕。"
           }
         }
       }
@@ -71735,19 +71735,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此 iPad 的螢幕需要 iPadOS 27 或以上版本"
+            "value" : "共享此 iPad 的螢幕需要 iPadOS 27 或以上版本。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此 iPad 的屏幕需要 iPadOS 27 或更高版本"
+            "value" : "共享此 iPad 的屏幕需要 iPadOS 27 或更高版本。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此 iPad 的螢幕需要 iPadOS 27 或以上版本"
+            "value" : "共享此 iPad 的螢幕需要 iPadOS 27 或以上版本。"
           }
         }
       }
@@ -72039,19 +72039,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此 iPhone 的螢幕需要 iOS 27 或以上版本"
+            "value" : "共享此 iPhone 的螢幕需要 iOS 27 或以上版本。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此 iPhone 的屏幕需要 iOS 27 或更高版本"
+            "value" : "共享此 iPhone 的屏幕需要 iOS 27 或更高版本。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共享此 iPhone 的螢幕需要 iOS 27 或以上版本"
+            "value" : "共享此 iPhone 的螢幕需要 iOS 27 或以上版本。"
           }
         }
       }
@@ -75079,19 +75079,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "需要有人在 Mac 前接受請求"
+            "value" : "需要有人在 Mac 前接受請求。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "需要有人在 Mac 前接受请求"
+            "value" : "需要有人在 Mac 前接受请求。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "需要有人在 Mac 前接受請求"
+            "value" : "需要有人在 Mac 前接受請求。"
           }
         }
       }
@@ -78119,19 +78119,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "點一下 %@ 以新增連線"
+            "value" : "點一下 %@ 以新增連線。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "轻点 %@ 添加连接"
+            "value" : "轻点 %@ 添加连接。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "點一下 %@ 以新增連線"
+            "value" : "點一下 %@ 以新增連線。"
           }
         }
       }
@@ -81159,19 +81159,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "重新啟動 App 後才會套用新語言"
+            "value" : "重新啟動 App 後才會套用新語言。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "重新启动 App 后将使用新语言"
+            "value" : "重新启动 App 后将使用新语言。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "重新啟動 App 後才會套用新語言"
+            "value" : "重新啟動 App 後才會套用新語言。"
           }
         }
       }
@@ -81463,19 +81463,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "密碼不正確"
+            "value" : "密碼不正確。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "密码不正确"
+            "value" : "密码不正确。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "密碼不正確"
+            "value" : "密碼不正確。"
           }
         }
       }
@@ -81767,19 +81767,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用户名稱或密碼不正確"
+            "value" : "用户名稱或密碼不正確。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用户名或密码不正确"
+            "value" : "用户名或密码不正确。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用者名稱或密碼不正確"
+            "value" : "使用者名稱或密碼不正確。"
           }
         }
       }
@@ -85415,19 +85415,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在 iPhone 或 iPad 上使用此 App 以共享該裝置的螢幕"
+            "value" : "在 iPhone 或 iPad 上使用此 App 以共享該裝置的螢幕。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在 iPhone 或 iPad 上使用此 App 来共享该设备的屏幕"
+            "value" : "在 iPhone 或 iPad 上使用此 App 来共享该设备的屏幕。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在 iPhone 或 iPad 上使用此 App 以共享該裝置的螢幕"
+            "value" : "在 iPhone 或 iPad 上使用此 App 以共享該裝置的螢幕。"
           }
         }
       }
@@ -89671,19 +89671,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你無法控制自己的螢幕"
+            "value" : "你無法控制自己的螢幕。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你不能控制你自己的屏幕"
+            "value" : "你不能控制你自己的屏幕。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你無法控制自己的螢幕"
+            "value" : "你無法控制自己的螢幕。"
           }
         }
       }
@@ -89975,19 +89975,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的帳户已在 Mac 上登入"
+            "value" : "你的帳户已在 Mac 上登入。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mac 上已登录你的账户"
+            "value" : "Mac 上已登录你的账户。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的帳號已在 Mac 上登入"
+            "value" : "你的帳號已在 Mac 上登入。"
           }
         }
       }
@@ -94231,19 +94231,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「%@」目前正在使用"
+            "value" : "「%@」目前正在使用。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@”当前正在使用"
+            "value" : "“%@”当前正在使用。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「%@」目前正在使用"
+            "value" : "「%@」目前正在使用。"
           }
         }
       }
@@ -94535,19 +94535,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「%@」不是有效的地址"
+            "value" : "「%@」不是有效的地址。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@”不是有效的地址"
+            "value" : "“%@”不是有效的地址。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「%@」不是有效的位址"
+            "value" : "「%@」不是有效的位址。"
           }
         }
       }
@@ -94839,19 +94839,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「%@」沒有提供此 App 支援的登入方式"
+            "value" : "「%@」沒有提供此 App 支援的登入方式。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@”没有提供此 App 支持的登录方式"
+            "value" : "“%@”没有提供此 App 支持的登录方式。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「%@」沒有提供此 App 支援的登入方式"
+            "value" : "「%@」沒有提供此 App 支援的登入方式。"
           }
         }
       }

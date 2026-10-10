@@ -917,19 +917,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 會尋找並連線到本地網絡上的 Mac"
+            "value" : "Screen Sharing 會尋找並連線到本地網絡上的 Mac。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 会查找并连接本地网络上的 Mac"
+            "value" : "Screen Sharing 会查找并连接本地网络上的 Mac。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 會尋找並連線到區域網路上的 Mac"
+            "value" : "Screen Sharing 會尋找並連線到區域網路上的 Mac。"
           }
         }
       }
@@ -1539,19 +1539,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 會將你的聲音傳送到 Mac"
+            "value" : "Screen Sharing 會將你的聲音傳送到 Mac。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 会将你的声音发送到 Mac"
+            "value" : "Screen Sharing 会将你的声音发送到 Mac。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 會將你的聲音傳送到 Mac"
+            "value" : "Screen Sharing 會將你的聲音傳送到 Mac。"
           }
         }
       }
@@ -1850,19 +1850,19 @@
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 會將螢幕截圖儲存到你的相片圖庫"
+            "value" : "Screen Sharing 會將螢幕截圖儲存到你的相片圖庫。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 会将截屏存储到你的照片图库"
+            "value" : "Screen Sharing 会将截屏存储到你的照片图库。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 會將截圖儲存到你的照片圖庫"
+            "value" : "Screen Sharing 會將截圖儲存到你的照片圖庫。"
           }
         }
       }
