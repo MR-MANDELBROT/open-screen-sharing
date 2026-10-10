@@ -227,22 +227,22 @@ func (c *Client) pull(ctx context.Context, policy map[string]any) (Snapshot, err
 	return snapshotReply(reply, "PULL_REPLY")
 }
 
-func (c *Client) WriteText(ctx context.Context, text string) error {
+func (c *Client) WriteText(ctx context.Context, text string, written func(error)) error {
 	data := make(map[string]any, len(textTypes))
 	for _, textType := range textTypes {
 		data[textType] = map[string]any{"data": []byte(text)}
 	}
-	return c.write(ctx, map[string]any{"types": textTypes, "data": data}, []byte(text))
+	return c.write(ctx, map[string]any{"types": textTypes, "data": data}, []byte(text), written)
 }
 
-func (c *Client) WriteImage(ctx context.Context, imageType string, image []byte) error {
+func (c *Client) WriteImage(ctx context.Context, imageType string, image []byte, written func(error)) error {
 	return c.write(ctx, map[string]any{
 		"types": []string{imageType},
 		"data":  map[string]any{imageType: map[string]any{"data": image}},
-	}, image)
+	}, image, written)
 }
 
-func (c *Client) write(ctx context.Context, item map[string]any, payload []byte) error {
+func (c *Client) write(ctx context.Context, item map[string]any, payload []byte, written func(error)) error {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
@@ -274,7 +274,7 @@ func (c *Client) write(ctx context.Context, item map[string]any, payload []byte)
 	}
 	c.pendingWrites++
 	c.access.Unlock()
-	go c.finishWrite(conn, fingerprint)
+	go c.finishWrite(conn, fingerprint, written)
 	return nil
 }
 
@@ -290,20 +290,22 @@ func (c *Client) sourceMetadata() map[string]any {
 	return map[string]any{"nonce": c.nonce, "pasteboardName": general, "changeCount": count}
 }
 
-func (c *Client) finishWrite(conn *xpc.Conn, fingerprint [sha1.Size]byte) {
+func (c *Client) finishWrite(conn *xpc.Conn, fingerprint [sha1.Size]byte, written func(error)) {
 	timer := time.AfterFunc(writeReplyTimeout, func() { conn.Close() })
 	reply, err := conn.Receive()
-	timer.Stop()
+	expired := !timer.Stop()
 	conn.Close()
 	var snapshot Snapshot
-	if err == nil {
+	switch {
+	case err != nil && expired:
+		err = fmt.Errorf("pasteboard: no SET_REPLY in %v", writeReplyTimeout)
+	case err != nil:
+		err = fmt.Errorf("pasteboard: receive SET_REPLY: %w", err)
+	default:
 		snapshot, err = snapshotReply(reply, "SET_REPLY")
 	}
 	c.access.Lock()
-	defer c.access.Unlock()
-	if err != nil {
-		c.logger.Debug("no SET_REPLY from the pasteboard", "error", err)
-	} else {
+	if err == nil {
 		if snapshot.change.valid() {
 			c.own = append(c.own, snapshot.change)
 			if len(c.own) > ownChangesKept {
@@ -316,6 +318,8 @@ func (c *Client) finishWrite(conn *xpc.Conn, fingerprint [sha1.Size]byte) {
 	if c.pendingWrites == 0 {
 		close(c.writesDone)
 	}
+	c.access.Unlock()
+	written(err)
 }
 
 func (c *Client) noteSent(fingerprint [sha1.Size]byte) {

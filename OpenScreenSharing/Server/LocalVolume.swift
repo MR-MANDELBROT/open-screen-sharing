@@ -20,17 +20,6 @@ final class LocalVolume {
         }
     }
 
-    private var saved: Float? {
-        get { store.value(Float.self, for: Self.savedKey) }
-        set {
-            if let newValue {
-                store.set(newValue, for: Self.savedKey)
-            } else {
-                store.remove(Self.savedKey)
-            }
-        }
-    }
-
     func setWatched(_ watched: Bool) {
         self.watched = watched
         update()
@@ -43,14 +32,14 @@ final class LocalVolume {
     private func update() {
         guard isReady, let slider else { return }
         let volume = slider.value
-        Self.logger.info("Watched \(self.watched, privacy: .public); volume \(volume, privacy: .public), saved \(String(describing: self.saved), privacy: .public)")
+        let saved = store.value(Float.self, for: Self.savedKey)
+        Self.logger.info("Watched \(self.watched, privacy: .public); volume \(volume, privacy: .public), saved \(String(describing: saved), privacy: .public)")
         if watched {
-            guard saved == nil, volume > 0 else { return }
-            saved = volume
+            guard saved == nil, volume > 0, store.set(volume, for: Self.savedKey) else { return }
             slider.value = 0
         } else {
             guard let saved else { return }
-            self.saved = nil
+            store.remove(Self.savedKey)
             guard volume == 0 else { return }
             slider.value = saved
         }

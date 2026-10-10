@@ -3,6 +3,7 @@ package rfb
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -166,8 +167,22 @@ func (c *Client) PasteText(text string) error {
 	if c.observing() {
 		return errObserving
 	}
+	clipboard := NewTextClipboard(text)
+	if len(clipboard.Items) > 0 {
+		item := &clipboard.Items[0]
+		item.Flavors = append(item.Flavors, ClipboardFlavor{Type: typeTransient, Data: []byte{1}})
+	}
+	message, err := pasteboardMessage(clipboard, 0)
+	if err != nil {
+		return err
+	}
+	command := appleKeysym(KeysymSuperLeft)
+	message = append(message, keyEventMessage(true, command)...)
+	message = append(message, keyEventMessage(true, 'v')...)
+	message = append(message, keyEventMessage(false, 'v')...)
+	message = append(message, keyEventMessage(false, command)...)
 	c.enqueueKeyboard(func() {
-		err := c.pasteText(text)
+		err := c.pasteText(message)
 		if err != nil {
 			c.logger.Warn("paste text", "error", err)
 		}
@@ -175,30 +190,21 @@ func (c *Client) PasteText(text string) error {
 	return nil
 }
 
-func (c *Client) pasteText(text string) error {
+func (c *Client) pasteText(message []byte) error {
 	c.access.Lock()
 	run := c.keyboard.paste
 	if run != nil {
 		run.restore.Stop()
 	}
 	c.access.Unlock()
+	var unsaved error
 	if run == nil {
-		run = &textPaste{saved: c.pasteboardToRestore()}
+		var saved *Clipboard
+		saved, unsaved = c.pasteboardToRestore()
+		run = &textPaste{saved: saved}
 	}
-	clipboard := NewTextClipboard(text)
-	if len(clipboard.Items) > 0 {
-		item := &clipboard.Items[0]
-		item.Flavors = append(item.Flavors, ClipboardFlavor{Type: typeTransient, Data: []byte{1}})
-	}
-	message, err := c.ownPasteboardMessage(clipboard)
-	if err == nil {
-		command := appleKeysym(KeysymSuperLeft)
-		message = append(message, keyEventMessage(true, command)...)
-		message = append(message, keyEventMessage(true, 'v')...)
-		message = append(message, keyEventMessage(false, 'v')...)
-		message = append(message, keyEventMessage(false, command)...)
-		err = c.sendInput(message, false)
-	}
+	c.expectOwnPasteboardEcho()
+	err := c.sendInput(message, false)
 	now := time.Now()
 	c.access.Lock()
 	c.keyboard.paste = run
@@ -210,7 +216,14 @@ func (c *Client) pasteText(text string) error {
 		})
 	})
 	c.access.Unlock()
-	return err
+	if err != nil {
+		return err
+	}
+	if unsaved != nil {
+		c.logger.Warn("pasteboard is not put back after pasting", "error", unsaved)
+		c.handler.ClipboardFailed(ClipboardNotRestored, fmt.Errorf("pasteboard is not put back after pasting: %w", unsaved))
+	}
+	return nil
 }
 
 func (c *Client) restorePasteboard(run *textPaste) {
@@ -225,8 +238,9 @@ func (c *Client) restorePasteboard(run *textPaste) {
 	if saved == nil {
 		return
 	}
-	message, err := c.ownPasteboardMessage(saved)
+	message, err := pasteboardMessage(saved, 0)
 	if err == nil {
+		c.expectOwnPasteboardEcho()
 		err = c.sendInput(message, false)
 	}
 	if err != nil {
@@ -264,12 +278,12 @@ func (c *Client) finishPaste() {
 	}
 }
 
-func (c *Client) pasteboardToRestore() *Clipboard {
+func (c *Client) pasteboardToRestore() (*Clipboard, error) {
 	c.access.Lock()
 	cached, shared := c.keyboard.pasteboard, c.sharedClipboard
 	c.access.Unlock()
 	if shared && cached != nil && !cached.Promise {
-		return restorableClipboard(cached)
+		return restorableClipboard(cached), nil
 	}
 	waiter := make(chan *Clipboard, 1)
 	c.access.Lock()
@@ -281,7 +295,10 @@ func (c *Client) pasteboardToRestore() *Clipboard {
 		defer timer.Stop()
 		select {
 		case clipboard := <-waiter:
-			return restorableClipboard(clipboard)
+			if clipboard != nil {
+				return restorableClipboard(clipboard), nil
+			}
+			err = errors.New("the Mac's pasteboard is unreadable")
 		case <-timer.C:
 			err = errors.New("no pasteboard in time")
 		case <-c.writerDone:
@@ -296,8 +313,7 @@ func (c *Client) pasteboardToRestore() *Clipboard {
 		}
 	}
 	c.access.Unlock()
-	c.logger.Warn("pasteboard is not put back after pasting", "error", err)
-	return nil
+	return nil, err
 }
 
 func restorableClipboard(clipboard *Clipboard) *Clipboard {
@@ -316,20 +332,12 @@ func restorableClipboard(clipboard *Clipboard) *Clipboard {
 	return restorable
 }
 
-func (c *Client) ownPasteboardMessage(clipboard *Clipboard) ([]byte, error) {
-	message, err := pasteboardMessage(clipboard, 0)
-	if err != nil {
-		return nil, err
-	}
-	if len(message) > maximumPasteboard {
-		return nil, errors.New("pasteboard is larger than the Mac accepts")
-	}
+func (c *Client) expectOwnPasteboardEcho() {
 	c.access.Lock()
 	if c.sharedClipboard {
 		c.keyboard.ownPasteboardEchoes = append(c.keyboard.ownPasteboardEchoes, time.Now().Add(pasteEchoWindow))
 	}
 	c.access.Unlock()
-	return message, nil
 }
 
 func (c *Client) takeOwnPasteboardEchoLocked() bool {

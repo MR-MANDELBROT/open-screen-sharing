@@ -87,21 +87,29 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 	return imported, nil
 }
 
-func Present(dir string, variant Variant) bool {
-	manifest, err := loadManifest(filepath.Join(dir, variant.String()))
+func Present(dir string, variant Variant) (bool, error) {
+	dir = filepath.Join(dir, variant.String())
+	manifest, err := loadManifest(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
 	if err != nil {
-		return false
+		return false, err
 	}
 	identity, err := variant.identity(manifest)
 	if err != nil {
-		return false
+		return false, err
 	}
 	for _, key := range variant.keys() {
-		if _, err = identity.resolve(filepath.Join(dir, variant.String()), key); err != nil {
-			return false
+		_, err = identity.resolve(dir, key)
+		if errors.Is(err, errMissingFile) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
 		}
 	}
-	return true
+	return true, nil
 }
 
 var ErrNoManifest = errors.New("imagemounter: no " + manifestName)

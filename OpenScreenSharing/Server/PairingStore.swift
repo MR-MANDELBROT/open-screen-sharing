@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import Libsharing
+import os
 
 struct PairedDevice {
     var name: String
@@ -20,8 +21,22 @@ final class PairingStore: ObservableObject {
     var isPaired: Bool { record != nil }
 
     init() {
-        record = try? Data(contentsOf: Self.url)
-        device = record.flatMap { try? Self.check($0) }
+        let record: Data
+        do {
+            record = try Data(contentsOf: Self.url)
+        } catch CocoaError.fileReadNoSuchFile {
+            return
+        } catch {
+            StorageNotice.shared.report("Couldn’t Read the Pairing Record", error: error)
+            return
+        }
+        do {
+            device = try Self.check(record)
+            self.record = record
+        } catch {
+            StorageNotice.logger.error("remove unreadable pairing record: \(error, privacy: .public)")
+            try? FileManager.default.removeItem(at: Self.url)
+        }
     }
 
     private static func check(_ record: Data) throws -> PairedDevice {

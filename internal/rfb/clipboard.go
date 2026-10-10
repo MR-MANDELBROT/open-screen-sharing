@@ -39,6 +39,13 @@ type ClipboardTag struct {
 	Value string
 }
 
+type ClipboardProblem int
+
+const (
+	ClipboardUnreadable ClipboardProblem = iota + 1
+	ClipboardNotRestored
+)
+
 func NewTextClipboard(text string) *Clipboard {
 	if text == "" {
 		return &Clipboard{}
@@ -152,6 +159,9 @@ func inflatePasteboard(compressed []byte, size uint32) ([]byte, error) {
 
 func pasteboardMessage(clipboard *Clipboard, echo uint32) ([]byte, error) {
 	archive := buildPasteboardArchive(clipboard)
+	if len(archive) > maximumPasteboard {
+		return nil, fmt.Errorf("pasteboard of %d bytes is over the 100 MiB limit", len(archive))
+	}
 	var compressed bytes.Buffer
 	writer, err := zlib.NewWriterLevel(&compressed, zlib.BestCompression)
 	if err != nil {
@@ -161,6 +171,9 @@ func pasteboardMessage(clipboard *Clipboard, echo uint32) ([]byte, error) {
 	err = writer.Flush()
 	if err != nil {
 		return nil, err
+	}
+	if compressed.Len() > maximumPasteboard {
+		return nil, fmt.Errorf("pasteboard of %d compressed bytes is over the 100 MiB limit", compressed.Len())
 	}
 	message := []byte{0x1f, 0, boolByte(clipboard.Promise), 0}
 	message = binary.BigEndian.AppendUint32(message, echo)
@@ -194,6 +207,8 @@ func (c *Client) receivePasteboard() error {
 	clipboard, err := parsePasteboardArchive(archive)
 	if err != nil {
 		c.logger.Warn("unreadable pasteboard", "error", err)
+		c.pasteboardReceived(nil)
+		c.handler.ClipboardFailed(ClipboardUnreadable, err)
 		return c.afterUpdate()
 	}
 	clipboard.Promise = promise
@@ -241,7 +256,7 @@ func (c *Client) SetClipboard(clipboard *Clipboard) error {
 		}
 		return c.send(clientCutTextMessage(encoded))
 	}
-	message, err := c.ownPasteboardMessage(clipboard)
+	message, err := pasteboardMessage(clipboard, 0)
 	if err != nil {
 		return err
 	}
@@ -251,6 +266,7 @@ func (c *Client) SetClipboard(clipboard *Clipboard) error {
 			c.keyboard.paste.saved = restorableClipboard(clipboard)
 		}
 		c.access.Unlock()
+		c.expectOwnPasteboardEcho()
 		sendErr := c.send(message)
 		if sendErr != nil {
 			c.logger.Warn("set pasteboard", "error", sendErr)

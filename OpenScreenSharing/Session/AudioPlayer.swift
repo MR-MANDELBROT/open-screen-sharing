@@ -28,6 +28,7 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
     private var target = AudioPlayer.minimumTarget
     private var lastSound = -CFTimeInterval.infinity
     private var quietTimer: DispatchSourceTimer?
+    private var observers: [any NSObjectProtocol] = []
     private let failed: @Sendable (any Error) -> Void
 
     private static let minimumTarget = 0.015
@@ -74,6 +75,26 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
         }
         engine.attach(source)
         engine.connect(source, to: engine.mainMixerNode, format: outputFormat)
+        let center = NotificationCenter.default
+        observers.append(
+            center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) { [weak self] _ in
+                self?.restart()
+            })
+        #if os(iOS)
+        observers.append(
+            center.addObserver(forName: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), queue: nil) {
+                [weak self] notification in
+                guard (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init) == .ended
+                else { return }
+                self?.restart()
+            })
+        #endif
+    }
+
+    deinit {
+        for observer in observers {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func start() {
@@ -109,6 +130,15 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
         } catch {
             started = false
             failed(error)
+        }
+    }
+
+    private func restart() {
+        queue.async { [self] in
+            guard started, !engine.isRunning else { return }
+            started = false
+            ring.flushRequested.store(true, ordering: .relaxed)
+            play()
         }
     }
 

@@ -101,10 +101,28 @@ struct ServerView: View {
             Toggle("Enabled", isOn: sharingBinding)
                 .disabled(!controller.isActive && !controller.canStart)
         } footer: {
-            if !controller.isActive, controller.tunnelFound == false {
-                Text("No loopback address found.")
-                    .foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 4) {
+                if !controller.isActive, controller.tunnelFound == false {
+                    Text("No loopback address found.")
+                }
+                if let problem = phaseProblem {
+                    Text(verbatim: problem.message.isEmpty ? problem.title : "\(problem.title): \(problem.message)")
+                }
+                if let problem = controller.viewerProblem {
+                    Text(problem)
+                }
+                if let problem = controller.advertisingProblem {
+                    Text(problem)
+                }
             }
+            .foregroundStyle(.red)
+        }
+    }
+
+    private var phaseProblem: ServerProblem? {
+        switch controller.phase {
+        case .connecting(let problem), .running(let problem): problem
+        default: nil
         }
     }
 
@@ -186,7 +204,13 @@ struct ServerView: View {
         } header: {
             Text("Background Service")
         } footer: {
-            Text("Screen Sharing needs to stay running in the background to keep sharing this device’s screen.")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Screen Sharing needs to stay running in the background to keep sharing this device’s screen.")
+                if let problem = controller.backgroundProblem {
+                    Text(problem)
+                        .foregroundStyle(.red)
+                }
+            }
         }
         .onChangeCompat(of: settings.runsInBackground) { controller.updateBackground() }
         .onChangeCompat(of: settings.backgroundMode) { controller.updateBackground() }

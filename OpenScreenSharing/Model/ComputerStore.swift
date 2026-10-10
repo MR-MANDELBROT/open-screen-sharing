@@ -47,14 +47,20 @@ final class ComputerStore: ObservableObject {
         self.database = database
         observation = ValueObservation
             .tracking { try Computer.order(Column("createdAt")).fetchAll($0) }
-            .start(in: database, scheduling: .immediate) { _ in
+            .start(in: database, scheduling: .immediate) { error in
+                StorageNotice.shared.report("Couldn’t Load Connections", error: error)
             } onChange: { [weak self] computers in
                 self?.computers = computers
             }
     }
 
     func computer(_ id: UUID) -> Computer? {
-        try? database.read { try Computer.fetchOne($0, key: id) }
+        do {
+            return try database.read { try Computer.fetchOne($0, key: id) }
+        } catch {
+            StorageNotice.shared.report("Couldn’t Load Connections", error: error)
+            return nil
+        }
     }
 
     func stored(_ id: UUID) -> StoredComputer? {
@@ -72,7 +78,12 @@ final class ComputerStore: ObservableObject {
     }
 
     func computer(at address: ComputerAddress, username: String?) -> Computer? {
-        try? database.read { try Self.computer(in: $0, at: address, username: username) }
+        do {
+            return try database.read { try Self.computer(in: $0, at: address, username: username) }
+        } catch {
+            StorageNotice.shared.report("Couldn’t Load Connections", error: error)
+            return nil
+        }
     }
 
     private static func computer(in db: Database, at address: ComputerAddress, username: String?) throws -> Computer? {
@@ -81,8 +92,13 @@ final class ComputerStore: ObservableObject {
         return computers.first { $0.username == username } ?? computers.first { $0.username.isEmpty }
     }
 
-    func save(_ computer: Computer) throws {
-        try database.write { try computer.save($0) }
+    func save(_ computer: Computer, modify: (inout Computer) -> Void) throws -> Computer {
+        try database.write { db in
+            var saved = try Computer.fetchOne(db, key: computer.id) ?? computer
+            modify(&saved)
+            try saved.save(db)
+            return saved
+        }
     }
 
     func delete(_ id: UUID) throws {

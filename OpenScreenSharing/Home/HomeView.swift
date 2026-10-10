@@ -34,6 +34,7 @@ struct HomeView: View {
     @State private var setup: SetupRequest?
     @State private var pendingRoute: SessionRoute?
     @State private var activeSession: SessionRoute?
+    @State private var alert: AlertState?
     @State private var actions = HomeActions()
     @State private var isWatchingConnections = false
     #if os(iOS) && (DEBUG || SIDELOAD)
@@ -50,8 +51,11 @@ struct HomeView: View {
                 SessionView(route: route, hasOwnWindow: false) {
                     activeSession = nil
                 }
+                .storageNoticeAlert()
             }
             #endif
+            .storageNoticeAlert()
+            .alert($alert)
             .sheet(item: $editing) { computer in
                 ComputerEditor(computer: computer)
             }
@@ -243,7 +247,10 @@ struct HomeView: View {
     }
 
     private func open(_ url: URL) {
-        guard let link = VNCLink(url: url) else { return }
+        guard let link = VNCLink(url: url) else {
+            alert = AlertState(String(localized: "Couldn’t Open the Link"), errorMessage: String(localized: "“\(url.absoluteString)” isn’t a valid address."))
+            return
+        }
         Task {
             var target = link.target
             if let serviceName = target.address.bonjourServiceName, let resolved = await ServiceResolver.resolve(name: serviceName) {

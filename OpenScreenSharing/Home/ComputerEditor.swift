@@ -191,16 +191,17 @@ struct ComputerEditor: View {
             focusedField = trimmedUsername.isEmpty ? .username : .password
             return
         }
-        var computer = computer
-        computer.name = name
-        computer.address = address
-        computer.authenticates = authenticates
-        computer.username = authenticates ? trimmedUsername : ""
-        computer.password = authenticates ? password : ""
-        computer.networkConfiguration = networkConfiguration
-        computer.serverType = serverType
+        let computer: Computer
         do {
-            try ComputerStore.shared.save(computer)
+            computer = try ComputerStore.shared.save(self.computer) { computer in
+                computer.name = name
+                computer.address = address
+                computer.authenticates = authenticates
+                computer.username = authenticates ? trimmedUsername : ""
+                computer.password = authenticates ? password : ""
+                computer.networkConfiguration = networkConfiguration
+                computer.serverType = serverType
+            }
         } catch {
             alert = AlertState(String(localized: "Couldn’t Save “\(name)”"), error: error)
             return

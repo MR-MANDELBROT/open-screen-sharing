@@ -243,7 +243,7 @@ func parseEncryptedEvent(key [16]byte, message []byte) (ViewerEvent, error) {
 		return nil, err
 	}
 	if block[0] != 0xff && block[0] != 0 {
-		return nil, errors.New("encrypted event that does not decrypt")
+		return nil, errors.New("the event does not decrypt with the session key")
 	}
 	if block[0] == 0 && block[10] == 0xff {
 		return parsePointerEvent(append([]byte{clientPointerEvent}, block[11:16]...)), nil

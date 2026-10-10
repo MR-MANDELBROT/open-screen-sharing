@@ -3,7 +3,7 @@ import Libsharing
 import os
 
 nonisolated final class LibsharingLog: NSObject, LibsharingLogHandlerProtocol {
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "libsharing")
+    static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "libsharing")
 
     static let installed: Void = LibsharingSetLogHandler(LibsharingLog(), -4)
 

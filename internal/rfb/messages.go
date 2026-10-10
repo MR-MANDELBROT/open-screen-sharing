@@ -103,6 +103,16 @@ func setDisplayMessage(id uint32) []byte {
 // +[SLVirtualDisplay capabilities] on macOS 27.0.1 (26A434).
 const virtualDisplayLargestSide = 16384
 
+func CheckVirtualDisplay(width, height int, density float64) error {
+	if density != 1 && density != 2 {
+		return fmt.Errorf("virtual display density %v; the Mac takes 1 or 2", density)
+	}
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("virtual display of %dx%d points", width, height)
+	}
+	return nil
+}
+
 // Apple's message 0x1d uses a 0x9c-byte display header and 0x1c-byte modes.
 // The viewer sets descriptor flag bit 0 for dynamic resolution and mode flag bit 0
 // for HDR. The wire builder takes the per-axis maximum pixel dimensions across modes.
@@ -116,11 +126,9 @@ const virtualDisplayLargestSide = 16384
 // -[SSAgentVirtualDisplay initVirtualDisplay:displayInfo:blankScreen:dynamicResolution:]
 // loads at 0x1000025b0..0x1000025b4, initializer call at 0x10000274c.
 func virtualDisplayMessage(width, height int, density float64, maximumWidth, maximumHeight int, refreshRate float64, hdr bool) ([]byte, error) {
-	if density != 1 && density != 2 {
-		return nil, fmt.Errorf("virtual display density %v; the Mac takes 1 or 2", density)
-	}
-	if width <= 0 || height <= 0 {
-		return nil, fmt.Errorf("virtual display of %dx%d points", width, height)
+	err := CheckVirtualDisplay(width, height, density)
+	if err != nil {
+		return nil, err
 	}
 	pixelWidth := int(float64(width) * density)
 	pixelHeight := int(float64(height) * density)

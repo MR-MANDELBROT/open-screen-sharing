@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import Libsharing
 import UIKit
+import dnssd
 
 final class ServerController: ObservableObject {
     static let shared = ServerController()
@@ -34,6 +35,9 @@ final class ServerController: ObservableObject {
     }
 
     @Published private(set) var advertisedName: String?
+    @Published private(set) var advertisingProblem: String?
+    @Published private(set) var viewerProblem: String?
+    @Published private(set) var backgroundProblem: String?
     @Published private(set) var tunnelFound: Bool?
 
     let remotePairing = RemotePairingBrowser()
@@ -51,7 +55,14 @@ final class ServerController: ObservableObject {
     private lazy var audio: BackgroundAudio = {
         let audio = BackgroundAudio()
         audio.onPlayingChange = { [weak self] in
-            self?.updateIdleTimer()
+            guard let self else { return }
+            if self.audio.isPlaying {
+                self.backgroundProblem = nil
+            }
+            self.updateIdleTimer()
+        }
+        audio.onFailure = { [weak self] error in
+            self?.backgroundProblem = error.localizedDescription
         }
         return audio
     }()
@@ -77,8 +88,8 @@ final class ServerController: ObservableObject {
         advertiser.onRegister = { [weak self] name in
             self?.advertisedName = name
         }
-        advertiser.onFailure = { [weak self] _ in
-            self?.advertisedName = nil
+        advertiser.onFailure = { [weak self] errorCode in
+            self?.advertisingFailed(errorCode)
         }
     }
 
@@ -134,6 +145,7 @@ final class ServerController: ObservableObject {
         settings.isEnabled = true
         generation += 1
         let generation = generation
+        viewerProblem = nil
         phase = .starting
         setBrowsing(true)
         startTask = Task {
@@ -161,18 +173,27 @@ final class ServerController: ObservableObject {
         options.noAuthentication = !settings.authenticates
         options.username = settings.effectiveUsername
         options.password = settings.password
-        options.diskImageDirectory = DiskImageStore.directory?.path ?? ""
+        do {
+            options.diskImageDirectory = try DiskImageStore.directory.get().path
+        } catch {
+            fail(ServerProblem(kind: .diskImage, message: error.localizedDescription))
+            return
+        }
         let events = DeviceServerEvents(
             state: { [weak self] change in
                 DispatchQueue.main.async { self?.handle(change, generation: generation) }
             },
-            viewer: { [weak self] viewerID, connected in
+            viewer: { [weak self] viewerID, connected, problem in
                 DispatchQueue.main.async {
                     guard let self, generation == self.generation else { return }
                     if connected {
                         self.viewers.insert(viewerID)
+                        self.viewerProblem = nil
                     } else {
                         self.viewers.remove(viewerID)
+                        if let problem {
+                            self.viewerProblem = problem
+                        }
                     }
                     self.volume.setWatched(!self.viewers.isEmpty)
                 }
@@ -276,6 +297,7 @@ final class ServerController: ObservableObject {
             audio.start()
         } else {
             audio.stop()
+            backgroundProblem = nil
         }
         updateIdleTimer()
     }
@@ -298,10 +320,24 @@ final class ServerController: ObservableObject {
         guard phase.isRunning else {
             advertiser.stop()
             advertisedName = nil
+            advertisingProblem = nil
             return
         }
         guard !advertiser.isPublishing else { return }
-        advertiser.start(name: name, type: "_rfb._tcp", port: settings.port, txt: ["model": Self.model])
+        let errorCode = advertiser.start(name: name, type: "_rfb._tcp", port: settings.port, txt: ["model": Self.model])
+        if errorCode == kDNSServiceErr_NoError {
+            advertisingProblem = nil
+        } else {
+            advertisingFailed(errorCode)
+        }
+    }
+
+    private func advertisingFailed(_ errorCode: DNSServiceErrorType) {
+        advertisedName = nil
+        advertisingProblem =
+            errorCode == kDNSServiceErr_PolicyDenied
+            ? String(localized: "Screen Sharing isn’t allowed to use the local network. Allow it in Settings › Privacy & Security › Local Network.")
+            : "DNSServiceRegister: error \(errorCode)"
     }
 
     private static let model: String = {

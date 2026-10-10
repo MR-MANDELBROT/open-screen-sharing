@@ -213,7 +213,7 @@ func (o *deviceObserver) ViewerDisconnected(session *rfb.ServerSession, err erro
 		o.handler.OnViewerDisconnected(int64(session.ID()), DeviceErrorNone, "")
 		return
 	}
-	o.handler.OnViewerDisconnected(int64(session.ID()), DeviceErrorOther, err.Error())
+	o.handler.OnViewerDisconnected(int64(session.ID()), DeviceErrorOther, "viewer "+viewerAddress(session)+": "+err.Error())
 }
 
 func (o *deviceObserver) StreamingChanged(active bool) {

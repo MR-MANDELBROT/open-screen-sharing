@@ -166,6 +166,7 @@ final class SessionController: ObservableObject {
     let debugInfo = DebugInfoMonitor()
     private var lastRemoteClipboard: ClipboardContent?
     private var syncedClipboardChangeCount = ClipboardAccess.changeCount
+    private var reportedClipboardNotRestored = false
     private var readingClipboard = false
     private var decidedClipboardSharing = false
 
@@ -285,6 +286,7 @@ final class SessionController: ObservableObject {
 
     func start() {
         guard session == nil, probeTask == nil else { return }
+        if case .failed(let failure) = phase, failure.kind == .drawingFailed { return }
         let stored = computerID.flatMap { store.stored($0) }
         if let stored {
             restore(stored.memory)
@@ -908,6 +910,13 @@ final class SessionController: ObservableObject {
         phase = .failed(SessionFailure(.highPerformance(failure.kind), message: failure.message))
     }
 
+    func drawingFailed(_ error: any Error) {
+        credentialPrompt = nil
+        releaseAllKeys()
+        teardown()
+        phase = .failed(SessionFailure(.drawingFailed, message: error.localizedDescription))
+    }
+
     fileprivate func handle(clipboard content: ClipboardContent) {
         guard content != lastRemoteClipboard else { return }
         lastRemoteClipboard = content
@@ -963,6 +972,12 @@ final class SessionController: ObservableObject {
                 remotePointerVisible = visible
             }
             pipeline.setCursorPosition(pointerPosition, visible: visible)
+        case .clipboardUnreadable(let message):
+            showError(String(localized: "Couldn’t Receive the Clipboard"), error: MessageError(message))
+        case .clipboardNotRestored(let message):
+            guard !reportedClipboardNotRestored else { return }
+            reportedClipboardNotRestored = true
+            showError(String(localized: "Couldn’t Receive the Clipboard"), error: MessageError(message))
         }
     }
 
@@ -1033,12 +1048,25 @@ final class SessionController: ObservableObject {
     }
 
     private func abandonTransfers() {
+        var interruption = FileTransferError(.connection)
+        interruption.message = interruption.summary
+        var abandoned: [FileTransfer] = []
         for index in transfers.indices where transfers[index].isActive {
-            transfers[index].state = .failed(FileTransferError(.connection))
+            transfers[index].state = .failed(interruption)
             transfers[index].scopedURLs.forEach { $0.stopAccessingSecurityScopedResource() }
             transfers[index].scopedURLs = []
             transfers[index].temporaryURLs.forEach { try? FileManager.default.removeItem(at: $0) }
             transfers[index].temporaryURLs = []
+            abandoned.append(transfers[index])
+        }
+        guard !isClosing, let transfer = abandoned.first else { return }
+        if abandoned.count == 1 {
+            showError(
+                transfer.direction == .upload
+                    ? String(localized: "Couldn’t Send “\(transfer.name)”") : String(localized: "Couldn’t Get “\(transfer.name)”"),
+                error: interruption)
+        } else {
+            showError(String(localized: "Couldn’t Finish Transferring Files"), error: MessageError(abandoned.map(\.name).joined(separator: "\n")))
         }
     }
 
@@ -1150,7 +1178,10 @@ final class SessionController: ObservableObject {
     }
 
     fileprivate func hdrDecodingFailed(_ error: any Error) {
-        guard hdrEnabled else { return }
+        guard hdrEnabled else {
+            videoDecodingFailed(error)
+            return
+        }
         hdrEnabled = false
         session?.setHDR(false)
         rememberState()
@@ -1158,7 +1189,6 @@ final class SessionController: ObservableObject {
     }
 
     fileprivate func videoDecodingFailed(_ error: any Error) {
-        guard usesHighPerformance else { return }
         failHighPerformance(MediaFailure(.undecodable, message: error.localizedDescription))
     }
 
@@ -1182,7 +1212,7 @@ final class SessionController: ObservableObject {
             return
         }
         guard microphone == nil else { return }
-        Task {
+        Task { [self] in
             let granted: Bool
             if #available(iOS 17, *) {
                 granted = await AVAudioApplication.requestRecordPermission()
@@ -1219,7 +1249,16 @@ final class SessionController: ObservableObject {
             guard microphone == nil, isVideo, remoteAudio == .toMac, !sceneInBackground else { return }
             let session = self.session
             do {
-                let sender = try MicrophoneSender(send: { data in session?.sendMicrophoneAudio(data) })
+                let sender = try MicrophoneSender(
+                    send: { data in session?.sendMicrophoneAudio(data) },
+                    failed: { [weak self] error in
+                        DispatchQueue.main.async {
+                            guard let self, let microphone = self.microphone else { return }
+                            microphone.stop()
+                            self.microphone = nil
+                            self.showError(String(localized: "Can’t Use the Microphone"), error: error)
+                        }
+                    })
                 try sender.start()
                 microphone = sender
             } catch {
@@ -1796,7 +1835,12 @@ final class SessionController: ObservableObject {
         if inBasicPlane, !macComposes {
             session?.sendText(text)
         } else {
-            session?.pasteText(text)
+            do {
+                try session?.pasteText(text)
+            } catch {
+                showError(String(localized: "Some Characters Can’t Be Typed on “\(title)”"), error: error)
+                return false
+            }
         }
         return true
     }
@@ -2307,8 +2351,9 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         onMain { $0.handle(phase: phase) }
     }
 
-    func sessionNeedsFramebuffer(width: Int, height: Int) -> Framebuffer? {
-        guard !isDetached, let framebuffer = Framebuffer(width: width, height: height) else { return nil }
+    func sessionNeedsFramebuffer(width: Int, height: Int) throws -> Framebuffer? {
+        guard !isDetached else { return nil }
+        let framebuffer = try Framebuffer(width: width, height: height)
         pipeline.attachFramebuffer(framebuffer)
         lock.lock()
         let video = isVideo

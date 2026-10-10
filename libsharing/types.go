@@ -84,6 +84,11 @@ const (
 )
 
 const (
+	ClipboardProblemUnreadable  = int32(rfb.ClipboardUnreadable)
+	ClipboardProblemNotRestored = int32(rfb.ClipboardNotRestored)
+)
+
+const (
 	SessionChoiceCancel       int32 = -1
 	SessionChoiceShareConsole int32 = 0
 	SessionChoiceOwnSession   int32 = 2

@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 enum AppDatabase {
     private static let url: URL = {
@@ -15,53 +16,84 @@ enum AppDatabase {
 
     private static func open() -> DatabaseQueue {
         do {
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let database = try DatabaseQueue(path: url.path)
-            try migrate(database)
-            return database
+            do {
+                return try load()
+            } catch let error as DatabaseError where error.resultCode == .SQLITE_CORRUPT || error.resultCode == .SQLITE_NOTADB {
+                StorageNotice.logger.error("reset \(url.lastPathComponent, privacy: .public): \(error, privacy: .public)")
+                for path in [url.path, url.path + "-journal", url.path + "-wal", url.path + "-shm"] where FileManager.default.fileExists(atPath: path) {
+                    try FileManager.default.removeItem(atPath: path)
+                }
+                return try load()
+            }
         } catch {
             fatalError("cannot open \(url.lastPathComponent): \(error)")
         }
     }
 
-    static func migrate(_ database: DatabaseQueue) throws {
-        var migrator = DatabaseMigrator()
-        migrator.eraseDatabaseOnSchemaChange = true
-        migrator.registerMigration("initialize") { db in
-            try db.create(table: "computers") { t in
-                t.primaryKey("id", .blob)
-                t.column("name", .text).notNull()
-                t.column("host", .text).notNull()
-                t.column("port", .integer).notNull()
-                t.column("username", .text).notNull()
-                t.column("password", .text).notNull()
-                t.column("authenticates", .boolean).notNull()
-                t.column("model", .text).notNull()
-                t.column("enclosureColor", .text).notNull()
-                t.column("lastConnected", .datetime)
-                t.column("thumbnail", .blob)
-                t.column("createdAt", .datetime).notNull()
-                t.column("supportsHighPerformance", .boolean).notNull()
-                t.column("networkQuality", .text).notNull()
-                t.column("internetMaximumFrameRate", .integer).notNull()
-                t.column("serverType", .text).notNull()
-                t.column("quality", .text).notNull()
-                t.column("observes", .boolean).notNull()
-                t.column("sharesClipboard", .boolean).notNull()
-                t.column("usesDynamicResolution", .boolean).notNull()
-                t.column("resolutionScale", .double).notNull()
-                t.column("displayID", .integer).notNull()
-                t.column("usesHDR", .boolean).notNull()
-                t.column("remoteAudio", .text).notNull()
-                t.column("keyboardSources", .text).notNull()
-                t.column("windowWidth", .double).notNull()
-                t.column("windowHeight", .double).notNull()
+    private static func load() throws -> DatabaseQueue {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let database = try DatabaseQueue(path: url.path)
+        let expected = try DatabaseQueue()
+        try expected.write(createTables)
+        let saved = try database.read(schema)
+        if try saved != expected.read(schema) {
+            if !saved.isEmpty {
+                StorageNotice.logger.error("erase \(url.lastPathComponent, privacy: .public) saved with a different schema")
+                try database.erase()
             }
-            try db.create(table: "preferences") { t in
-                t.primaryKey("name", .text)
-                t.column("data", .blob).notNull()
+            try database.write(createTables)
+        }
+        try database.write { db in
+            for row in try Row.fetchAll(db, sql: "SELECT * FROM computers") {
+                do {
+                    _ = try Computer(row: row)
+                } catch {
+                    let name: String = row["name"] ?? ""
+                    StorageNotice.logger.error("remove unreadable computer \(name, privacy: .public): \(error, privacy: .public)")
+                    try db.execute(sql: "DELETE FROM computers WHERE id = ?", arguments: [row["id"] as DatabaseValue])
+                }
             }
         }
-        try migrator.migrate(database)
+        return database
+    }
+
+    private nonisolated static func schema(_ db: Database) throws -> [String] {
+        try String.fetchAll(db, sql: "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name")
+    }
+
+    nonisolated static func createTables(_ db: Database) throws {
+        try db.create(table: "computers") { t in
+            t.primaryKey("id", .blob)
+            t.column("name", .text).notNull()
+            t.column("host", .text).notNull()
+            t.column("port", .integer).notNull()
+            t.column("username", .text).notNull()
+            t.column("password", .text).notNull()
+            t.column("authenticates", .boolean).notNull()
+            t.column("model", .text).notNull()
+            t.column("enclosureColor", .text).notNull()
+            t.column("lastConnected", .datetime)
+            t.column("thumbnail", .blob)
+            t.column("createdAt", .datetime).notNull()
+            t.column("supportsHighPerformance", .boolean).notNull()
+            t.column("networkQuality", .text).notNull()
+            t.column("internetMaximumFrameRate", .integer).notNull()
+            t.column("serverType", .text).notNull()
+            t.column("quality", .text).notNull()
+            t.column("observes", .boolean).notNull()
+            t.column("sharesClipboard", .boolean).notNull()
+            t.column("usesDynamicResolution", .boolean).notNull()
+            t.column("resolutionScale", .double).notNull()
+            t.column("displayID", .integer).notNull()
+            t.column("usesHDR", .boolean).notNull()
+            t.column("remoteAudio", .text).notNull()
+            t.column("keyboardSources", .text).notNull()
+            t.column("windowWidth", .double).notNull()
+            t.column("windowHeight", .double).notNull()
+        }
+        try db.create(table: "preferences") { t in
+            t.primaryKey("name", .text)
+            t.column("data", .blob).notNull()
+        }
     }
 }

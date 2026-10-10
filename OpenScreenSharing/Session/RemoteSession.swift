@@ -33,6 +33,7 @@ nonisolated struct SessionFailure: Error, Equatable, Sendable {
         case closedByServer
         case unsupported
         case highPerformance(MediaFailure.Kind)
+        case drawingFailed
         case ended
         case other
     }
@@ -117,6 +118,8 @@ nonisolated enum SessionEvent: Sendable {
     case busy(Bool)
     case pointerVisible(Bool)
     case controlAllowed(Bool)
+    case clipboardUnreadable(String)
+    case clipboardNotRestored(String)
 }
 
 typealias ClipboardContent = [[String: Data]]

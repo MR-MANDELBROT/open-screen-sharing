@@ -45,22 +45,26 @@ final class DiskImageStore: ObservableObject {
     var isImporting: Bool { progress != nil }
 
     init() {
-        isImported = Self.directory.map { LibsharingDiskImageImported($0.path) } ?? false
+        var imported: ObjCBool = false
+        do {
+            var error: NSError?
+            LibsharingDiskImageImported(try Self.directory.get().path, &imported, &error)
+            if let error { throw error }
+        } catch {
+            StorageNotice.shared.report("Couldn’t Check the Developer Disk Image", error: error)
+        }
+        isImported = imported.boolValue
     }
 
-    static let directory: URL? = {
+    static let directory = Result<URL, any Error> {
         var directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("DeveloperDiskImage", isDirectory: true)
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            var values = URLResourceValues()
-            values.isExcludedFromBackup = true
-            try directory.setResourceValues(values)
-        } catch {
-            return nil
-        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try directory.setResourceValues(values)
         return directory
-    }()
+    }
 
     static var defaultURL: String { LibsharingDefaultDiskImageURL() }
 
@@ -95,9 +99,7 @@ final class DiskImageStore: ObservableObject {
 
     private func run(_ body: @escaping @Sendable (LibsharingDiskImageImport) throws -> Void) async throws {
         guard current == nil else { throw CancellationError() }
-        guard let directory = Self.directory else {
-            throw MessageError("Couldn’t create the folder for the developer disk image")
-        }
+        let directory = try Self.directory.get()
         LibsharingLog.installed
         let events = DiskImageImportEvents { [weak self] progress in
             DispatchQueue.main.async {

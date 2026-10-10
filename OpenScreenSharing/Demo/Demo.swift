@@ -36,7 +36,7 @@ extension Demo {
 
     private init() {
         database = try! DatabaseQueue()
-        try! AppDatabase.migrate(database)
+        try! database.write(AppDatabase.createTables)
         var nearby: [NearbyComputer] = []
         for (index, saved) in Self.saved.enumerated() {
             let address = ComputerAddress(host: saved.host, port: ComputerAddress.defaultPort)

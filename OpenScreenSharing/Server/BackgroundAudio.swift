@@ -12,6 +12,7 @@ final class BackgroundAudio: ObservableObject {
     }
 
     var onPlayingChange: (() -> Void)?
+    var onFailure: ((any Error) -> Void)?
 
     nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "server")
 
@@ -58,6 +59,7 @@ final class BackgroundAudio: ObservableObject {
         } catch {
             Self.logger.error("Couldn't play the background sound: \(error, privacy: .public)")
             isPlaying = false
+            onFailure?(error)
         }
     }
 

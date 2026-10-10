@@ -116,6 +116,8 @@ func (i buildIdentity) digest(key string) ([]byte, error) {
 	return digest, nil
 }
 
+var errMissingFile = errors.New("imagemounter: missing")
+
 type resolvedFile struct {
 	key    string
 	path   string
@@ -148,7 +150,7 @@ func (i buildIdentity) resolve(dir, key string) (resolvedFile, error) {
 			return resolvedFile{}, fmt.Errorf("imagemounter: %w", err)
 		}
 	}
-	return resolvedFile{}, fmt.Errorf("imagemounter: %s is not in %s", key, dir)
+	return resolvedFile{}, fmt.Errorf("%w %s in %s", errMissingFile, key, dir)
 }
 
 func (i buildIdentity) readFile(dir, key string) ([]byte, error) {

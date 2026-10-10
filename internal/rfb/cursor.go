@@ -38,11 +38,11 @@ func (c *Client) receiveCursorImage(rectangle Rectangle) error {
 	}
 	if length == 0 {
 		cursor, found := c.cursors[id]
-		if found {
-			c.handler.CursorChanged(cursor)
-		} else {
+		if !found {
 			c.logger.Debug("cursor select for an unknown id", "id", id)
+			cursor = &Cursor{CacheID: id}
 		}
+		c.handler.CursorChanged(cursor)
 		return nil
 	}
 	compressed, err := c.stream.bytes(int(length))
@@ -52,12 +52,14 @@ func (c *Client) receiveCursorImage(rectangle Rectangle) error {
 	width, height := rectangle.Width, rectangle.Height
 	if width == 0 || height == 0 || width > maximumCursorSize || height > maximumCursorSize {
 		c.logger.Warn("cursor image of unusable size", "width", width, "height", height)
+		c.clearCursor(id)
 		return nil
 	}
 	pixels := width * height
 	raw, err := inflateIndependent(compressed, pixels*5)
 	if err != nil || len(raw) != pixels*5 {
 		c.logger.Warn("cursor image does not inflate", "id", id, "error", err, "bytes", len(raw))
+		c.clearCursor(id)
 		return nil
 	}
 	image := make([]byte, pixels*4)
@@ -77,6 +79,12 @@ func (c *Client) receiveCursorImage(rectangle Rectangle) error {
 	c.cursors[id] = cursor
 	c.handler.CursorChanged(cursor)
 	return nil
+}
+
+func (c *Client) clearCursor(id uint32) {
+	cursor := &Cursor{CacheID: id}
+	c.cursors[id] = cursor
+	c.handler.CursorChanged(cursor)
 }
 
 func (c *Client) receiveRichCursor(rectangle Rectangle) error {

@@ -79,10 +79,11 @@ final class RemoteScreenNSView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .never
         metalLayer.backgroundColor = NSColor.black.cgColor
-        guard let renderer = ScreenRenderer(layer: metalLayer) else {
-            fatalError("The screen can't be drawn without Metal")
+        do {
+            renderer = try ScreenRenderer(layer: metalLayer)
+        } catch {
+            DispatchQueue.main.async { [controller] in controller.drawingFailed(error) }
         }
-        self.renderer = renderer
         controller.screen = self
         Self.views.add(self)
         setAccessibilityElement(true)

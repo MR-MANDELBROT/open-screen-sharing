@@ -14,8 +14,16 @@ func DefaultDiskImageURL() string {
 	return imagemounter.RepositoryURL(imagemounter.Cryptex)
 }
 
-func DiskImageImported(directory string) bool {
-	return imagemounter.Present(directory, imagemounter.Cryptex) || imagemounter.Present(directory, imagemounter.Personalized)
+func DiskImageImported(directory string) (bool, error) {
+	cryptex, cryptexErr := imagemounter.Present(directory, imagemounter.Cryptex)
+	if cryptex {
+		return true, nil
+	}
+	personalized, personalizedErr := imagemounter.Present(directory, imagemounter.Personalized)
+	if personalized {
+		return true, nil
+	}
+	return false, errors.Join(cryptexErr, personalizedErr)
 }
 
 type DiskImageImportHandler interface {

@@ -11,8 +11,8 @@ nonisolated final class Framebuffer: @unchecked Sendable {
     let bytesPerRow: Int
     let baseAddress: UnsafeMutableRawPointer
 
-    init?(width: Int, height: Int) {
-        guard width > 0, height > 0 else { return nil }
+    init(width: Int, height: Int) throws {
+        guard width > 0, height > 0 else { throw MessageError("framebuffer size \(width)x\(height)") }
         let attributes: [CFString: Any] = [
             kCVPixelBufferIOSurfacePropertiesKey: [CFString: Any](),
             kCVPixelBufferMetalCompatibilityKey: true,
@@ -21,11 +21,11 @@ nonisolated final class Framebuffer: @unchecked Sendable {
         ]
         var buffer: CVPixelBuffer?
         let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &buffer)
-        guard status == kCVReturnSuccess, let buffer else { return nil }
+        guard status == kCVReturnSuccess, let buffer else { throw MessageError("CVPixelBufferCreate", status: status) }
         CVPixelBufferLockBaseAddress(buffer, [])
         guard let address = CVPixelBufferGetBaseAddress(buffer) else {
             CVPixelBufferUnlockBaseAddress(buffer, [])
-            return nil
+            throw MessageError("CVPixelBufferGetBaseAddress returned no address")
         }
         pixelBuffer = buffer
         self.width = width

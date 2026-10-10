@@ -66,11 +66,10 @@ final class ScreenRenderer {
     private var cursorTexture: MTLTexture?
     private var cursorImage: CGImage?
 
-    init?(layer: CAMetalLayer) {
-        guard let device = MTLCreateSystemDefaultDevice(),
-            let commandQueue = device.makeCommandQueue(),
-            let library = try? device.makeLibrary(source: Self.shaderSource, options: nil)
-        else { return nil }
+    init(layer: CAMetalLayer) throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { throw MessageError("MTLCreateSystemDefaultDevice returned no device") }
+        guard let commandQueue = device.makeCommandQueue() else { throw MessageError("MTLDevice returned no command queue") }
+        let library = try device.makeLibrary(source: Self.shaderSource, options: nil)
         self.device = device
         self.commandQueue = commandQueue
         layer.device = device
@@ -78,12 +77,12 @@ final class ScreenRenderer {
         layer.framebufferOnly = true
         layer.isOpaque = true
 
-        func makePipelines(pixelFormat: MTLPixelFormat, cursorFunction: String) -> Pipelines? {
+        func makePipelines(pixelFormat: MTLPixelFormat, cursorFunction: String) throws -> Pipelines {
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.vertexFunction = library.makeFunction(name: "quadVertex")
             descriptor.fragmentFunction = library.makeFunction(name: "screenFragment")
             descriptor.colorAttachments[0].pixelFormat = pixelFormat
-            guard let screen = try? device.makeRenderPipelineState(descriptor: descriptor) else { return nil }
+            let screen = try device.makeRenderPipelineState(descriptor: descriptor)
             descriptor.fragmentFunction = library.makeFunction(name: cursorFunction)
             let attachment = descriptor.colorAttachments[0]!
             attachment.isBlendingEnabled = true
@@ -91,14 +90,11 @@ final class ScreenRenderer {
             attachment.sourceAlphaBlendFactor = .one
             attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
             attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-            guard let cursor = try? device.makeRenderPipelineState(descriptor: descriptor) else { return nil }
+            let cursor = try device.makeRenderPipelineState(descriptor: descriptor)
             return Pipelines(screen: screen, cursor: cursor)
         }
-        guard let standardPipelines = makePipelines(pixelFormat: .bgra8Unorm, cursorFunction: "cursorFragment"),
-            let hdrPipelines = makePipelines(pixelFormat: .rgba16Float, cursorFunction: "cursorFragmentPQ")
-        else { return nil }
-        self.standardPipelines = standardPipelines
-        self.hdrPipelines = hdrPipelines
+        standardPipelines = try makePipelines(pixelFormat: .bgra8Unorm, cursorFunction: "cursorFragment")
+        hdrPipelines = try makePipelines(pixelFormat: .rgba16Float, cursorFunction: "cursorFragmentPQ")
 
         let samplerDescriptor = MTLSamplerDescriptor()
         samplerDescriptor.minFilter = .linear
@@ -108,7 +104,8 @@ final class ScreenRenderer {
         linearSampler = device.makeSamplerState(descriptor: samplerDescriptor)!
         samplerDescriptor.magFilter = .nearest
         nearestSampler = device.makeSamplerState(descriptor: samplerDescriptor)!
-        guard CVMetalTextureCacheCreate(nil, nil, device, nil, &textureCache) == kCVReturnSuccess else { return nil }
+        let status = CVMetalTextureCacheCreate(nil, nil, device, nil, &textureCache)
+        guard status == kCVReturnSuccess else { throw MessageError("CVMetalTextureCacheCreate", status: status) }
     }
 
     struct Frame {

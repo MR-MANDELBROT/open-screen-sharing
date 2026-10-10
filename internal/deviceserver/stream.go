@@ -337,6 +337,9 @@ func (s *Server) startVideo(ctx context.Context, a *attachment, request media.Se
 		PixelFormat:   pixelFormat(info.PixelFormat),
 		TilesPerFrame: info.TilesPerFrame,
 	}
+	if source.info.PixelFormat == 0 {
+		s.logger.Warn("the device's video pixel format is unknown; the viewer is told 4:2:0", "pixel_format", fmt.Sprintf("%#x", info.PixelFormat))
+	}
 	m.access.Lock()
 	m.failures = 0
 	m.open[source.stream] = struct{}{}

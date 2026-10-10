@@ -141,7 +141,7 @@ struct SessionStatusOverlay: View {
         case .ownScreen: String(localized: "You Can’t Control Your Own Screen")
         case .unreachable, .other: String(localized: "Couldn’t Connect to “\(name)”")
         case .connectionLost: String(localized: "Lost the Connection to “\(name)”")
-        case .ended: String(localized: "Disconnected from “\(name)”")
+        case .ended, .drawingFailed: String(localized: "Disconnected from “\(name)”")
         case .closedByServer: String(localized: "“\(name)” Ended Screen Sharing")
         case .unsupported: String(localized: "“\(name)” Isn’t Supported")
         case .highPerformance(.busy): String(localized: "Another Device Is Using High Performance on “\(name)”")

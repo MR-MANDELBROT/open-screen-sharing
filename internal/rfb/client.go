@@ -56,6 +56,7 @@ type Handler interface {
 	CursorMoved(x, y int)
 	DisplaysChanged(layout *DisplayLayout)
 	ClipboardReceived(clipboard *Clipboard)
+	ClipboardFailed(problem ClipboardProblem, err error)
 	Bell()
 	KeyboardSourceChanged(source KeyboardSource)
 	StatusReceived(status Status)
@@ -262,6 +263,10 @@ func (c *Client) setup() error {
 
 func (c *Client) Info() ServerInfo {
 	return c.info
+}
+
+func (c *Client) Logger() *slog.Logger {
+	return c.logger
 }
 
 func (c *Client) LocalAddress() net.Addr {

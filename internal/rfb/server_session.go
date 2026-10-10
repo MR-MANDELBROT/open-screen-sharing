@@ -66,6 +66,7 @@ type ServerSession struct {
 	fetching         bool
 	fetchAgain       bool
 	fetchEcho        uint32
+	viewerClipboard  *Clipboard
 }
 
 func newServerSession(server *Server, conn net.Conn, id uint64) *ServerSession {
@@ -140,15 +141,16 @@ func (s *ServerSession) run() {
 	s.logger.Info("viewer connected", "user", s.userName)
 	s.server.handler.SessionStarted(s)
 	for _, message := range held {
-		s.dispatch(message)
+		if err == nil {
+			err = s.dispatch(message)
+		}
 	}
-	for {
+	for err == nil {
 		var message []byte
 		message, err = readClientMessage(s.stream)
-		if err != nil {
-			break
+		if err == nil {
+			err = s.dispatch(message)
 		}
-		s.dispatch(message)
 	}
 	s.finish(err)
 }
@@ -380,7 +382,7 @@ func (s *ServerSession) emitInput(event ViewerEvent) {
 	}
 }
 
-func (s *ServerSession) dispatch(message []byte) {
+func (s *ServerSession) dispatch(message []byte) error {
 	switch message[0] {
 	case clientSetPixelFormat:
 		format := parsePixelFormat(message[4:])
@@ -414,8 +416,7 @@ func (s *ServerSession) dispatch(message []byte) {
 	case clientEncryptedEvent:
 		event, err := parseEncryptedEvent(s.keys.key, message)
 		if err != nil {
-			s.logger.Debug("encrypted event", "error", err)
-			return
+			return fmt.Errorf("encrypted input event: %w", err)
 		}
 		s.emitInput(event)
 	case clientSetScale:
@@ -430,11 +431,11 @@ func (s *ServerSession) dispatch(message []byte) {
 		event, err := parseEventMessage(message)
 		if err != nil {
 			s.logger.Debug("event message", "error", err)
-			return
+			return nil
 		}
 		if event == nil {
 			s.logger.Debug("event message", "version", binary.BigEndian.Uint16(message[4:]), "subtype", binary.BigEndian.Uint16(message[6:]))
-			return
+			return nil
 		}
 		s.emitInput(event)
 	case clientMediaStream:
@@ -446,12 +447,13 @@ func (s *ServerSession) dispatch(message []byte) {
 		clipboard, err := parseClientPasteboard(message)
 		if err != nil {
 			s.logger.Warn("unreadable pasteboard", "error", err)
-			return
+			return nil
 		}
 		s.receiveClipboard(clipboard)
 	default:
 		s.logger.Debug("client message", "type", fmt.Sprintf("%#02x", message[0]), "bytes", len(message))
 	}
+	return nil
 }
 
 func (s *ServerSession) declaredLocked(encoding Encoding) bool {
@@ -689,8 +691,10 @@ func (s *ServerSession) clipboardChanged() {
 }
 
 func (s *ServerSession) receiveClipboard(clipboard *Clipboard) {
+	s.access.Lock()
+	s.viewerClipboard = clipboard
+	s.access.Unlock()
 	s.emit(ViewerClipboard{Clipboard: clipboard})
-	s.server.ClipboardChanged()
 }
 
 func (s *ServerSession) fetchPasteboard(echo uint32) {
@@ -725,19 +729,31 @@ func (s *ServerSession) answerPasteboard(echo uint32) {
 	ctx, cancel := context.WithTimeout(s.ctx, pasteboardFetchTimeout)
 	defer cancel()
 	clipboard, err := s.server.handler.Clipboard(ctx)
+	var message []byte
+	if err == nil {
+		message, err = pasteboardMessage(clipboard, echo)
+	}
 	if err != nil {
-		s.logger.Debug("device clipboard", "error", err)
-		clipboard = &Clipboard{}
+		if s.ctx.Err() != nil {
+			return
+		}
+		s.access.Lock()
+		clipboard = s.viewerClipboard
+		s.access.Unlock()
+		if clipboard == nil {
+			s.logger.Warn("the device clipboard is unavailable; the viewer's pasteboard request goes unanswered", "error", err)
+			return
+		}
+		s.logger.Warn("the device clipboard is unavailable; answering the viewer with its last known pasteboard", "error", err)
+		message, err = pasteboardMessage(clipboard, echo)
+		if err != nil {
+			s.logger.Warn("pasteboard", "error", err)
+			return
+		}
 	}
-	message, err := pasteboardMessage(clipboard, echo)
-	if err != nil {
-		s.logger.Warn("pasteboard", "error", err)
-		return
-	}
-	if len(message) > maximumPasteboard {
-		s.logger.Warn("device clipboard is larger than viewers accept", "bytes", len(message))
-		message, _ = pasteboardMessage(&Clipboard{}, echo)
-	}
+	s.access.Lock()
+	s.viewerClipboard = clipboard
+	s.access.Unlock()
 	err = s.outbox.pushWait(message)
 	if err != nil {
 		s.logger.Debug("send the pasteboard", "error", err)

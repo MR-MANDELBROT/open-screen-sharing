@@ -153,6 +153,15 @@ struct KeyShortcut: Codable, Hashable {
         self.modifiers = modifiers.rawValue
     }
 
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        key = try container.decode(String.self, forKey: .key)
+        modifiers = try container.decode(Int.self, forKey: .modifiers)
+        guard key.count == 1 || isSpecial else {
+            throw DecodingError.dataCorruptedError(forKey: .key, in: container, debugDescription: "unknown key \"\(key)\"")
+        }
+    }
+
     private struct SpecialKey {
         let name: String
         let equivalent: KeyEquivalent

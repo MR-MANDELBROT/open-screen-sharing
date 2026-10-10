@@ -27,6 +27,7 @@ type SessionHandler interface {
 	OnCursorPosition(x int32, y int32)
 	OnDisplays(displays *DisplayList)
 	OnClipboard(clipboard *Clipboard)
+	OnClipboardProblem(kind int32, message string)
 	OnBell()
 	OnKeyboardSource(sourceID string, secureInput bool)
 
@@ -231,10 +232,16 @@ func (s *Session) prepare(client *rfb.Client) error {
 func (s *Session) apply(client *rfb.Client, setup sessionSetup) {
 	info := newServerInfo(client.Info())
 	if setup.hdr != nil && info.SupportsVirtualDisplay {
-		_ = client.SetHDR(*setup.hdr)
+		err := client.SetHDR(*setup.hdr)
+		if err != nil {
+			client.Logger().Warn("apply the HDR setting made before connecting", "error", err)
+		}
 	}
 	if display := setup.display; display != nil && info.SupportsVirtualDisplay {
-		_ = client.SetVirtualDisplay(int(display.width), int(display.height), display.density, int(display.maximumWidth), int(display.maximumHeight))
+		err := client.SetVirtualDisplay(int(display.width), int(display.height), display.density, int(display.maximumWidth), int(display.maximumHeight))
+		if err != nil {
+			client.Logger().Warn("apply the virtual display requested before connecting", "error", err)
+		}
 	}
 	if setup.highPerformance != nil && info.SupportsHighPerformance && client.MediaStream() == nil {
 		err := client.StartMediaStream(*setup.highPerformance, &mediaEvents{session: s})
@@ -486,6 +493,10 @@ func (s *Session) SetScale(factor float64) error {
 }
 
 func (s *Session) SetVirtualDisplay(width int32, height int32, density float64, maximumWidth int32, maximumHeight int32) error {
+	err := rfb.CheckVirtualDisplay(int(width), int(height), density)
+	if err != nil {
+		return err
+	}
 	client, kept := s.pending(func(setup *sessionSetup) {
 		setup.display = &virtualDisplay{width: width, height: height, density: density, maximumWidth: maximumWidth, maximumHeight: maximumHeight}
 	})
@@ -599,6 +610,10 @@ func (e *sessionEvents) DisplaysChanged(layout *rfb.DisplayLayout) {
 
 func (e *sessionEvents) ClipboardReceived(clipboard *rfb.Clipboard) {
 	e.session.handler.OnClipboard(newClipboard(clipboard))
+}
+
+func (e *sessionEvents) ClipboardFailed(problem rfb.ClipboardProblem, err error) {
+	e.session.handler.OnClipboardProblem(int32(problem), err.Error())
 }
 
 func (e *sessionEvents) Bell() {

@@ -48,10 +48,11 @@ final class RemoteScreenUIView: UIView {
         super.init(frame: .zero)
         backgroundColor = .black
         isMultipleTouchEnabled = true
-        guard let renderer = ScreenRenderer(layer: metalLayer) else {
-            fatalError("The screen can't be drawn without Metal")
+        do {
+            renderer = try ScreenRenderer(layer: metalLayer)
+        } catch {
+            DispatchQueue.main.async { [controller] in controller.drawingFailed(error) }
         }
-        self.renderer = renderer
         controller.screen = self
         keyInput.controller = controller
         keyInput.screen = self

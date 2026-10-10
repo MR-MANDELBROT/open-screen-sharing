@@ -24,6 +24,7 @@ type clipboardBridge struct {
 	watched   *attachment
 	stopWatch context.CancelFunc
 	latest    *rfb.Clipboard
+	writing   *rfb.Clipboard
 }
 
 func newClipboardBridge(server *Server, logger *slog.Logger) *clipboardBridge {
@@ -123,20 +124,41 @@ func (c *clipboardBridge) viewerClipboard(clipboard *rfb.Clipboard) {
 		return
 	}
 	c.access.Lock()
-	if c.stopWatch != nil {
+	c.writing = clipboard
+	c.access.Unlock()
+	c.server.input.postClipboard(clipboard)
+}
+
+func (c *clipboardBridge) written(a *attachment, clipboard *rfb.Clipboard, err error) {
+	if err != nil {
+		c.logger.Warn("write the clipboard to the device", "error", err)
+		return
+	}
+	c.access.Lock()
+	current := c.writing == clipboard
+	if current {
+		c.writing = nil
+	}
+	announce := current && c.watched == a
+	if announce {
 		c.latest = clipboard
 	}
 	c.access.Unlock()
-	c.server.input.postClipboard(clipboard)
+	if announce {
+		c.server.rfb.ClipboardChanged()
+	}
 }
 
 func (w *inputWorker) writeClipboard(ctx context.Context, a *attachment, clipboard *rfb.Clipboard) {
 	ctx, cancel := context.WithTimeout(ctx, inputTimeout)
 	defer cancel()
 	board := a.pasteboard
+	written := func(err error) {
+		w.server.clip.written(a, clipboard, err)
+	}
 	if text, found := clipboard.Text(); found {
-		if err := board.WriteText(ctx, text); err != nil {
-			w.logger.Debug("write the clipboard to the device", "error", err)
+		if err := board.WriteText(ctx, text, written); err != nil {
+			written(err)
 		}
 		return
 	}
@@ -144,8 +166,8 @@ func (w *inputWorker) writeClipboard(ctx context.Context, a *attachment, clipboa
 		for _, item := range clipboard.Items {
 			for _, flavor := range item.Flavors {
 				if flavor.Type == imageType && !flavor.Promise && len(flavor.Data) > 0 {
-					if err := board.WriteImage(ctx, imageType, flavor.Data); err != nil {
-						w.logger.Debug("write the clipboard to the device", "error", err)
+					if err := board.WriteImage(ctx, imageType, flavor.Data, written); err != nil {
+						written(err)
 					}
 					return
 				}

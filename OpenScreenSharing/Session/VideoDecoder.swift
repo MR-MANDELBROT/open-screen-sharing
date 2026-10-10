@@ -3,6 +3,7 @@ import CoreVideo
 import Foundation
 import QuartzCore
 import VideoToolbox
+import os
 
 nonisolated final class VideoDecoder: @unchecked Sendable {
     private let queue = DispatchQueue(label: "io.nekohasekai.screensharing.video-decoder")
@@ -26,6 +27,8 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     private var lastSubmissionEnded = true
     private var timeout: DispatchWorkItem?
     private var timeoutID: UInt64 = 0
+    private var rejections = 0
+    private var reportedUnsupported = false
     private let completions = LockedState(initialState: [Completion]())
     private let output: @Sendable (DecodedVideoFrame) -> Void
     private let failure: @Sendable () -> Void
@@ -34,6 +37,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     private static let maxInFlight = 8
     private static let maxPendingFrames = 4
     private static let assemblyTimeout: CFTimeInterval = 0.5
+    private static let rejectionLimit = 10
 
     private struct Submission {
         var frameID: Int64
@@ -100,9 +104,14 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
 
     func setFormat(_ format: VideoFormat) {
         serialized {
-            guard format.codec != codec || format.parameterSets != parameterSets || format.isHDR != isHDR
-                || format.bands != bands || format.canvasHeight != canvasHeight || formatDescription == nil
-            else { return }
+            let changed =
+                format.codec != codec || format.parameterSets != parameterSets || format.isHDR != isHDR
+                || format.bands != bands || format.canvasHeight != canvasHeight
+            guard changed || formatDescription == nil else { return }
+            if changed {
+                rejections = 0
+                reportedUnsupported = false
+            }
             invalidateSession()
             formatDescription = nil
             parameterSets = format.parameterSets
@@ -116,7 +125,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
                 }
                 formatDescription = try Self.makeFormatDescription(format)
             } catch {
-                unsupported(isHDR, error)
+                reportUnsupported(error)
             }
         }
     }
@@ -159,7 +168,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
             do {
                 try createSession()
             } catch {
-                unsupported(isHDR, error)
+                reportUnsupported(error)
                 return
             }
         }
@@ -228,7 +237,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
             queue.async { [weak self] in self?.drainCompletions() }
         }
         if status != noErr {
-            recover()
+            rejected(status)
         }
     }
 
@@ -240,12 +249,15 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
         }
         for completion in ready {
             guard completion.generation == generation, let submission = inFlight.removeValue(forKey: completion.ticket) else { continue }
-            guard completion.status == noErr, let pixelBuffer = completion.pixelBuffer,
-                let index = pending.firstIndex(where: { $0.id == submission.frameID })
-            else {
+            guard completion.status == noErr else {
+                rejected(completion.status)
+                continue
+            }
+            guard let pixelBuffer = completion.pixelBuffer, let index = pending.firstIndex(where: { $0.id == submission.frameID }) else {
                 recover()
                 continue
             }
+            rejections = 0
             pending[index].remaining -= 1
             pending[index].completedAt = CACurrentMediaTime()
             if pending[index].latestTickets[submission.band] == completion.ticket {
@@ -313,6 +325,21 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     private func recover() {
         invalidateSession()
         failure()
+    }
+
+    private func rejected(_ status: OSStatus) {
+        LibsharingLog.logger.error("VideoToolbox rejected a frame: OSStatus \(status, privacy: .public)")
+        rejections += 1
+        recover()
+        if rejections >= Self.rejectionLimit {
+            reportUnsupported(MessageError("VTDecompressionSessionDecodeFrame", status: status))
+        }
+    }
+
+    private func reportUnsupported(_ error: any Error) {
+        guard !reportedUnsupported else { return }
+        reportedUnsupported = true
+        unsupported(isHDR, error)
     }
 
     private func invalidateSession() {

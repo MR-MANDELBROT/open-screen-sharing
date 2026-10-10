@@ -92,6 +92,10 @@ func (h *handler) ClipboardReceived(clipboard *rfb.Clipboard) {
 	}
 }
 
+func (h *handler) ClipboardFailed(problem rfb.ClipboardProblem, err error) {
+	h.logger.Warn("clipboard", "problem", int(problem), "error", err)
+}
+
 func (h *handler) Bell() {
 	h.logger.Info("bell")
 }

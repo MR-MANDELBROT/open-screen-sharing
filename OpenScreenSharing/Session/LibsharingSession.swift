@@ -3,6 +3,7 @@ import CoreMedia
 import Foundation
 import QuartzCore
 import Libsharing
+import os
 
 nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     private let configuration: SessionConfiguration
@@ -143,8 +144,8 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         try? current?.sendText(text)
     }
 
-    func pasteText(_ text: String) {
-        try? current?.pasteText(text)
+    func pasteText(_ text: String) throws {
+        try current?.pasteText(text)
     }
 
     func selectKeyboardSource(_ id: String) {
@@ -474,6 +475,7 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
     private weak var delegate: SessionEventSink?
     weak var session: LibsharingSession?
     private var framebuffer: Framebuffer?
+    private var framebufferFailure: String?
     private var info = SessionInfo()
     private var capabilities: SessionCapabilities = []
     private var clipboardForwarded = true
@@ -530,7 +532,7 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
             onConnected?(locked { supportsHighPerformance })
             delegate.sessionPhaseChanged(.connected)
         case LibsharingStateDisconnected:
-            let text = message ?? ""
+            let text = locked { framebufferFailure } ?? message ?? ""
             switch errorCode {
             case LibsharingErrorNone, LibsharingErrorCancelled:
                 delegate.sessionPhaseChanged(.disconnected)
@@ -591,18 +593,27 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
     }
 
     func onFramebufferResize(_ width: Int32, height: Int32) {
-        guard let session, let framebuffer = delegate?.sessionNeedsFramebuffer(width: Int(width), height: Int(height)) else { return }
+        guard let session, let delegate else { return }
         let attached: Framebuffer?
+        let failure: String?
         do {
+            guard let framebuffer = try delegate.sessionNeedsFramebuffer(width: Int(width), height: Int(height)) else { return }
             try session.attachFramebuffer(
                 Int64(Int(bitPattern: framebuffer.baseAddress)),
                 width: width, height: height, bytesPerRow: Int32(framebuffer.bytesPerRow)
             )
             attached = framebuffer
+            failure = nil
         } catch {
+            let text = "attach a \(width)x\(height) framebuffer: \(error.localizedDescription)"
+            LibsharingLog.logger.error("\(text, privacy: .public)")
             attached = nil
+            failure = text
         }
-        locked { self.framebuffer = attached }
+        locked {
+            self.framebuffer = attached
+            framebufferFailure = failure
+        }
         updateInfo { info in
             info.framebufferWidth = Int(width)
             info.framebufferHeight = Int(height)
@@ -746,6 +757,14 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
 
     func onBell() {
         delegate?.sessionEvent(.bell)
+    }
+
+    func onClipboardProblem(_ kind: Int32, message: String?) {
+        if kind == LibsharingClipboardProblemNotRestored {
+            delegate?.sessionEvent(.clipboardNotRestored(message ?? ""))
+        } else {
+            delegate?.sessionEvent(.clipboardUnreadable(message ?? ""))
+        }
     }
 
     func onVideoFormat(_ format: LibsharingVideoFormat?) {

@@ -8,14 +8,18 @@ nonisolated final class MicrophoneSender: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let queue = DispatchQueue(label: "io.nekohasekai.screensharing.microphone")
     private let send: @Sendable (Data) -> Void
+    private let failed: @Sendable (any Error) -> Void
     private let pcmFormat: AVAudioFormat
     private let encodedFormat: AVAudioFormat
     private let encoder: AVAudioConverter
     private var resampler: AVAudioConverter?
     private var pending: [Float] = []
+    private var running = false
+    private var observers: [any NSObjectProtocol] = []
 
-    init(send: @escaping @Sendable (Data) -> Void) throws {
+    init(send: @escaping @Sendable (Data) -> Void, failed: @escaping @Sendable (any Error) -> Void) throws {
         self.send = send
+        self.failed = failed
         var description = AudioStreamBasicDescription(
             mSampleRate: Self.sampleRate, mFormatID: kAudioFormatMPEG4AAC_ELD, mFormatFlags: 0, mBytesPerPacket: 0,
             mFramesPerPacket: Self.framesPerPacket, mBytesPerFrame: 0, mChannelsPerFrame: 1, mBitsPerChannel: 0, mReserved: 0
@@ -29,6 +33,26 @@ nonisolated final class MicrophoneSender: @unchecked Sendable {
         self.pcmFormat = pcmFormat
         self.encodedFormat = encodedFormat
         self.encoder = encoder
+        let center = NotificationCenter.default
+        observers.append(
+            center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+                self?.restart()
+            })
+        #if os(iOS)
+        observers.append(
+            center.addObserver(forName: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), queue: .main) {
+                [weak self] notification in
+                guard (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init) == .ended
+                else { return }
+                self?.restart()
+            })
+        #endif
+    }
+
+    deinit {
+        for observer in observers {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func start() throws {
@@ -50,12 +74,24 @@ nonisolated final class MicrophoneSender: @unchecked Sendable {
         }
         engine.prepare()
         try engine.start()
+        running = true
     }
 
     func stop() {
+        running = false
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         queue.async { [self] in pending.removeAll() }
+    }
+
+    private func restart() {
+        guard running, !engine.isRunning else { return }
+        stop()
+        do {
+            try start()
+        } catch {
+            failed(error)
+        }
     }
 
     private func process(_ buffer: AVAudioPCMBuffer) {
