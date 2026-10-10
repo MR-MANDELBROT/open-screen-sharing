@@ -363,7 +363,38 @@ extension View {
             buttonStyle(.bordered)
         }
     }
+
+    @ViewBuilder
+    func formRowButtonStyleCompat() -> some View {
+        #if os(macOS)
+        buttonStyle(FormRowButtonStyle())
+        #else
+        self
+        #endif
+    }
 }
+
+#if os(macOS)
+private struct FormRowButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let foreground: AnyShapeStyle =
+            if !isEnabled {
+                AnyShapeStyle(.tertiary)
+            } else if configuration.role == .destructive {
+                AnyShapeStyle(.red)
+            } else {
+                AnyShapeStyle(.tint)
+            }
+        configuration.label
+            .foregroundStyle(foreground)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.6 : 1)
+    }
+}
+#endif
 
 struct GlassEffectContainerCompat<Content: View>: View {
     private let spacing: CGFloat?

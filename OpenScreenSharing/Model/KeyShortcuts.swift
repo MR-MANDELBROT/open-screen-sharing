@@ -208,6 +208,8 @@ struct KeyShortcut: Codable, Hashable {
 
     var isUnset: Bool { key.isEmpty }
 
+    var isSpecial: Bool { Self.specialKeys.contains { $0.name == key } }
+
     var eventModifiers: EventModifiers { EventModifiers(rawValue: modifiers) }
 
     var chord: KeyChord? {
@@ -296,9 +298,34 @@ extension EventModifiers {
 }
 
 struct KeyMapping: Codable, Hashable, Identifiable {
+    enum Step: Codable, Hashable {
+        case keys(KeyShortcut)
+        case text(String)
+
+        var displayName: String {
+            switch self {
+            case .keys(let keys):
+                keys.displayName
+            case .text(let text):
+                "“"
+                    + text.map { character in
+                        switch character {
+                        case "\n", "\r", "\r\n": "↩"
+                        case "\t": "⇥"
+                        default: String(character)
+                        }
+                    }.joined() + "”"
+            }
+        }
+    }
+
     var id: UUID
     var trigger: KeyShortcut
-    var target: KeyShortcut
+    var steps: [Step]
+
+    var displayName: String {
+        steps.map(\.displayName).joined(separator: " ")
+    }
 }
 
 final class KeyShortcuts: ObservableObject {
@@ -351,10 +378,6 @@ final class KeyShortcuts: ObservableObject {
 
     func mapping(triggeredBy shortcut: KeyShortcut) -> KeyMapping? {
         mappings.first { $0.trigger == shortcut }
-    }
-
-    func chord(for shortcut: KeyShortcut) -> KeyChord? {
-        mapping(triggeredBy: shortcut)?.target.chord
     }
 
     func add(_ mapping: KeyMapping) {

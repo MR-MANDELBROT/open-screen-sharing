@@ -1609,8 +1609,8 @@ final class SessionController: ObservableObject {
         }
         if down, isControlling {
             keyboardType = keyboardType.learning(from: usage)
-            if let shortcut = KeyShortcut(key: key), let chord = KeyShortcuts.shared.chord(for: shortcut) {
-                performMapping(chord, held: heldModifiers(from: key.modifierFlags))
+            if let shortcut = KeyShortcut(key: key), let mapping = KeyShortcuts.shared.mapping(triggeredBy: shortcut) {
+                performMapping(mapping.steps, held: heldModifiers(from: key.modifierFlags))
                 return true
             }
         }
@@ -1645,8 +1645,8 @@ final class SessionController: ObservableObject {
                 keyboardType = .current
             }
             syncModifiers(event.modifierFlags)
-            if event.type == .keyDown, isControlling, let shortcut = KeyShortcut(event: event), let chord = KeyShortcuts.shared.chord(for: shortcut) {
-                performMapping(chord, held: heldModifiers(from: event.modifierFlags))
+            if event.type == .keyDown, isControlling, let shortcut = KeyShortcut(event: event), let mapping = KeyShortcuts.shared.mapping(triggeredBy: shortcut) {
+                performMapping(mapping.steps, held: heldModifiers(from: event.modifierFlags))
                 return true
             }
             return handleKey(id: id, down: event.type == .keyDown, held: heldModifiers(from: event.modifierFlags), repeats: false) {
@@ -1745,8 +1745,13 @@ final class SessionController: ObservableObject {
         if !stickyModifiers.isEmpty, let first = remaining.popFirst() {
             typed = typeCharacter(first)
         }
+        return typeUnmodified(remaining) && typed
+    }
+
+    private func typeUnmodified(_ text: Substring) -> Bool {
+        var typed = true
         var run = ""
-        for character in remaining {
+        for character in text {
             let key: MacKey? =
                 switch character {
                 case "\n", "\r", "\r\n": .returnKey
@@ -1852,15 +1857,33 @@ final class SessionController: ObservableObject {
         #endif
     }
 
-    private func performMapping(_ chord: KeyChord, held: Set<ModifierKey>) {
+    private func performMapping(_ steps: [KeyMapping.Step], held: Set<ModifierKey>) {
         textCursorMayHaveMoved()
-        let wanted = Set(chord.modifiers)
-        let latched = held.union(lockedModifiers).union(pressedModifiers)
-        var releasing = Set(pressedKeys.values.filter { key in ModifierKey(keysym: key.keysym).map { !wanted.contains($0) } ?? false })
-        for modifier in lockedModifiers.union(pressedModifiers).subtracting(wanted) { releasing.insert(modifier.macKey) }
-        for key in releasing { send(key, down: false) }
-        tap(chord.key, modifiers: wanted.subtracting(latched))
-        for key in releasing { send(key, down: true) }
+        var latched = held.union(lockedModifiers).union(pressedModifiers)
+        var down = Set(pressedKeys.values.filter { ModifierKey(keysym: $0.keysym) != nil })
+        for modifier in lockedModifiers.union(pressedModifiers) { down.insert(modifier.macKey) }
+        var released: [MacKey] = []
+        for step in steps {
+            let chord: KeyChord? =
+                switch step {
+                case .keys(let keys): keys.chord
+                case .text: nil
+                }
+            let wanted = Set(chord?.modifiers ?? [])
+            for key in down {
+                guard let modifier = ModifierKey(keysym: key.keysym), !wanted.contains(modifier) else { continue }
+                send(key, down: false)
+                down.remove(key)
+                latched.remove(modifier)
+                released.append(key)
+            }
+            if let chord {
+                tap(chord.key, modifiers: wanted.subtracting(latched))
+            } else if case .text(let text) = step {
+                _ = typeUnmodified(Substring(text))
+            }
+        }
+        for key in released { send(key, down: true) }
     }
 
     private func tap(_ key: MacKey, modifiers: Set<ModifierKey>) {
