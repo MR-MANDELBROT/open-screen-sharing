@@ -50,6 +50,7 @@ struct SettingsView: View {
         }
         #if os(macOS)
         .formStyle(.grouped)
+        .unboundedFormWidth()
         #endif
         .navigationTitle("Settings")
         .alert($alert)

@@ -61,6 +61,7 @@ struct KeyboardShortcutsView: View {
         .navigationBarTitleDisplayMode(.inline)
         #else
         .formStyle(.grouped)
+        .unboundedFormWidth()
         #endif
         .navigationTitle("Keyboard Shortcuts")
         .alert($alert)
