@@ -310,7 +310,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
-          fetch-depth: 1
+          fetch-depth: 0
       - name: Download builds
         uses: actions/download-artifact@v4
         with:
@@ -319,14 +319,13 @@ jobs:
           path: dist
       - name: Publish
         run: |-
+          if git rev-parse -q --verify refs/tags/nightly > /dev/null; then
+            NOTES=$(git log --format='* %s' nightly..)
+          else
+            NOTES=$(git log -1 --format='* %s')
+          fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" tag -a -f nightly -m "$BUILD_NUMBER" "$GITHUB_SHA"
           git push -f origin refs/tags/nightly
-          BUNDLE_ID=$(jq -r '.apps[0].bundleIdentifier' dist/altstore/altstore.json)
-          NOTES="Built from [${GITHUB_SHA::7}](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)
-
-          ---
-
-          <a href='https://altstore.io/source/github.com/$GITHUB_REPOSITORY/releases/download/nightly/altstore.json?app=$BUNDLE_ID'><img src='https://2606795771-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FAfe8qEztjcTjsjjaMBY2%2Fuploads%2FUjblMQb1NnujZg8y2vxZ%2FDownloadBadge_dark.png?alt=media&token=25419460-9af3-4229-961a-936451128bf9' alt='Download on AltStore' height='40'></a>"
           if gh release view nightly > /dev/null 2>&1; then
             gh release edit nightly --prerelease --title "Nightly build" --notes "$NOTES"
           else

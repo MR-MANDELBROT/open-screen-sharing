@@ -2,6 +2,24 @@
 
 Open Screen Sharing aims to develop superior servers and clients based on the private protocol used by Apple VNC (macOS's Screen Sharing server and ScreenSharing.app).
 
+## Installation
+
+### iOS
+
+<a href='https://altstore.io/source/github.com/nekohasekai/open-screen-sharing/releases/download/nightly/altstore.json?app=io.nekohasekai.screensharing'><img src='https://2606795771-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FAfe8qEztjcTjsjjaMBY2%2Fuploads%2FUjblMQb1NnujZg8y2vxZ%2FDownloadBadge_dark.png?alt=media&token=25419460-9af3-4229-961a-936451128bf9' alt='Download on AltStore' height='40'></a>
+
+To add the source to SideStore (or AltStore) manually:
+
+```
+https://github.com/nekohasekai/open-screen-sharing/releases/download/nightly/altstore.json
+```
+
+Or download [OpenScreenSharing.ipa](https://github.com/nekohasekai/open-screen-sharing/releases/download/nightly/OpenScreenSharing.ipa) and sideload it.
+
+### macOS
+
+Download and install [OpenScreenSharing.pkg](https://github.com/nekohasekai/open-screen-sharing/releases/download/nightly/OpenScreenSharing.pkg).
+
 ## Features
 
 1. Compared to the original ScreenSharing.app:
