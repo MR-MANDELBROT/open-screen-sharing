@@ -308,13 +308,13 @@ extension EventModifiers {
 
 struct KeyMapping: Codable, Hashable, Identifiable {
     enum Step: Codable, Hashable {
-        case keys(KeyShortcut)
+        case key(KeyShortcut)
         case text(String)
 
         var displayName: String {
             switch self {
-            case .keys(let keys):
-                keys.displayName
+            case .key(let shortcut):
+                shortcut.displayName
             case .text(let text):
                 "“"
                     + text.map { character in

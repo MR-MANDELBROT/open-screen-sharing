@@ -94,7 +94,7 @@ struct KeyboardShortcutsView: View {
                     }
                 }
                 Button {
-                    editing = KeyMapping(id: UUID(), trigger: .unset, steps: [.keys(.unset)])
+                    editing = KeyMapping(id: UUID(), trigger: .unset, steps: [])
                 } label: {
                     Label("Add Mapping", systemImage: "plus")
                 }
@@ -245,28 +245,28 @@ private struct KeyMappingEditor: View {
     private struct Step: Identifiable {
         let id = UUID()
         let sendsText: Bool
-        var keys: KeyShortcut
+        var shortcut: KeyShortcut
         var text: String
 
         init(_ step: KeyMapping.Step) {
             switch step {
-            case .keys(let keys):
+            case .key(let shortcut):
                 sendsText = false
-                self.keys = keys
+                self.shortcut = shortcut
                 text = ""
             case .text(let text):
                 sendsText = true
-                keys = .unset
+                shortcut = .unset
                 self.text = text
             }
         }
 
         var value: KeyMapping.Step {
-            sendsText ? .text(text) : .keys(keys)
+            sendsText ? .text(text) : .key(shortcut)
         }
 
         var isComplete: Bool {
-            sendsText ? !text.isEmpty : !keys.isUnset && (keys.hasCommandModifier || keys.isSpecial)
+            sendsText ? !text.isEmpty : !shortcut.isUnset && (shortcut.hasCommandModifier || shortcut.isSpecial)
         }
     }
 
@@ -328,11 +328,11 @@ private struct KeyMappingEditor: View {
                             } else {
                                 ForEach(Self.modifiers, id: \.symbol) { modifier in
                                     Toggle(isOn: Binding(
-                                        get: { step.keys.eventModifiers.contains(modifier.flag) },
+                                        get: { step.shortcut.eventModifiers.contains(modifier.flag) },
                                         set: { on in
-                                            var flags = step.keys.eventModifiers
+                                            var flags = step.shortcut.eventModifiers
                                             if on { flags.insert(modifier.flag) } else { flags.remove(modifier.flag) }
-                                            step.keys = KeyShortcut(key: step.keys.key, modifiers: flags)
+                                            step.shortcut = KeyShortcut(key: step.shortcut.key, modifiers: flags)
                                         }
                                     )) {
                                         Text(verbatim: modifier.symbol)
@@ -342,7 +342,7 @@ private struct KeyMappingEditor: View {
                                 }
                                 ShortcutButton(
                                     isRecording: recording == .key(step.id), title: String(localized: "Key"),
-                                    shortcut: step.keys.isUnset ? nil : KeyShortcut(key: step.keys.key, modifiers: []).displayName, prompt: "Type Key"
+                                    shortcut: step.shortcut.isUnset ? nil : KeyShortcut(key: step.shortcut.key, modifiers: []).displayName, prompt: "Type Key"
                                 ) {
                                     recording = recording == .key(step.id) ? nil : .key(step.id)
                                 }
@@ -380,9 +380,9 @@ private struct KeyMappingEditor: View {
                     }
                     Menu {
                         Button {
-                            steps.append(Step(.keys(.unset)))
+                            steps.append(Step(.key(.unset)))
                         } label: {
-                            Label("Keys", systemImage: "keyboard")
+                            Label("Key", systemImage: "keyboard")
                         }
                         Button {
                             steps.append(Step(.text("")))
@@ -444,7 +444,7 @@ private struct KeyMappingEditor: View {
                 trigger = .unset
             case .key(let stepID):
                 guard let index = steps.firstIndex(where: { $0.id == stepID }) else { break }
-                steps[index].keys = KeyShortcut(key: "", modifiers: steps[index].keys.eventModifiers)
+                steps[index].shortcut = KeyShortcut(key: "", modifiers: steps[index].shortcut.eventModifiers)
             }
         case .shortcut(let shortcut):
             switch field {
@@ -455,8 +455,8 @@ private struct KeyMappingEditor: View {
             case .key(let stepID):
                 recording = nil
                 guard let index = steps.firstIndex(where: { $0.id == stepID }) else { break }
-                let modifiers = shortcut.eventModifiers.isEmpty ? steps[index].keys.eventModifiers : shortcut.eventModifiers
-                steps[index].keys = KeyShortcut(key: shortcut.key, modifiers: modifiers)
+                let modifiers = shortcut.eventModifiers.isEmpty ? steps[index].shortcut.eventModifiers : shortcut.eventModifiers
+                steps[index].shortcut = KeyShortcut(key: shortcut.key, modifiers: modifiers)
             }
         #if os(macOS)
         case .modifierChord:

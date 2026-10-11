@@ -2134,7 +2134,7 @@ final class SessionController: ObservableObject {
         for step in steps {
             let chord: KeyChord? =
                 switch step {
-                case .keys(let keys): keys.chord
+                case .key(let shortcut): shortcut.chord
                 case .text: nil
                 }
             let wanted = Set(chord?.modifiers ?? [])
