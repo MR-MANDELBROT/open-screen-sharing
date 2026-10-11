@@ -38,7 +38,6 @@ struct SessionStatusOverlay: View {
         case .reconnection: String(localized: "Reconnecting…")
         case .resize: String(localized: "Changing Resolution…")
         case .videoStart: String(localized: "Starting High Performance…")
-        case .videoEnd: String(localized: "Stopping High Performance…")
         }
     }
 

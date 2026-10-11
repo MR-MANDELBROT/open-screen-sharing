@@ -13,7 +13,6 @@ nonisolated enum PictureChange: Equatable {
     case reconnection
     case resize
     case videoStart
-    case videoEnd
 }
 
 nonisolated final class DisplayPipeline: @unchecked Sendable {
@@ -170,7 +169,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         update {
             presentationEpoch &+= 1
             resetPresentation()
-            hold(.videoEnd)
+            hold(.reconnection)
             isVideo = false
             videoFrame = nil
             strips = []
