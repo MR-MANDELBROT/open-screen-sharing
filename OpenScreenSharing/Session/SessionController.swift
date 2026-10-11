@@ -3,6 +3,7 @@ import Atomics
 import Combine
 import CoreGraphics
 import Foundation
+import ImageIO
 import SwiftUI
 #if os(iOS)
 import UIKit
@@ -65,6 +66,11 @@ struct FileTransfer: Identifiable, Equatable {
     var fraction: Double {
         total > 0 ? min(1, Double(transferred) / Double(total)) : 0
     }
+}
+
+struct RemoteDragOffer {
+    let items: [RemoteDragItem]
+    let image: CGImage?
 }
 
 nonisolated extension FileTransferError: LocalizedError {
@@ -160,6 +166,7 @@ final class SessionController: ObservableObject {
     @Published var alert: AlertState?
     @Published private(set) var isClosing = false
     @Published private(set) var transfers: [FileTransfer] = []
+    @Published private(set) var dropTarget: DropTarget?
     @Published var isShowingResolution = false
     @Published var isCustomizingToolbar = false
     @Published private(set) var lastRemoteText: String?
@@ -188,6 +195,11 @@ final class SessionController: ObservableObject {
 
     private var session: LibsharingRemoteSession?
     private var sink: SessionEventSink?
+    private var dragID: Int64?
+    private var drops: [Int64: DropDelivery] = [:]
+    private(set) var remoteDragOffer: RemoteDragOffer?
+    private var promisedFiles: [Int64: PromisedFile] = [:]
+    private var holdsPointer = false
     private var credentials: SessionCredentials?
     private var pressedKeys: [Int: MacKey] = [:]
     private var repeatTask: Task<Void, Never>?
@@ -588,6 +600,13 @@ final class SessionController: ObservableObject {
         virtualDisplayRequests.reset(sender: nil)
         awaitsVirtualDisplay = false
         highPerformanceAwaitsDisplay = false
+        holdsPointer = false
+        pointerButtons = []
+        pointerModifiers = []
+        dragID = nil
+        dropTarget = nil
+        remoteDragOffer = nil
+        discardPendingDrops()
         abandonTransfers()
     }
 
@@ -1025,8 +1044,146 @@ final class SessionController: ObservableObject {
         }
     }
 
-    func downloadFile(_ remotePath: String) {
-        let destination = Self.downloadsFolder
+    enum DropTarget {
+        case desktop
+        case pointer
+    }
+
+    private struct DropDelivery {
+        var destination: String?
+        var discards = false
+        var waiting: [(url: URL, temporary: Bool)] = []
+        var loading: Int
+
+        var isSettled: Bool { destination != nil || discards }
+    }
+
+    func dropEntered(names: [String]) {
+        guard canTransferFiles else { return }
+        if capabilities.contains(.dragToRemote), isControlling, let id = try? session?.startDrop(names: names) {
+            dragID = id
+            dropTarget = .pointer
+        } else {
+            dropTarget = .desktop
+        }
+    }
+
+    func dropMoved(to point: CGPoint) {
+        guard dragID != nil else { return }
+        moveTouch(to: point)
+        if !pointerButtons.contains(.primary) {
+            press(.primary)
+        }
+    }
+
+    func dropExited() {
+        dropTarget = nil
+        guard let dragID else { return }
+        self.dragID = nil
+        session?.cancelDrag(dragID)
+        release(.primary)
+    }
+
+    private func endDrop(loading: Int) -> Int64? {
+        dropTarget = nil
+        guard let id = dragID else { return nil }
+        dragID = nil
+        release(.primary)
+        // The Mac sends no destination when the window under the pointer refuses the drop, as
+        // Finder's search results such as Recents do.
+        discardPendingDrops()
+        drops[id] = DropDelivery(loading: loading)
+        return id
+    }
+
+    @discardableResult
+    func drop(files: [URL], loading count: Int = 0) -> @MainActor (URL?, String, (any Error)?) -> Void {
+        let id = endDrop(loading: files.count + count)
+        for url in files {
+            droppedFileLoaded(url, temporary: false, name: url.lastPathComponent, error: nil, dragID: id)
+        }
+        return { [weak self] url, name, error in
+            self?.droppedFileLoaded(url, temporary: true, name: name, error: error, dragID: id)
+        }
+    }
+
+    func drop(_ providers: [NSItemProvider]) {
+        let loaded = drop(files: [], loading: providers.count)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Drops", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for provider in providers {
+            let type = provider.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: .item) == true } ?? UTType.item.identifier
+            let suggestedName = provider.suggestedName
+            _ = provider.loadFileRepresentation(forTypeIdentifier: type) { url, error in
+                guard let url else {
+                    Task { @MainActor in loaded(nil, suggestedName ?? String(localized: "Item"), error) }
+                    return
+                }
+                let destination = folder.appendingPathComponent(
+                    suggestedName.map { name in
+                        url.pathExtension.isEmpty || name.hasSuffix(url.pathExtension) ? name : "\(name).\(url.pathExtension)"
+                    } ?? url.lastPathComponent)
+                var copyError: (any Error)?
+                do {
+                    try FileManager.default.copyItem(at: url, to: destination)
+                } catch {
+                    copyError = error
+                }
+                Task { @MainActor in
+                    loaded(copyError == nil ? destination : nil, destination.lastPathComponent, copyError)
+                }
+            }
+        }
+    }
+
+    private func droppedFileLoaded(_ url: URL?, temporary: Bool, name: String, error: (any Error)?, dragID: Int64?) {
+        guard let dragID, var delivery = drops[dragID] else {
+            if let url {
+                uploadFiles([url], to: "~/Desktop", temporary: temporary)
+            } else {
+                reportSendFailure(name, error: error)
+            }
+            return
+        }
+        delivery.loading -= 1
+        if let url {
+            if delivery.discards {
+                if temporary { try? FileManager.default.removeItem(at: url) }
+            } else if let destination = delivery.destination {
+                uploadFiles([url], to: destination, temporary: temporary)
+            } else {
+                delivery.waiting.append((url, temporary))
+            }
+        } else if !delivery.discards {
+            reportSendFailure(name, error: error)
+        }
+        drops[dragID] = delivery.loading == 0 && delivery.isSettled ? nil : delivery
+    }
+
+    func handleDropDestination(id: Int64, path: String) {
+        guard var delivery = drops[id], !delivery.isSettled else { return }
+        delivery.destination = path
+        for file in delivery.waiting {
+            uploadFiles([file.url], to: path, temporary: file.temporary)
+        }
+        delivery.waiting = []
+        drops[id] = delivery.loading == 0 ? nil : delivery
+    }
+
+    private func discardPendingDrops() {
+        for (id, var delivery) in drops where !delivery.isSettled {
+            delivery.discards = true
+            for file in delivery.waiting where file.temporary {
+                try? FileManager.default.removeItem(at: file.url)
+            }
+            delivery.waiting = []
+            drops[id] = delivery.loading == 0 ? nil : delivery
+        }
+    }
+
+    @discardableResult
+    func downloadFile(_ remotePath: String, to destination: URL = SessionController.downloadsFolder) -> Int64? {
         do {
             guard let session else { throw MessageError("not connected") }
             let id = try session.downloadFile(remotePath, localFolder: destination)
@@ -1034,9 +1191,57 @@ final class SessionController: ObservableObject {
                 FileTransfer(
                     id: id, direction: .download, name: (remotePath as NSString).lastPathComponent, localFolder: destination
                 ))
+            return id
         } catch {
             showError(String(localized: "Couldn’t Get “\((remotePath as NSString).lastPathComponent)”"), error: error)
+            return nil
         }
+    }
+
+    private struct PromisedFile {
+        let folder: URL
+        let progress: Progress
+        let completion: (Result<URL, any Error>) -> Void
+    }
+
+    func downloadFile(_ remotePath: String, into folder: URL, progress: Progress, completion: @escaping (Result<URL, any Error>) -> Void) {
+        guard let id = downloadFile(remotePath, to: folder) else {
+            completion(.failure(CocoaError(.fileWriteUnknown)))
+            return
+        }
+        progress.cancellationHandler = { [weak self] in
+            Task { @MainActor in self?.session?.cancelTransfer(id) }
+        }
+        promisedFiles[id] = PromisedFile(folder: folder, progress: progress, completion: completion)
+    }
+
+    fileprivate func handleRemoteDrag(_ items: [RemoteDragItem], image: Data?) {
+        guard !items.isEmpty, capabilities.contains(.dragFromRemote), isControlling, pointerButtons.contains(.primary) else {
+            remoteDragOffer = nil
+            return
+        }
+        let icon = image.flatMap { CGImageSourceCreateWithData($0 as CFData, nil) }.flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }
+        remoteDragOffer = RemoteDragOffer(items: items, image: icon)
+    }
+
+    func takeRemoteDrag() -> RemoteDragOffer? {
+        guard let offer = remoteDragOffer, isControlling else { return nil }
+        remoteDragOffer = nil
+        return offer
+    }
+
+    // ScreensharingAgent cancels the Mac's drag by activating Finder and then posting Escape; a
+    // button released before that drops the items where the pointer is.
+    func cancelRemoteDrag() {
+        session?.cancelRemoteDrag()
+        holdsPointer = true
+        Task { [weak self] in
+            try? await Task.sleep(seconds: 0.5)
+            guard let self, self.holdsPointer else { return }
+            self.holdsPointer = false
+            if self.isControlling { self.sendPointer(buttons: self.pointerButtons) }
+        }
+        release(.primary)
     }
 
     func cancelTransfer(_ transfer: FileTransfer) {
@@ -1059,6 +1264,10 @@ final class SessionController: ObservableObject {
             transfers[index].temporaryURLs = []
             abandoned.append(transfers[index])
         }
+        for promised in promisedFiles.values {
+            promised.completion(.failure(interruption))
+        }
+        promisedFiles = [:]
         guard !isClosing, let transfer = abandoned.first else { return }
         if abandoned.count == 1 {
             showError(
@@ -1076,6 +1285,10 @@ final class SessionController: ObservableObject {
     }
 
     fileprivate func handleTransferProgress(id: Int64, transferred: Int64, total: Int64, item: String?) {
+        if let progress = promisedFiles[id]?.progress {
+            progress.totalUnitCount = total
+            progress.completedUnitCount = transferred
+        }
         update(id) { transfer in
             transfer.transferred = transferred
             transfer.total = total
@@ -1099,6 +1312,15 @@ final class SessionController: ObservableObject {
             transfer.scopedURLs = []
             transfer.temporaryURLs.forEach { try? FileManager.default.removeItem(at: $0) }
             transfer.temporaryURLs = []
+        }
+        if let promised = promisedFiles.removeValue(forKey: id) {
+            if let error {
+                promised.completion(.failure(error))
+            } else if let name, !name.isEmpty {
+                promised.completion(.success(promised.folder.appendingPathComponent(name)))
+            } else {
+                promised.completion(.failure(CocoaError(.fileNoSuchFile)))
+            }
         }
         guard let transfer = transfers.first(where: { $0.id == id }) else { return }
         if case .failed(let error) = transfer.state {
@@ -1528,6 +1750,7 @@ final class SessionController: ObservableObject {
     }
 
     func setButtons(_ buttons: PointerButtons) {
+        if !buttons.contains(.primary) { remoteDragOffer = nil }
         pointerButtons = buttons
         guard isControlling else {
             updateAssistCursor()
@@ -1537,6 +1760,7 @@ final class SessionController: ObservableObject {
     }
 
     private func sendPointer(buttons: PointerButtons) {
+        guard !holdsPointer else { return }
         let point = serverPoint(pointerPosition)
         session?.sendPointer(x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)), buttons: buttons)
     }
@@ -2474,6 +2698,14 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
 
     func sessionDeviceInfo(_ device: DeviceInfo) {
         onMain { $0.handle(device: device) }
+    }
+
+    func sessionDropDestination(id: Int64, path: String) {
+        onMain { $0.handleDropDestination(id: id, path: path) }
+    }
+
+    func sessionRemoteDragChanged(_ items: [RemoteDragItem], image: Data?) {
+        onMain { $0.handleRemoteDrag(items, image: image) }
     }
 
     func sessionInfoChanged(_ info: SessionInfo) {

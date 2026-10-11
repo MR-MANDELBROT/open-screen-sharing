@@ -19,6 +19,11 @@ type handler struct {
 	pixels     int64
 	clipboards chan *rfb.Clipboard
 	layouts    chan *rfb.DisplayLayout
+
+	drag         *rfb.RemoteDrag
+	dropID       uint32
+	dropPaths    []string
+	destinations chan dropDestination
 }
 
 func newHandler(logger *slog.Logger, session rfb.SessionChoice) *handler {
@@ -27,6 +32,8 @@ func newHandler(logger *slog.Logger, session rfb.SessionChoice) *handler {
 		session:    session,
 		clipboards: make(chan *rfb.Clipboard, 16),
 		layouts:    make(chan *rfb.DisplayLayout, 16),
+
+		destinations: make(chan dropDestination, 16),
 	}
 }
 

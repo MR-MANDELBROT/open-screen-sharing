@@ -356,6 +356,21 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         return id
     }
 
+    func startDrop(names: [String]) throws -> Int64 {
+        guard let session = current else { throw MessageError("not connected") }
+        var id: Int64 = 0
+        try session.startDrop(names.joined(separator: "\n"), ret0_: &id)
+        return id
+    }
+
+    func cancelDrag(_ id: Int64) {
+        try? current?.cancelDrag(id)
+    }
+
+    func cancelRemoteDrag() {
+        try? current?.cancelRemoteDrag()
+    }
+
     private func transfer(_ id: Int64) -> LibsharingFileTransfer? {
         lock.lock()
         defer { lock.unlock() }
@@ -571,6 +586,8 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
         if serverInfo.supportsKeyCodes { capabilities.insert(.keyCodes) }
         if serverInfo.supportsHighPerformance { capabilities.insert(.highPerformance) }
         if serverInfo.supportsFileTransfer { capabilities.insert(.fileTransfer) }
+        if serverInfo.supportsDragToRemote { capabilities.insert(.dragToRemote) }
+        if serverInfo.supportsDragFromRemote { capabilities.insert(.dragFromRemote) }
         if serverInfo.supportsGestures { capabilities.insert(.gestures) }
         if serverInfo.supportsAssistCursor { capabilities.insert(.assistCursor) }
         if serverInfo.supportsMissionControl { capabilities.insert(.missionControl) }
@@ -871,6 +888,20 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
             default: .failed
             }
         delegate?.sessionFileTransferFinished(id: transferID, name: name, error: kind.map { FileTransferError($0, message: message ?? "") })
+    }
+
+    func onDropDestination(_ dragID: Int64, path: String?) {
+        guard let path else { return }
+        delegate?.sessionDropDestination(id: dragID, path: path)
+    }
+
+    func onRemoteDrag(_ drag: LibsharingRemoteDrag?) {
+        guard let drag else {
+            delegate?.sessionRemoteDragChanged([], image: nil)
+            return
+        }
+        delegate?.sessionRemoteDragChanged(
+            (0..<drag.len()).map { RemoteDragItem(path: drag.path($0), isFolder: drag.isFolder($0)) }, image: drag.image)
     }
 
     func reportMediaFailure(_ failure: MediaFailure) {

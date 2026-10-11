@@ -73,7 +73,34 @@ func (c *Client) SendPointer(x, y int, buttons uint8) error {
 	c.buttons = buttons
 	wireX, wireY := c.wirePositionLocked(x, y)
 	c.access.Unlock()
+	if !motion && c.info.Accepts(0x10) {
+		message, err := encryptedPointerMessage(c.wrapKey, c.wireButtons(buttons), wireX, wireY)
+		if err != nil {
+			return err
+		}
+		return c.sendInput(message, false)
+	}
 	return c.sendInput(pointerEventMessage(c.wireButtons(buttons), wireX, wireY), motion)
+}
+
+// screensharingd 756.36.5.2 arm64e (UUID 44908B06-F788-3822-ABC4-2285001F6A8D) sends a drag's
+// messages only to the viewer whose last left-button press came as an encrypted or V2 event:
+// HandleEncryptedEventMessage reads a pointer from a block with byte 0 clear and byte 10 set
+// at 0x10003df9c..0x10003dfd4 and marks its viewer at 0x10003f528, the V2 handler at 0x100041f48,
+// while a message 5 is posted at 0x10003e62c without marking.
+func encryptedPointerMessage(key [16]byte, buttons uint8, x, y int) ([]byte, error) {
+	message := make([]byte, 18)
+	message[0] = 0x10
+	block := message[2:]
+	block[10] = 0xff
+	block[11] = buttons
+	binary.BigEndian.PutUint16(block[12:], uint16(clampInt(x, 0, math.MaxUint16)))
+	binary.BigEndian.PutUint16(block[14:], uint16(clampInt(y, 0, math.MaxUint16)))
+	err := encryptECB(key[:], block)
+	if err != nil {
+		return nil, err
+	}
+	return message, nil
 }
 
 func (c *Client) wirePositionLocked(x, y int) (int, int) {

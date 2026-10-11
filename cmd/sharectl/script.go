@@ -55,7 +55,11 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 			var numbers []int
 			numbers, err = parseNumbers(argument, 2, strconv.Atoi)
 			if err == nil {
-				err = client.SendPointer(numbers[0], numbers[1], 0)
+				var buttons uint8
+				if len(numbers) > 2 {
+					buttons = uint8(numbers[2])
+				}
+				err = client.SendPointer(numbers[0], numbers[1], buttons)
 			}
 		case "click":
 			var numbers []int
@@ -167,7 +171,12 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 				recorder = nil
 			}
 		case "upload", "download":
-			err = copyFile(ctx, client, h, verb, argument)
+			source, destination, found := strings.Cut(argument, ",")
+			if found {
+				err = copyFile(ctx, client, h, verb == "upload", source, destination)
+			} else {
+				err = fmt.Errorf("%s needs SOURCE,DESTINATION", verb)
+			}
 		case "raw":
 			var message []byte
 			message, err = hex.DecodeString(strings.ReplaceAll(argument, " ", ""))
@@ -191,7 +200,10 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 				"records", statistics.Records, "wire-bytes", statistics.WireBytes, "dirty-updates", updates, "pixels", pixels)
 		default:
 			var handled bool
-			handled, err = runGestureAction(client, verb, argument, wait)
+			handled, err = runDragAction(ctx, client, h, verb, argument)
+			if !handled {
+				handled, err = runGestureAction(client, verb, argument, wait)
+			}
 			if !handled {
 				err = fmt.Errorf("unknown action %q", action)
 			}
@@ -348,17 +360,13 @@ func parseMediaOptions(flags []string) media.OfferOptions {
 	return options
 }
 
-func copyFile(ctx context.Context, client *rfb.Client, h *handler, verb, argument string) error {
-	source, destination, found := strings.Cut(argument, ",")
-	if !found {
-		return fmt.Errorf("%s needs SOURCE,DESTINATION", verb)
-	}
+func copyFile(ctx context.Context, client *rfb.Client, h *handler, upload bool, source, destination string) error {
 	progress := func(progress filecopy.Progress) {
 		h.logger.Debug("file copy", "item", progress.Item, "transferred", progress.Transferred, "total", progress.Total)
 	}
 	var transfer *filecopy.Transfer
 	var err error
-	if verb == "upload" {
+	if upload {
 		transfer, err = client.FileCopy().Upload(ctx, filecopy.PathSource(source), destination, progress)
 	} else {
 		transfer, err = client.FileCopy().Download(ctx, source, filecopy.DirectoryReceiver(destination), progress)

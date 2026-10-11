@@ -2,6 +2,7 @@
 import AppKit
 import Carbon
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RemoteScreenView: NSViewRepresentable {
     @ObservedObject var controller: SessionController
@@ -102,6 +103,7 @@ final class RemoteScreenNSView: NSView {
         controller.pipeline.setWakeHandler { [weak self] in
             DispatchQueue.main.async { self?.contentChanged() }
         }
+        registerForDraggedTypes([.fileURL] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
     }
 
     required init?(coder: NSCoder) {
@@ -770,6 +772,12 @@ final class RemoteScreenNSView: NSView {
         }
         let location = convert(event.locationInWindow, from: nil)
         systemPointerLocation = location
+        if clickedButtons == [.primary], !bounds.contains(location), let offer = controller.takeRemoteDrag() {
+            controller.cancelRemoteDrag()
+            clickedButtons = []
+            dragOut(offer, event: event, at: location)
+            return
+        }
         if let panStart {
             panViewport(by: CGPoint(x: location.x - panStart.x, y: location.y - panStart.y))
             self.panStart = location
@@ -1053,6 +1061,130 @@ final class RemoteScreenNSView: NSView {
 
     @objc func paste(_ sender: Any?) {
         controller.pasteFromDevice()
+    }
+}
+
+extension RemoteScreenNSView {
+    private static let promiseQueue = OperationQueue()
+
+    private func draggedItems(_ info: any NSDraggingInfo) -> [Any] {
+        info.draggingPasteboard.readObjects(forClasses: [NSURL.self, NSFilePromiseReceiver.self], options: [.urlReadingFileURLsOnly: true]) ?? []
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        let items = draggedItems(sender)
+        guard controller.canTransferFiles, sender.draggingSource == nil, !items.isEmpty else { return [] }
+        controller.dropEntered(
+            names: items.flatMap { item -> [String] in
+                if let url = item as? URL {
+                    return [(try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true ? url.lastPathComponent + "/" : url.lastPathComponent]
+                }
+                // -[NSFilePromiseReceiver initWithPasteboardPropertyList:ofType:] fills in only the file
+                // types; the names arrive with the files.
+                return ((item as? NSFilePromiseReceiver)?.fileTypes ?? []).map { identifier in
+                    let type = UTType(identifier)
+                    let name = String(localized: "Item")
+                    if type?.conforms(to: .directory) == true { return name + "/" }
+                    return type?.preferredFilenameExtension.map { "\(name).\($0)" } ?? name
+                }
+            })
+        return draggingUpdated(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        controller.dropMoved(to: imagePoint(for: convert(sender.draggingLocation, from: nil)))
+        return controller.dropTarget == nil ? [] : .copy
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        controller.dropExited()
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        let items = draggedItems(sender)
+        guard controller.dropTarget != nil, !items.isEmpty else { return false }
+        let receivers = items.compactMap { $0 as? NSFilePromiseReceiver }
+        let loaded = controller.drop(files: items.compactMap { $0 as? URL }, loading: receivers.reduce(0) { $0 + $1.fileTypes.count })
+        guard !receivers.isEmpty else { return true }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Drops", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for receiver in receivers {
+            receiver.receivePromisedFiles(atDestination: folder, options: [:], operationQueue: Self.promiseQueue) { @Sendable url, error in
+                Task { @MainActor in loaded(error == nil ? url : nil, url.lastPathComponent, error) }
+            }
+        }
+        return true
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        controller.dropExited()
+    }
+}
+
+extension RemoteScreenNSView: NSDraggingSource, NSFilePromiseProviderDelegate {
+    private func dragOut(_ offer: RemoteDragOffer, event: NSEvent, at location: CGPoint) {
+        let scale = displayScale
+        let items = offer.items.enumerated().map { index, item in
+            // -[NSFilePromiseProvider initWithFileType:delegate:] throws for a type conforming to neither
+            // public.data nor public.directory.
+            let extensionType = UTType(filenameExtension: (item.path as NSString).pathExtension).flatMap { type in
+                type.isDeclared && (type.conforms(to: .data) || type.conforms(to: .directory)) ? type : nil
+            }
+            let type = item.isFolder ? .folder : extensionType ?? .data
+            let provider = NSFilePromiseProvider(fileType: type.identifier, delegate: self)
+            provider.userInfo = item.path
+            let draggingItem = NSDraggingItem(pasteboardWriter: provider)
+            if let image = offer.image {
+                let size = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+                draggingItem.setDraggingFrame(
+                    CGRect(origin: CGPoint(x: location.x - size.width / 2, y: location.y - size.height / 2), size: size),
+                    contents: index == 0 ? NSImage(cgImage: image, size: size) : nil)
+            } else {
+                let offset = CGFloat(index) * 4
+                draggingItem.setDraggingFrame(
+                    CGRect(x: location.x - 24 + offset, y: location.y - 24 + offset, width: 48, height: 48),
+                    contents: NSWorkspace.shared.icon(for: type))
+            }
+            return draggingItem
+        }
+        beginDraggingSession(with: items, event: event, source: self)
+    }
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .outsideApplication ? .copy : []
+    }
+
+    nonisolated func filePromiseProvider(_ provider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
+        ((provider.userInfo as? String ?? "") as NSString).lastPathComponent
+    }
+
+    func filePromiseProvider(
+        _ provider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping @Sendable ((any Error)?) -> Void
+    ) {
+        guard let path = provider.userInfo as? String else { return completionHandler(CocoaError(.fileNoSuchFile)) }
+        let folder: URL
+        do {
+            folder = try FileManager.default.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: url, create: true)
+        } catch {
+            return completionHandler(error)
+        }
+        let progress = Progress(totalUnitCount: 0)
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+        progress.fileURL = url
+        progress.publish()
+        controller.downloadFile(path, into: folder, progress: progress) { result in
+            var moveError: (any Error)?
+            do {
+                try FileManager.default.moveItem(at: result.get(), to: url)
+            } catch {
+                moveError = error
+            }
+            try? FileManager.default.removeItem(at: folder)
+            progress.unpublish()
+            completionHandler(moveError)
+        }
     }
 }
 

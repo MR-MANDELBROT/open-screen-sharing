@@ -148,6 +148,11 @@ nonisolated struct FileTransferError: Error, Equatable, Sendable {
     }
 }
 
+nonisolated struct RemoteDragItem: Sendable {
+    let path: String
+    let isFolder: Bool
+}
+
 nonisolated struct PointerButtons: OptionSet, Hashable, Sendable {
     let rawValue: UInt8
 
@@ -212,6 +217,8 @@ nonisolated struct SessionCapabilities: OptionSet, Hashable, Sendable {
     static let showDesktop = SessionCapabilities(rawValue: 1 << 12)
     static let launchpad = SessionCapabilities(rawValue: 1 << 13)
     static let keyCodes = SessionCapabilities(rawValue: 1 << 14)
+    static let dragToRemote = SessionCapabilities(rawValue: 1 << 15)
+    static let dragFromRemote = SessionCapabilities(rawValue: 1 << 16)
 }
 
 nonisolated enum GesturePhase: Sendable {

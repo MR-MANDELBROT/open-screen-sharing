@@ -61,6 +61,8 @@ type Handler interface {
 	KeyboardSourceChanged(source KeyboardSource)
 	StatusReceived(status Status)
 	DeviceInfoReceived(info DeviceInfo)
+	RemoteDragChanged(drag *RemoteDrag)
+	DropDestinationReceived(id uint32, path string)
 	SystemCommandsChanged(commands []SystemCommand)
 	ChooseSession(request SessionRequest) (SessionChoice, error)
 }
@@ -618,8 +620,12 @@ func (c *Client) receiveMessage() error {
 		return c.receiveStatus()
 	case 0x15:
 		return c.receiveAccessibility()
+	case 0x1e:
+		return c.receiveDropDestination()
 	case 0x1f:
 		return c.receivePasteboard()
+	case 0x20:
+		return c.receiveDrag()
 	default:
 		c.access.Lock()
 		handler := c.messageHandlers[messageType]

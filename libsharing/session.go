@@ -46,6 +46,9 @@ type SessionHandler interface {
 
 	OnFileTransferFinished(transferID int64, name string, errorCode int32, message string)
 
+	OnDropDestination(dragID int64, path string)
+	OnRemoteDrag(drag *RemoteDrag)
+
 	OnDeviceInfo(model string, deviceColor string, enclosureColor string)
 }
 
@@ -636,6 +639,18 @@ func (e *sessionEvents) StatusReceived(status rfb.Status) {
 
 func (e *sessionEvents) DeviceInfoReceived(info rfb.DeviceInfo) {
 	e.session.handler.OnDeviceInfo(info.Model, info.DeviceColor, info.EnclosureColor)
+}
+
+func (e *sessionEvents) RemoteDragChanged(drag *rfb.RemoteDrag) {
+	if drag == nil {
+		e.session.handler.OnRemoteDrag(nil)
+		return
+	}
+	e.session.handler.OnRemoteDrag(&RemoteDrag{Image: drag.Image, items: drag.Items})
+}
+
+func (e *sessionEvents) DropDestinationReceived(id uint32, path string) {
+	e.session.handler.OnDropDestination(int64(id), path)
 }
 
 func (e *sessionEvents) ChooseSession(request rfb.SessionRequest) (rfb.SessionChoice, error) {

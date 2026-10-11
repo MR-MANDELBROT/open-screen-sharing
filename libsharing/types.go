@@ -181,6 +181,9 @@ type ServerInfo struct {
 
 	SupportsFileTransfer bool
 
+	SupportsDragToRemote   bool
+	SupportsDragFromRemote bool
+
 	SupportsCurtain        bool
 	MaximumVirtualDisplays int32
 
@@ -214,6 +217,8 @@ func newServerInfo(info rfb.ServerInfo) *ServerInfo {
 		SupportsKeyCodes:              info.Accepts(0x10),
 		SupportsScrollWheel:           info.Accepts(0x17),
 		SupportsFileTransfer:          info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
+		SupportsDragToRemote:          info.Accepts(0x20) && info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
+		SupportsDragFromRemote:        info.Accepts(0x0e) && info.Accepts(0x20) && info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
 		SupportsCurtain:               info.Accepts(0x0c),
 		MaximumVirtualDisplays:        int32(info.MaximumVirtualDisplays()),
 		SupportsGestures:              info.Accepts(0x17),

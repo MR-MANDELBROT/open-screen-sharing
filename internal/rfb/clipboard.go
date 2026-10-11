@@ -157,11 +157,7 @@ func inflatePasteboard(compressed []byte, size uint32) ([]byte, error) {
 	return archive, err
 }
 
-func pasteboardMessage(clipboard *Clipboard, echo uint32) ([]byte, error) {
-	archive := buildPasteboardArchive(clipboard)
-	if len(archive) > maximumPasteboard {
-		return nil, fmt.Errorf("pasteboard of %d bytes is over the 100 MiB limit", len(archive))
-	}
+func compressPasteboard(archive []byte) ([]byte, error) {
 	var compressed bytes.Buffer
 	writer, err := zlib.NewWriterLevel(&compressed, zlib.BestCompression)
 	if err != nil {
@@ -172,14 +168,26 @@ func pasteboardMessage(clipboard *Clipboard, echo uint32) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if compressed.Len() > maximumPasteboard {
-		return nil, fmt.Errorf("pasteboard of %d compressed bytes is over the 100 MiB limit", compressed.Len())
+	return compressed.Bytes(), nil
+}
+
+func pasteboardMessage(clipboard *Clipboard, echo uint32) ([]byte, error) {
+	archive := buildPasteboardArchive(clipboard)
+	if len(archive) > maximumPasteboard {
+		return nil, fmt.Errorf("pasteboard of %d bytes is over the 100 MiB limit", len(archive))
+	}
+	compressed, err := compressPasteboard(archive)
+	if err != nil {
+		return nil, err
+	}
+	if len(compressed) > maximumPasteboard {
+		return nil, fmt.Errorf("pasteboard of %d compressed bytes is over the 100 MiB limit", len(compressed))
 	}
 	message := []byte{0x1f, 0, boolByte(clipboard.Promise), 0}
 	message = binary.BigEndian.AppendUint32(message, echo)
 	message = binary.BigEndian.AppendUint32(message, uint32(len(archive)))
-	message = binary.BigEndian.AppendUint32(message, uint32(compressed.Len()))
-	return append(message, compressed.Bytes()...), nil
+	message = binary.BigEndian.AppendUint32(message, uint32(len(compressed)))
+	return append(message, compressed...), nil
 }
 
 func (c *Client) receivePasteboard() error {

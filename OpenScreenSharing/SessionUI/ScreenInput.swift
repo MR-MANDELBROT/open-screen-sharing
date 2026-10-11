@@ -19,6 +19,8 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private unowned let controller: SessionController
 
     private var pointerInteraction: UIPointerInteraction!
+    private var drag: ScreenDrag!
+    private var drop: ScreenDrop!
     private var secondaryTapGesture: UITapGestureRecognizer!
     private var twoFingerPanGesture: UIPanGestureRecognizer!
     private var pinchGesture: UIPinchGestureRecognizer!
@@ -71,6 +73,8 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         self.controller = controller
         super.init()
         installGestures()
+        drag = ScreenDrag(view: view, controller: controller, input: self)
+        drop = ScreenDrop(view: view, controller: controller, drag: drag)
         pointerInteraction = UIPointerInteraction(delegate: self)
         view.addInteraction(pointerInteraction)
         PointerLock.addReceiver(self)
@@ -129,7 +133,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        if isToolbarShown, !(gestureRecognizer is UIHoverGestureRecognizer) {
+        if isToolbarShown || drag.isDragging, !(gestureRecognizer is UIHoverGestureRecognizer) {
             return false
         }
         if controller.isZoomModeOn, gestureRecognizer.numberOfTouches > 0 || gestureRecognizer === rotationGesture {
@@ -158,6 +162,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
 
 
     func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard !drag.isDragging else { return }
         controller.stopScrollMomentum()
         view.takeKeyFocus()
         for touch in touches {
@@ -222,6 +227,16 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
             if toolbarTouches.remove(touch) != nil { continue }
+            if touch === drag.takenTouch {
+                fingers.remove(touch)
+                pointerTouches.remove(touch)
+                if touch === touchFinger {
+                    touchFinger = nil
+                    touchPressed = false
+                }
+                if touch === finger?.touch { finger = nil }
+                continue
+            }
             if zoomTouches[touch] != nil {
                 zoomTouchEnded(touch, cancelled: true)
                 continue
@@ -384,6 +399,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         }
         let velocity = finger.velocity(at: touch.timestamp)
         movePointer(by: delta, speed: hypot(velocity.x, velocity.y))
+        if finger.phase == .dragging { drag.begin(with: touch, relative: true) }
     }
 
     private func fingerEnded(_ touch: UITouch, cancelled: Bool) {
@@ -443,7 +459,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         }
     }
 
-    private func movePointer(by delta: CGPoint, speed: CGFloat) {
+    func movePointer(by delta: CGPoint, speed: CGFloat) {
         let gain = 1.2 + min(speed / 1200, 1.8)
         let scale = view.displayScale
         guard scale > 0 else { return }
@@ -469,6 +485,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private func touchMoved(_ touch: UITouch) {
         guard touch === touchFinger else { return }
         controller.moveTouch(to: view.imagePoint(for: touch.location(in: view)))
+        drag.begin(with: touch, relative: false)
     }
 
     private func touchEnded(_ touch: UITouch, cancelled: Bool) {
@@ -713,6 +730,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         if buttons != controller.pointerButtons {
             controller.setPressedButtons(buttons)
         }
+        drag.begin(with: touch, relative: false)
     }
 
     private func pointerEnded(_ touch: UITouch) {

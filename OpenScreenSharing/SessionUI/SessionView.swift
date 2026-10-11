@@ -1,12 +1,10 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct SessionView: View {
     @StateObject private var controller: SessionController
     @ObservedObject private var settings = AppSettings.shared
     private let hasOwnWindow: Bool
     private let onClose: () -> Void
-    @State private var isDropTargeted = false
     #if os(iOS)
     @ObservedObject private var macToolbar = ToolbarLayout.mac
     @ObservedObject private var touchScreenToolbar = ToolbarLayout.touchScreen
@@ -238,8 +236,7 @@ struct SessionView: View {
     private var screen: some View {
         ZStack {
             RemoteScreenView(controller: controller)
-                .onDrop(of: [.item], delegate: FileDropDelegate(canAccept: controller.canTransferFiles, isTargeted: $isDropTargeted, perform: drop))
-            if isDropTargeted && controller.canTransferFiles {
+            if controller.dropTarget == .desktop {
                 RoundedRectangle(cornerRadius: 24)
                     .strokeBorder(Color.accentColor, lineWidth: 4)
                     .overlay {
@@ -256,60 +253,8 @@ struct SessionView: View {
         }
     }
 
-    private func drop(_ providers: [NSItemProvider]) -> Bool {
-        guard controller.canTransferFiles else { return false }
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Drops", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for provider in providers {
-            let type = provider.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: .item) == true } ?? UTType.item.identifier
-            let suggestedName = provider.suggestedName
-            _ = provider.loadFileRepresentation(forTypeIdentifier: type) { url, error in
-                guard let url else {
-                    Task { @MainActor in controller.reportSendFailure(suggestedName ?? String(localized: "Item"), error: error) }
-                    return
-                }
-                let destination = folder.appendingPathComponent(
-                    suggestedName.map { name in
-                        url.pathExtension.isEmpty || name.hasSuffix(url.pathExtension) ? name : "\(name).\(url.pathExtension)"
-                    } ?? url.lastPathComponent)
-                do {
-                    try FileManager.default.copyItem(at: url, to: destination)
-                } catch {
-                    Task { @MainActor in controller.reportSendFailure(destination.lastPathComponent, error: error) }
-                    return
-                }
-                Task { @MainActor in
-                    controller.uploadFiles([destination], to: "~/Desktop", temporary: true)
-                }
-            }
-        }
-        return true
-    }
-
     private func close() {
         controller.close()
-    }
-}
-
-private struct FileDropDelegate: DropDelegate {
-    let canAccept: Bool
-    @Binding var isTargeted: Bool
-    let perform: ([NSItemProvider]) -> Bool
-
-    func validateDrop(info: DropInfo) -> Bool { canAccept }
-
-    func dropEntered(info: DropInfo) { isTargeted = true }
-
-    func dropExited(info: DropInfo) { isTargeted = false }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: canAccept ? .copy : .forbidden)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        isTargeted = false
-        return perform(info.itemProviders(for: [.item]))
     }
 }
 

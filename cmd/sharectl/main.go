@@ -21,7 +21,7 @@ Actions run in order once the session is up:
   wait:DURATION            keep receiving, e.g. wait:2s
   png:FILE                 save the framebuffer as PNG
   cursor:FILE              save the last cursor image as PNG
-  move:X,Y                 move the pointer (framebuffer pixels)
+  move:X,Y[,BUTTONS]       move the pointer (framebuffer pixels) with BUTTONS held
   click:X,Y[,BUTTONS]      press and release buttons (1 left, 2 middle, 4 right)
   scroll:X,Y,DY[,DX]       scroll by points, positive DY up
   key:KEYSYM               press and release a keysym (hex or decimal)
@@ -54,6 +54,10 @@ Actions run in order once the session is up:
   clipboard-save / clipboard-restore   fetch the pasteboard and put it back later
   stats                    print receive counters
   dblclick:X,Y / drag:X1,Y1,X2,Y2   double-click, or drag with the left button
+  drop-start:PATH,...      start dragging local files onto the Mac; move with button 1 held
+  drop-cancel / drop-finish:TIMEOUT  cancel it, or wait for the folder it landed on and send the files
+  drag-request / drag-cancel         ask for the Mac's own drag, or cancel it
+  drag-get:LOCAL-FOLDER    copy the files of the Mac's own drag
   pinch:X,Y,STEPS,AMOUNT   magnify gesture: STEPS events of AMOUNT each (0.1 zooms in)
   rotate:X,Y,STEPS,DEGREES rotate gesture, counterclockwise positive
   smart-magnify:X,Y / lookup:X,Y      two-finger double tap / look up
