@@ -16,7 +16,7 @@ final class ScreenshotTests: XCTestCase {
         for locale in locales {
             let app = launch(in: locale)
             XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Mac mini")).firstMatch.waitForExistence(timeout: 10))
-            attachScreenshot(named: "01-Connections", in: locale)
+            attachScreenshot(of: app, named: "01-Connections", in: locale)
         }
     }
 
@@ -33,8 +33,12 @@ final class ScreenshotTests: XCTestCase {
     }
 
     @MainActor
-    private func attachScreenshot(named name: String, in locale: String) {
-        let image = XCUIScreen.main.screenshot().image
+    private func attachScreenshot(of app: XCUIApplication, named name: String, in locale: String) {
+        let window = app.windows.firstMatch.frame.size
+        // XCUIScreen.main stays the outer display of an unfolded iPhone Duo.
+        let image = XCUIScreen.screens.lazy.map { $0.screenshot().image }.first {
+            abs($0.size.width - window.width) < 1 && abs($0.size.height - window.height) < 1
+        } ?? XCUIScreen.main.screenshot().image
         let width = Int(image.size.width * image.scale)
         let height = Int(image.size.height * image.scale)
         let context = CGContext(

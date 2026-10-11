@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"image"
+	"image/draw"
+	"image/png"
 	"log"
 	"os"
 	"os/exec"
@@ -46,7 +50,9 @@ type preference struct {
 type device struct {
 	name        string
 	platform    string
+	simulator   string
 	deviceType  string
+	pose        string
 	sizes       []size
 	preferences []preference
 }
@@ -55,12 +61,30 @@ var devices = []device{
 	{
 		name:       "iphone",
 		platform:   "iOS Simulator",
+		simulator:  "iphone",
 		deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
 		sizes:      []size{{1206, 2622}, {1179, 2556}},
 	},
 	{
+		name:       "duo-outer",
+		platform:   "iOS Simulator",
+		simulator:  "duo",
+		deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo",
+		pose:       "Closed",
+		sizes:      []size{{1398, 2034}},
+	},
+	{
+		name:       "duo-inner",
+		platform:   "iOS Simulator",
+		simulator:  "duo",
+		deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo",
+		pose:       "Open",
+		sizes:      []size{{2007, 2853}},
+	},
+	{
 		name:       "ipad",
 		platform:   "iOS Simulator",
+		simulator:  "ipad",
 		deviceType: "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB",
 		sizes:      []size{{2064, 2752}, {2048, 2732}},
 		// Full Screen Apps in Settings › Multitasking & Gestures; windowed apps get a resize grabber and the app name in the status bar.
@@ -85,7 +109,7 @@ type variant struct {
 var variants = []variant{
 	{
 		name:    "app-store",
-		devices: []string{"iphone", "ipad", "mac"},
+		devices: []string{"iphone", "duo-outer", "duo-inner", "ipad", "mac"},
 		settings: []string{
 			"SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEMO",
 			"EXCLUDED_SOURCE_FILE_NAMES=$(SRCROOT)/OpenScreenSharing/Server/*",
@@ -116,7 +140,7 @@ var screenshotName = regexp.MustCompile(`^([A-Za-z-]+)_(\d\d-[A-Za-z]+)_`)
 
 func main() {
 	languages := flag.String("languages", "en", "the languages to take the screenshots in")
-	deviceNames := flag.String("devices", "iphone,ipad,mac", "the devices to take the screenshots on")
+	deviceNames := flag.String("devices", "iphone,duo-outer,duo-inner,ipad,mac", "the devices to take the screenshots on")
 	variantNames := flag.String("variants", "app-store,sideload", "the builds to take the screenshots of")
 	appearance := flag.String("appearance", "light", "light or dark")
 	skipBuild := flag.Bool("skip-build", false, "use the apps and tests as last built")
@@ -170,9 +194,6 @@ func main() {
 			}
 		}
 	}
-	runtime := latestRuntime()
-	log.Print("on ", runtime)
-
 	for _, device := range chosenDevices {
 		deviceVariants := common.Filter(chosenVariants, func(variant variant) bool { return slices.Contains(variant.devices, device.name) })
 		if len(deviceVariants) == 0 {
@@ -184,6 +205,8 @@ func main() {
 			}
 			continue
 		}
+		runtime := latestRuntime(device.deviceType)
+		log.Print(device.name, " on ", runtime)
 		simulator := startSimulator(device, runtime, *appearance)
 		for _, variant := range deviceVariants {
 			takeScreenshots(device, simulator, variant, chosenLanguages)
@@ -215,20 +238,26 @@ func latestTestRun(variant variant) string {
 	return latest
 }
 
-func latestRuntime() string {
+func latestRuntime(deviceType string) string {
+	type supportedDeviceType struct {
+		Identifier string `json:"identifier"`
+	}
 	var list struct {
 		Runtimes []struct {
-			Identifier  string `json:"identifier"`
-			Platform    string `json:"platform"`
-			Version     string `json:"version"`
-			IsAvailable bool   `json:"isAvailable"`
+			Identifier           string                `json:"identifier"`
+			Platform             string                `json:"platform"`
+			Version              string                `json:"version"`
+			IsAvailable          bool                  `json:"isAvailable"`
+			SupportedDeviceTypes []supportedDeviceType `json:"supportedDeviceTypes"`
 		} `json:"runtimes"`
 	}
 	decode(output(exec.Command("xcrun", "simctl", "list", "runtimes", "--json")), &list)
 	var latest string
 	var latestVersion []int
 	for _, runtime := range list.Runtimes {
-		if runtime.Platform != "iOS" || !runtime.IsAvailable {
+		if runtime.Platform != "iOS" || !runtime.IsAvailable || !slices.ContainsFunc(runtime.SupportedDeviceTypes, func(supported supportedDeviceType) bool {
+			return supported.Identifier == deviceType
+		}) {
 			continue
 		}
 		version := parseVersion(runtime.Version)
@@ -238,7 +267,7 @@ func latestRuntime() string {
 		}
 	}
 	if latest == "" {
-		log.Fatal("no iOS simulator runtime")
+		log.Fatal("no iOS simulator runtime for ", deviceType)
 	}
 	return latest
 }
@@ -269,7 +298,7 @@ func findSimulator(device device, runtime string) (simulator, bool) {
 	}
 	decode(output(exec.Command("xcrun", "simctl", "list", "devices", "--json")), &list)
 	for _, existing := range list.Devices[runtime] {
-		if existing.Name == "Screenshots "+device.name && existing.DeviceTypeIdentifier == device.deviceType {
+		if existing.Name == "Screenshots "+device.simulator && existing.DeviceTypeIdentifier == device.deviceType {
 			return existing, true
 		}
 	}
@@ -279,12 +308,12 @@ func findSimulator(device device, runtime string) (simulator, bool) {
 func startSimulator(device device, runtime string, appearance string) string {
 	existing, found := findSimulator(device, runtime)
 	if !found {
-		output(exec.Command("xcrun", "simctl", "create", "Screenshots "+device.name, device.deviceType, runtime))
+		output(exec.Command("xcrun", "simctl", "create", "Screenshots "+device.simulator, device.deviceType, runtime))
 		existing, _ = findSimulator(device, runtime)
 	}
 	simulator := existing.UDID
 	if existing.State == "Shutdown" {
-		run(exec.Command("xcrun", "simctl", "boot", simulator))
+		boot(simulator)
 	}
 	output(exec.Command("xcrun", "simctl", "bootstatus", simulator, "-b"))
 	var changed bool
@@ -305,7 +334,7 @@ func startSimulator(device device, runtime string, appearance string) string {
 	}
 	if changed {
 		run(exec.Command("xcrun", "simctl", "shutdown", simulator))
-		run(exec.Command("xcrun", "simctl", "boot", simulator))
+		boot(simulator)
 		output(exec.Command("xcrun", "simctl", "bootstatus", simulator, "-b"))
 	}
 	run(exec.Command("xcrun", "simctl", "ui", simulator, "appearance", appearance))
@@ -321,7 +350,65 @@ func startSimulator(device device, runtime string, appearance string) string {
 	run(exec.Command("xcrun", "simctl", "status_bar", simulator, "override",
 		"--time", time.Date(2007, time.January, 9, 9, 41, 0, 0, time.Local).Format("2006-01-02T15:04:05.000Z07:00"),
 	))
+	if device.pose != "" {
+		setPose(existing, device.pose)
+	}
 	return simulator
+}
+
+// CoreSimulatorService can refuse to boot an installed runtime with "runtime path not found" until it restarts, and
+// restarting it shuts down every booted simulator.
+func boot(udid string) {
+	command := exec.Command("xcrun", "simctl", "boot", udid)
+	start := time.Now()
+	message, err := command.CombinedOutput()
+	if err == nil {
+		logTime(command, start)
+		return
+	}
+	var list struct {
+		Devices map[string][]simulator `json:"devices"`
+	}
+	decode(output(exec.Command("xcrun", "simctl", "list", "devices", "booted", "--json")), &list)
+	for _, booted := range list.Devices {
+		if len(booted) > 0 {
+			log.Fatal("[xcrun simctl boot ", udid, "]: ", err, "\n", string(message), "shut down ", booted[0].Name, " to let CoreSimulatorService restart")
+		}
+	}
+	log.Print(strings.TrimSpace(string(message)), "\nrestarting CoreSimulatorService")
+	_ = exec.Command("killall", "com.apple.CoreSimulator.CoreSimulatorService").Run()
+	run(exec.Command("xcrun", "simctl", "boot", udid))
+}
+
+const pressPose = `on run {deviceName, pose}
+	tell application "System Events"
+		repeat 100 times
+			try
+				tell (first process whose bundle identifier is "com.apple.dt.Devices")
+					click (first button of (first window whose name starts with deviceName) whose description is pose)
+				end tell
+				return
+			end try
+			delay 0.3
+		end repeat
+	end tell
+	error "Device Hub shows no " & pose & " button for " & deviceName & "; the terminal needs Accessibility access"
+end run`
+
+// Only Device Hub folds a simulated iPhone Duo, and it opens on the device it showed last.
+func setPose(booted simulator, pose string) {
+	if exec.Command("pgrep", "-x", "DeviceHub").Run() == nil {
+		run(exec.Command("osascript", "-e", `quit app id "com.apple.dt.Devices"`))
+		for start := time.Now(); exec.Command("pgrep", "-x", "DeviceHub").Run() == nil; time.Sleep(100 * time.Millisecond) {
+			if time.Since(start) > 10*time.Second {
+				log.Fatal("Device Hub didn't quit")
+			}
+		}
+	}
+	run(exec.Command("defaults", "write", "com.apple.dt.Devices", "lastSelectedDeviceIdentifier", "-data", hex.EncodeToString([]byte(strconv.Quote(booted.UDID)))))
+	developer := strings.TrimSpace(string(output(exec.Command("xcode-select", "-p"))))
+	run(exec.Command("open", "-g", "-a", filepath.Join(developer, "../Applications/DeviceHub.app")))
+	run(exec.Command("osascript", "-e", pressPose, booted.Name, pose))
 }
 
 func takeScreenshots(device device, simulator string, variant variant, languages []string) {
@@ -432,6 +519,7 @@ func takeMacScreenshots(device device, variant variant, languages []string, appe
 }
 
 func save(data []byte, device device, variant variant, language string, name string) {
+	data = padScreenshot(data, device.sizes)
 	err := checkScreenshot(data, device.sizes)
 	if err != nil {
 		log.Fatal(name, ": ", err)
@@ -447,6 +535,31 @@ func save(data []byte, device device, variant variant, language string, name str
 		log.Fatal(err)
 	}
 	log.Print(path)
+}
+
+// XCTest captures the inner display of an iPhone Duo without its leftmost column and bottom row.
+func padScreenshot(data []byte, sizes []size) []byte {
+	config, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil || !slices.ContainsFunc(sizes, func(accepted size) bool {
+		return config.Width+1 == accepted.width && config.Height+1 == accepted.height || config.Width+1 == accepted.height && config.Height+1 == accepted.width
+	}) {
+		return data
+	}
+	captured, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		log.Fatal(err)
+	}
+	bounds := captured.Bounds()
+	padded := image.NewRGBA(image.Rect(0, 0, bounds.Dx()+1, bounds.Dy()+1))
+	for _, offset := range []image.Point{{0, 1}, {1, 1}, {0, 0}, {1, 0}} {
+		draw.Draw(padded, bounds.Sub(bounds.Min).Add(offset), captured, bounds.Min, draw.Src)
+	}
+	var buffer bytes.Buffer
+	err = png.Encode(&buffer, padded)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return buffer.Bytes()
 }
 
 func checkScreenshot(data []byte, sizes []size) error {
