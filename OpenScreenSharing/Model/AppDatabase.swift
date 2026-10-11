@@ -58,7 +58,7 @@ enum AppDatabase {
     }
 
     private nonisolated static func schema(_ db: Database) throws -> [String] {
-        try String.fetchAll(db, sql: "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name")
+        try String.fetchAll(db, sql: "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name != 'grdb_migrations' ORDER BY name")
     }
 
     nonisolated static func createTables(_ db: Database) throws {

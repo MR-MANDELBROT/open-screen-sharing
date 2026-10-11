@@ -37,10 +37,13 @@
 		<string>_remotepairing-pairable-host._tcp</string>
 #endif
 	</array>
-#if DEBUG || SIDELOAD
+#if !MACOS
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).transfer.*</string>
+#if DEBUG || SIDELOAD
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).pairing.*</string>
+#endif
 	</array>
 #endif
 #if !MACOS

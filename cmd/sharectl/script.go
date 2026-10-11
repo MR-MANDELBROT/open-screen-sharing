@@ -420,7 +420,7 @@ func setVirtualDisplay(client *rfb.Client, argument string) error {
 			return err
 		}
 	}
-	return client.SetVirtualDisplay(width, height, density, 0, 0)
+	return client.SetVirtualDisplay(width, height, density, rfb.VirtualDisplayLargestSide, rfb.VirtualDisplayLargestSide)
 }
 
 func savePNG(client *rfb.Client, path string) error {

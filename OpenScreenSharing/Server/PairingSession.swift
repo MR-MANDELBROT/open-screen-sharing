@@ -5,6 +5,8 @@ import UIKit
 import dnssd
 
 final class PairingSession: ObservableObject {
+    private static let timeLimit = 300
+
     enum State: Equatable {
         case idle
         case waiting
@@ -25,7 +27,8 @@ final class PairingSession: ObservableObject {
 
     private var responder: LibsharingPairingResponder?
     private let advertiser = BonjourAdvertiser()
-    private var continuedTask: PairingBackgroundTask?
+    private var continuedTask: ContinuedTask?
+    private var ticker: Task<Void, Never>?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var observers: [NSObjectProtocol] = []
 
@@ -67,10 +70,20 @@ final class PairingSession: ObservableObject {
         }
         responder.start()
         state = .waiting
-        let continuedTask = PairingBackgroundTask()
+        let continuedTask = ContinuedTask(kind: "pairing")
         continuedTask.onExpire = { [weak self] in self?.backgroundTimeRanOut() }
         continuedTask.submit(title: String(localized: "Pair in Settings"), subtitle: settingsPath)
         self.continuedTask = continuedTask
+        ticker = Task { [weak self] in
+            for elapsed in 1...Self.timeLimit {
+                try? await Task.sleep(seconds: 1)
+                guard !Task.isCancelled else { return }
+                continuedTask.setProgress(completed: Int64(elapsed), total: Int64(Self.timeLimit))
+            }
+            guard continuedTask.isRunning else { return }
+            continuedTask.finish(success: false)
+            self?.backgroundTimeRanOut()
+        }
         watchAppState()
     }
 
@@ -124,6 +137,8 @@ final class PairingSession: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
         }
         observers.removeAll()
+        ticker?.cancel()
+        ticker = nil
         continuedTask?.finish(success: succeeded)
         continuedTask = nil
         endBackgroundTask()

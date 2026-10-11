@@ -1,10 +1,6 @@
 import Foundation
 import Libsharing
 
-nonisolated struct UncheckedSendable<Value>: @unchecked Sendable {
-    let value: Value
-}
-
 nonisolated struct DeviceServerStateChange: Sendable {
     var state: Int32
     var errorCode: Int32

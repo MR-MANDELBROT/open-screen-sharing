@@ -101,7 +101,7 @@ func setDisplayMessage(id uint32) []byte {
 
 // SkyLight 1.600.0 reports MaximumSizeInPixels 16384×16384 via
 // +[SLVirtualDisplay capabilities] on macOS 27.0.1 (26A434).
-const virtualDisplayLargestSide = 16384
+const VirtualDisplayLargestSide = 16384
 
 func CheckVirtualDisplay(width, height int, density float64) error {
 	if density != 1 && density != 2 {
@@ -132,8 +132,8 @@ func virtualDisplayMessage(width, height int, density float64, maximumWidth, max
 	}
 	pixelWidth := int(float64(width) * density)
 	pixelHeight := int(float64(height) * density)
-	maximumWidth = max(min(maximumWidth, virtualDisplayLargestSide), pixelWidth)
-	maximumHeight = max(min(maximumHeight, virtualDisplayLargestSide), pixelHeight)
+	maximumWidth = max(min(maximumWidth, VirtualDisplayLargestSide), pixelWidth)
+	maximumHeight = max(min(maximumHeight, VirtualDisplayLargestSide), pixelHeight)
 	const (
 		descriptorHead = 0x9c
 		modeSize       = 0x1c

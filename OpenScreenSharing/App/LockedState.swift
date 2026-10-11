@@ -15,6 +15,10 @@ nonisolated final class LockedState<State>: @unchecked Sendable {
     }
 }
 
+nonisolated struct UncheckedSendable<Value>: @unchecked Sendable {
+    let value: Value
+}
+
 extension Task where Success == Never, Failure == Never {
     nonisolated static func sleep(seconds: TimeInterval) async throws {
         try await sleep(nanoseconds: UInt64(seconds * 1_000_000_000))

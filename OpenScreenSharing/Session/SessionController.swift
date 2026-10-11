@@ -165,7 +165,9 @@ final class SessionController: ObservableObject {
     @Published private(set) var computerID: UUID?
     @Published var alert: AlertState?
     @Published private(set) var isClosing = false
-    @Published private(set) var transfers: [FileTransfer] = []
+    @Published private(set) var transfers: [FileTransfer] = [] {
+        didSet { updateTransferTask() }
+    }
     @Published private(set) var dropTarget: DropTarget?
     @Published var isShowingResolution = false
     @Published var isCustomizingToolbar = false
@@ -231,6 +233,8 @@ final class SessionController: ObservableObject {
     private var activeWhenBackgrounded = false
     #if os(iOS)
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+    private var transferTask: ContinuedTask?
+    private var transferTaskIDs: Set<Int64> = []
     #endif
     private var returnedFromBackground: TimeInterval?
     private var resumeCheck: Task<Void, Never>?
@@ -1277,6 +1281,38 @@ final class SessionController: ObservableObject {
         } else {
             showError(String(localized: "Couldn’t Finish Transferring Files"), error: MessageError(abandoned.map(\.name).joined(separator: "\n")))
         }
+    }
+
+    private func updateTransferTask() {
+        #if os(iOS)
+        let running = transfers.filter(\.isActive)
+        guard let current = running.first else {
+            guard let transferTask else { return }
+            transferTask.finish(success: transfers.allSatisfy { !transferTaskIDs.contains($0.id) || $0.state == .finished })
+            self.transferTask = nil
+            transferTaskIDs = []
+            return
+        }
+        let activity =
+            current.direction == .upload
+            ? String(localized: "Sending “\(current.name)”") : String(localized: "Receiving “\(current.name)”")
+        if let transferTask {
+            transferTask.update(title: activity, subtitle: title)
+        } else {
+            let task = ContinuedTask(kind: "transfer")
+            task.onExpire = { [weak self] in
+                guard let self else { return }
+                for transfer in self.transfers where transfer.isActive {
+                    self.cancelTransfer(transfer)
+                }
+            }
+            task.submit(title: activity, subtitle: title)
+            transferTask = task
+        }
+        transferTaskIDs.formUnion(running.map(\.id))
+        let batch = transfers.filter { transferTaskIDs.contains($0.id) }
+        transferTask?.setProgress(completed: batch.reduce(0) { $0 + $1.transferred }, total: batch.reduce(0) { $0 + $1.total })
+        #endif
     }
 
     private func update(_ id: Int64, _ body: (inout FileTransfer) -> Void) {
