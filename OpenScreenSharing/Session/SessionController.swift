@@ -270,6 +270,9 @@ final class SessionController: ObservableObject {
         didSet {
             isTouchScreen = deviceType?.isTouchScreen ?? false
             isPhone = deviceType == .iPhone
+            if isTouchScreen {
+                virtualDisplayRequests.stopWaiting()
+            }
         }
     }
     @Published private(set) var isTouchScreen = false
@@ -540,11 +543,11 @@ final class SessionController: ObservableObject {
         if hdrEnabled {
             session.setHDR(true)
         }
-        awaitsVirtualDisplay = usesDynamicResolution
+        awaitsVirtualDisplay = wantsVirtualDisplay
         virtualDisplayRequests.open()
         highPerformanceAwaitsDisplay = mayUseHighPerformance
         requestVirtualDisplay()
-        if !usesDynamicResolution {
+        if !wantsVirtualDisplay {
             startHighPerformanceWithConnection()
         }
     }
@@ -1566,8 +1569,12 @@ final class SessionController: ObservableObject {
         requestVirtualDisplay(holdingPicture: true)
     }
 
+    var wantsVirtualDisplay: Bool {
+        !isTouchScreen && usesDynamicResolution
+    }
+
     var pictureMatchesWindow: Bool {
-        !isTouchScreen && usesDynamicResolution && capabilities.contains(.virtualDisplay)
+        wantsVirtualDisplay && capabilities.contains(.virtualDisplay)
     }
 
     func displayAreaDidChange(_ area: CGSize, scale: CGFloat, screen: CGSize) {
@@ -1592,7 +1599,7 @@ final class SessionController: ObservableObject {
 
     private func requestVirtualDisplay(holdingPicture: Bool = false) {
         guard virtualDisplayRequests.isOpening || phase == .connected && capabilities.contains(.virtualDisplay),
-            usesDynamicResolution,
+            wantsVirtualDisplay,
             let mode = VirtualDisplayMode(matching: displayArea, screenScale: displayScale, resolutionScale: resolutionScale)
         else { return }
         virtualDisplayRequests.request(mode)

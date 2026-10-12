@@ -186,7 +186,8 @@ extension SessionController {
     }
 
     var offersResolution: Bool {
-        (usesHighPerformance || usesDynamicResolution) && (capabilities.isEmpty || capabilities.contains(.virtualDisplay))
+        !isTouchScreen && (usesHighPerformance || usesDynamicResolution)
+            && (capabilities.isEmpty || capabilities.contains(.virtualDisplay))
     }
 
     var audioOptions: [RemoteAudio] {

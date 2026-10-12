@@ -134,6 +134,14 @@ final class VirtualDisplayRequests {
         answered()
     }
 
+    func stopWaiting() {
+        guard let answerTask else { return }
+        answerTask.cancel()
+        self.answerTask = nil
+        waiting = nil
+        reportIdle()
+    }
+
     private func answered() {
         answerTask?.cancel()
         answerTask = nil
