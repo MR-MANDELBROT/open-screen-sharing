@@ -11,17 +11,21 @@ struct ComputersView: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var computerToDelete: Computer?
     @State private var alert: AlertState?
+    @State private var visibleSize: CGSize = .zero
+    @State private var cardLabelHeight: CGFloat = 0
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var margin: CGFloat = 16
+    private static let cardWidth: CGFloat = 340
     #else
     @State private var selection: Set<Computer.ID> = []
-    @State private var gridWidth: CGFloat = 0
     @FocusState private var focusedLayout: ComputerLayout?
     private let margin: CGFloat = 20
     private static let cardWidth: CGFloat = 220
-    private static let cardSpacing: CGFloat = 20
     #endif
+    private static let cardSpacing: CGFloat = 20
+    private static let rowSpacing: CGFloat = 24
+    private static let gridPadding: CGFloat = 12
 
     private var orderedComputers: [Computer] {
         let computers = store.computers
@@ -36,6 +40,7 @@ struct ComputersView: View {
             #if os(iOS)
             .background(NavigationBarMarginReader(margin: $margin))
             #endif
+            .onGeometryChangeCompat(for: CGSize.self, of: { $0.size }) { visibleSize = $0 }
             .navigationTitle("Connections")
             .primaryActionsCompat {
                 Button(action: newConnection) { Label("New Connection", systemImage: "plus") }
@@ -121,17 +126,17 @@ struct ComputersView: View {
     private func cardGrid(@ViewBuilder cards: () -> some View) -> some View {
         #if os(iOS)
         ScrollView {
-            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 24, content: cards)
+            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Self.rowSpacing, content: cards)
                 .padding(.horizontal, margin)
-                .padding(.vertical, 12)
+                .padding(.vertical, Self.gridPadding)
         }
         #else
         let cards = cards()
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 24) { cards }
+                LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Self.rowSpacing) { cards }
                     .padding(.horizontal, margin)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, Self.gridPadding)
             }
             .onChangeCompat(of: selection) { selection in
                 if let id = selection.first {
@@ -147,7 +152,6 @@ struct ComputersView: View {
                     focusedLayout = .grid
                 }
         }
-        .onGeometryChangeCompat(for: CGFloat.self, of: { $0.size.width }) { gridWidth = $0 }
         .focusable(interactions: .edit)
         .focused($focusedLayout, equals: .grid)
         .onAppear { focusedLayout = .grid }
@@ -186,10 +190,31 @@ struct ComputersView: View {
         if sizeClass == .compact {
             return [GridItem(.flexible(), alignment: .top)]
         }
-        return [GridItem(.adaptive(minimum: 340), spacing: 20, alignment: .top)]
-        #else
-        return [GridItem(.adaptive(minimum: Self.cardWidth), spacing: Self.cardSpacing, alignment: .top)]
         #endif
+        let layout = gridLayout
+        return Array(
+            repeating: GridItem(layout.cardWidth.map { .fixed($0) } ?? .flexible(), spacing: Self.cardSpacing, alignment: .top),
+            count: layout.columns)
+    }
+
+    private var gridLayout: (columns: Int, cardWidth: CGFloat?) {
+        let count = store.computers.count
+        let width = visibleSize.width - margin * 2
+        let height = visibleSize.height - Self.gridPadding * 2
+        let maxColumns = max(1, Int((width + Self.cardSpacing) / (Self.cardWidth + Self.cardSpacing)))
+        for columns in 1...max(1, min(count, maxColumns)) {
+            let rows = (count + columns - 1) / columns
+            let cardWidth = (width - Self.cardSpacing * CGFloat(columns - 1)) / CGFloat(columns)
+            let cardHeight = cardWidth / ComputerCard.aspectRatio + cardLabelHeight
+            if CGFloat(rows) * cardHeight + Self.rowSpacing * CGFloat(rows - 1) <= height {
+                return (columns, nil)
+            }
+        }
+        let cardWidth = ((height - cardLabelHeight) * ComputerCard.aspectRatio).rounded(.down)
+        if count <= maxColumns, cardWidth >= Self.cardWidth {
+            return (count, cardWidth)
+        }
+        return (maxColumns, nil)
     }
 
     #if os(iOS)
@@ -203,6 +228,7 @@ struct ComputersView: View {
         }
         .buttonStyle(.plain)
         .hoverEffectDisabledCompat()
+        .onGeometryChangeCompat(for: CGFloat.self, of: { $0.size.height - $0.size.width / ComputerCard.aspectRatio }) { cardLabelHeight = $0 }
         .contextMenu { menu(computer) }
     }
 
@@ -228,6 +254,7 @@ struct ComputersView: View {
             name: computer.displayName, detail: computer.detailText, device: computer.device,
             thumbnail: computer.thumbnail, availability: availabilityMonitor.availability(of: computer.address),
             isSelected: selection.contains(computer.id))
+        .onGeometryChangeCompat(for: CGFloat.self, of: { $0.size.height - $0.size.width / ComputerCard.aspectRatio }) { cardLabelHeight = $0 }
         .onTapGesture(count: 2) { connect(SessionRoute(computer: computer)) }
         .simultaneousGesture(
             TapGesture().onEnded {
@@ -260,7 +287,7 @@ struct ComputersView: View {
             selection = [first.id]
             return
         }
-        let columns = max(1, Int((gridWidth - margin * 2 + Self.cardSpacing) / (Self.cardWidth + Self.cardSpacing)))
+        let columns = gridLayout.columns
         let target: Int
         switch direction {
         case .left: target = current - 1

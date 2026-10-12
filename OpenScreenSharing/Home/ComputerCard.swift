@@ -9,6 +9,7 @@ struct ComputerCard: View {
     var availability: ComputerAvailability? = nil
     var isSelected = false
 
+    static let aspectRatio: CGFloat = 16 / 10
     private static let cornerRadius: CGFloat = 18
 
     @ScaledMetric(relativeTo: .headline) private var dotSize: CGFloat = 12
@@ -41,7 +42,7 @@ struct ComputerCard: View {
         VStack(alignment: .leading, spacing: 8) {
             RoundedRectangle(cornerRadius: Self.cornerRadius)
                 .fill(Self.fill)
-                .aspectRatio(16 / 10, contentMode: .fit)
+                .aspectRatio(Self.aspectRatio, contentMode: .fit)
                 .overlay(alignment: .top) {
                     if let thumbnail {
                         ComputerThumbnail(data: thumbnail, dimmed: availability == .unavailable)
