@@ -197,6 +197,7 @@ extension SessionController {
 
 enum SessionCommandStyle {
     case barItem
+    case windowToolbarItem
     case menuItem
 
     var isBar: Bool { self != .menuItem }
@@ -227,7 +228,7 @@ struct SessionCommandView: View {
             items { QualityPicker(controller: controller, inOwnMenu: style.isBar).pickerStyle(.inline) }
         case .resolution:
             switch style {
-            case .barItem:
+            case .barItem, .windowToolbarItem:
                 Button { controller.isShowingResolution = true } label: { label }
                     .resolutionPopover(controller: controller, isPresented: $controller.isShowingResolution)
             case .menuItem:
@@ -291,11 +292,8 @@ struct SessionCommandView: View {
     @ViewBuilder
     private func toggle(isOn: Binding<Bool>, subtitle: LocalizedStringKey? = nil) -> some View {
         switch style {
-        #if os(iOS)
         case .barItem: Toggle(isOn: isOn) { label }.toggleStyle(BarToggleStyle())
-        #else
-        case .barItem: Toggle(isOn: isOn) { label }.toggleStyle(.button)
-        #endif
+        case .windowToolbarItem: Toggle(isOn: isOn) { label }.toggleStyle(.button)
         case .menuItem:
             Toggle(isOn: isOn) {
                 label

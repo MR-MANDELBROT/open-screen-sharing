@@ -61,6 +61,7 @@ final class RemoteScreenNSView: NSView {
     private var releaseChordFlags: NSEvent.ModifierFlags = []
     private var releaseChordSpoiled = false
     private var shapedImageSize: CGSize?
+    private var windowToolbarHeight: CGFloat = 0
     private var hasSizedWindow = false
     private var keepsRememberedSize = false
 
@@ -286,7 +287,8 @@ final class RemoteScreenNSView: NSView {
     private func resizeWindow(toPicture size: CGSize, animate: Bool) {
         guard let window, let screen = window.screen, size.width > 0, size.height > 0 else { return }
         let content = window.contentLayoutRect.size
-        let chrome = CGSize(width: window.frame.width - content.width, height: window.frame.height - content.height)
+        let toolbar = window.toolbar == nil ? windowToolbarHeight : 0
+        let chrome = CGSize(width: window.frame.width - content.width, height: window.frame.height - content.height + toolbar)
         let available = CGSize(width: screen.visibleFrame.width - chrome.width, height: screen.visibleFrame.height - chrome.height)
         let fit = min(1, available.width / size.width, available.height / size.height)
         let target = CGSize(width: (size.width * fit).rounded(), height: (size.height * fit).rounded())
@@ -374,6 +376,7 @@ final class RemoteScreenNSView: NSView {
         if controller.isFullScreen != fullScreen {
             controller.isFullScreen = fullScreen
         }
+        updateLetterbox()
     }
 
 
@@ -436,8 +439,32 @@ final class RemoteScreenNSView: NSView {
     }
 
     private func setNeedsRender() {
+        updateLetterbox()
         needsRender = true
         wake()
+    }
+
+    private func updateLetterbox() {
+        let letterbox = measureLetterbox()
+        if controller.letterbox != letterbox {
+            controller.letterbox = letterbox
+        }
+    }
+
+    private func measureLetterbox() -> Letterbox? {
+        guard let window, controller.imageSize.width > 0, controller.imageSize.height > 0 else { return nil }
+        let fullScreen = window.styleMask.contains(.fullScreen)
+        let titlebar = fullScreen ? 0 : NSWindow.frameRect(forContentRect: .zero, styleMask: window.styleMask.subtracting(.fullSizeContentView)).height
+        let toolbar = max(0, window.frame.height - titlebar - bounds.height)
+        if toolbar > 0, !fullScreen {
+            windowToolbarHeight = toolbar
+        }
+        let area = CGRect(x: bounds.minX, y: bounds.minY - toolbar, width: bounds.width, height: bounds.height + toolbar)
+        let picture = imageRect(in: area)
+        return Letterbox(
+            left: CGRect(x: area.minX, y: area.minY, width: max(0, picture.minX - area.minX), height: area.height),
+            top: CGRect(x: area.minX, y: area.minY, width: area.width, height: max(0, picture.minY - area.minY))
+        )
     }
 
     private func render() -> Bool {
@@ -538,30 +565,34 @@ final class RemoteScreenNSView: NSView {
         return size.width > 0 && size.height > 0 ? size : CGSize(width: 16, height: 10)
     }
 
-    private var fitScale: CGFloat {
-        let scale = min(bounds.width / imageSize.width, bounds.height / imageSize.height)
+    private func fitScale(in size: CGSize) -> CGFloat {
+        let scale = min(size.width / imageSize.width, size.height / imageSize.height)
         let devicePixels = scale * backingScale
         return devicePixels >= 1 && devicePixels < 1.01 ? 1 / backingScale : scale
     }
 
     var displayScale: CGFloat {
-        fitScale * zoom
+        fitScale(in: bounds.size) * zoom
     }
 
     private var maximumZoom: CGFloat {
-        max(4, (8 / backingScale) / max(fitScale, 0.0001))
+        max(4, (8 / backingScale) / max(fitScale(in: bounds.size), 0.0001))
     }
 
     private var actualSizeZoom: CGFloat {
-        (1 / backingScale) / max(fitScale, 0.0001)
+        (1 / backingScale) / max(fitScale(in: bounds.size), 0.0001)
     }
 
     var imageRect: CGRect {
-        let scale = displayScale
+        imageRect(in: bounds)
+    }
+
+    private func imageRect(in area: CGRect) -> CGRect {
+        let scale = fitScale(in: area.size) * zoom
         let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-        var origin = CGPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2)
+        var origin = CGPoint(x: area.midX - size.width / 2, y: area.midY - size.height / 2)
         if let center = viewportCenter {
-            origin = CGPoint(x: bounds.midX - center.x * scale, y: bounds.midY - center.y * scale)
+            origin = CGPoint(x: area.midX - center.x * scale, y: area.midY - center.y * scale)
         }
         origin.x = (origin.x * backingScale).rounded() / backingScale
         origin.y = (origin.y * backingScale).rounded() / backingScale

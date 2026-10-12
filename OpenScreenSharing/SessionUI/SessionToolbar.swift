@@ -17,7 +17,6 @@ struct KeyboardButton: View {
     }
 }
 
-#if os(iOS)
 struct ToolbarDock: Equatable {
     enum Edge {
         case left
@@ -53,7 +52,7 @@ struct FloatingToolbar: View {
     let closes: Bool
     let onClose: () -> Void
 
-    @ScaledMetric(relativeTo: .body) private var itemSize: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var itemSize = ToolbarLayout.itemSize
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
 
@@ -62,11 +61,17 @@ struct FloatingToolbar: View {
     }
 
     var body: some View {
+        #if os(iOS)
         if let dock {
             docked(in: dock)
         } else {
             floating
         }
+        #else
+        if let dock {
+            docked(in: dock)
+        }
+        #endif
     }
 
     private func docked(in dock: ToolbarDock) -> some View {
@@ -74,13 +79,16 @@ struct FloatingToolbar: View {
         let margin = min(ToolbarLayout.dockMargin, ((left ? dock.area.width : dock.area.height) - itemSize) / 2)
         return bar(left ? .vertical : .horizontal)
             .environment(\.layoutDirection, layoutDirection)
-            .padding(left ? .leading : .top, margin)
-            .frame(width: dock.area.width, height: dock.area.height, alignment: left ? .leading : .top)
+            .padding(left ? .trailing : .bottom, margin)
+            .frame(width: dock.area.width, height: dock.area.height, alignment: left ? .trailing : .bottom)
             .position(x: dock.area.midX, y: dock.area.midY)
             .environment(\.layoutDirection, .leftToRight)
+            #if os(iOS)
             .ignoresSafeArea()
+            #endif
     }
 
+    #if os(iOS)
     private var floating: some View {
         VStack(spacing: 0) {
             Button {
@@ -111,6 +119,7 @@ struct FloatingToolbar: View {
         }
         .onDisappear { controller.toolbarHandleFrame = nil }
     }
+    #endif
 
     private func bar(_ axis: Axis) -> some View {
         GlassEffectContainerCompat(spacing: 0) {
@@ -120,18 +129,22 @@ struct FloatingToolbar: View {
                         Label("Disconnect", systemImage: "xmark")
                     }
                     .accessibilityShowsLargeContentViewer()
-                    .glassEffectCompat(tint: glassTint, in: Circle())
+                    .barBackground(tint: glassTint, in: Circle())
                 }
                 if !plan.inBar.isEmpty {
                     AxisStack(axis, spacing: 0) {
                         ForEach(plan.inBar) { command in
                             SessionCommandView(command: command, controller: controller, style: .barItem)
                                 .accessibilityShowsLargeContentViewer()
+                                #if os(macOS)
+                                .help(String(localized: command.title))
+                                #endif
                         }
                     }
                     .padding(axis == .vertical ? .vertical : .horizontal, ToolbarLayout.capsuleGroupPadding)
-                    .glassEffectCompat(tint: glassTint, in: Capsule())
+                    .barBackground(tint: glassTint, in: Capsule())
                 }
+                #if os(iOS)
                 Menu {
                     SessionMoreMenuContent(controller: controller)
                 } label: {
@@ -143,13 +156,27 @@ struct FloatingToolbar: View {
                         get: { controller.isShowingResolution && !plan.inBar.contains(.resolution) },
                         set: { controller.isShowingResolution = $0 }))
                 .accessibilityShowsLargeContentViewer()
-                .glassEffectCompat(tint: glassTint, in: Circle())
+                .barBackground(tint: glassTint, in: Circle())
+                #else
+                Button {
+                    controller.isCustomizingToolbar = true
+                } label: {
+                    Label("Customize Toolbar…", systemImage: "slider.horizontal.3")
+                }
+                .help("Customize Toolbar")
+                .barBackground(tint: glassTint, in: Circle())
+                #endif
             }
         }
         .menuOrderFixedCompat()
         .labelStyle(ItemLabelStyle(size: itemSize))
         .buttonStyle(.plain)
+        #if os(iOS)
         .font(.body.weight(.medium))
+        #else
+        .menuIndicator(.hidden)
+        .font(.title2.weight(.medium))
+        #endif
         .fixedSize()
     }
 
@@ -161,9 +188,21 @@ struct FloatingToolbar: View {
                 .labelStyle(.iconOnly)
                 .frame(width: size, height: size)
                 .contentShape(Rectangle())
+                #if os(iOS)
                 .contentShape(.hoverEffect, Circle())
                 .hoverEffect(.highlight)
+                #endif
         }
     }
 }
-#endif
+
+extension View {
+    @ViewBuilder
+    fileprivate func barBackground(tint: Color?, in shape: some Shape) -> some View {
+        #if os(iOS)
+        glassEffectCompat(tint: tint, in: shape)
+        #else
+        background(Color(nsColor: .underPageBackgroundColor), in: shape)
+        #endif
+    }
+}

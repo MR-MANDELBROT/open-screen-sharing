@@ -5,19 +5,18 @@ struct SessionView: View {
     @ObservedObject private var settings = AppSettings.shared
     private let hasOwnWindow: Bool
     private let onClose: () -> Void
-    #if os(iOS)
     @ObservedObject private var macToolbar = ToolbarLayout.mac
     @ObservedObject private var touchScreenToolbar = ToolbarLayout.touchScreen
-
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var toolbarWidth: CGFloat = 0
-    @ScaledMetric(relativeTo: .body) private var toolbarItemWidth: CGFloat = 44
-
-    private var isFullScreen: Bool { controller.isFullScreen }
+    @ScaledMetric(relativeTo: .body) private var toolbarItemWidth = ToolbarLayout.itemSize
 
     private var dock: ToolbarDock? {
         controller.pictureMatchesWindow ? nil : ToolbarDock(letterbox: controller.letterbox, itemWidth: toolbarItemWidth)
     }
+    #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var toolbarWidth: CGFloat = 0
+
+    private var isFullScreen: Bool { controller.isFullScreen }
 
     private var toolbarSlots: Int {
         ToolbarLayout.capsuleSlots(width: dock?.length ?? toolbarWidth, itemWidth: toolbarItemWidth)
@@ -29,6 +28,10 @@ struct SessionView: View {
     }
     #else
     @State private var showsPointerLockHint = false
+
+    private var toolbarSlots: Int? {
+        dock.map { ToolbarLayout.capsuleSlots(width: $0.length, itemWidth: toolbarItemWidth) }
+    }
 
     private var locksPointer: Bool {
         controller.isPointerLockOn && pointerLockAvailable && !pointerLockPaused
@@ -156,6 +159,8 @@ struct SessionView: View {
     }
     #else
     var body: some View {
+        let dock = dock
+        let plan = ToolbarLayout.layout(for: controller).plan(for: controller, slots: toolbarSlots)
         screen
             .background(Color.black)
             .overlay(alignment: .topTrailing) {
@@ -164,6 +169,9 @@ struct SessionView: View {
                         .padding(8)
                         .allowsHitTesting(false)
                 }
+            }
+            .overlay {
+                FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: false, onClose: close)
             }
             .overlay(alignment: .top) {
                 if showsPointerLockHint {
@@ -181,11 +189,13 @@ struct SessionView: View {
             .navigationTitle(controller.title)
             .navigationSubtitle(controller.mode == .observe ? String(localized: "Observing") : "")
             .toolbar {
-                SessionWindowToolbar(controller: controller, layout: .layout(for: controller))
+                if dock == nil {
+                    SessionWindowToolbar(controller: controller, layout: .layout(for: controller))
+                }
             }
             .windowToolbarFullScreenVisibilityCompat()
             .sheet(isPresented: $controller.isCustomizingToolbar) {
-                CustomizeToolbarView(controller: controller, slots: nil)
+                CustomizeToolbarView(controller: controller, slots: toolbarSlots)
             }
             .preferredColorScheme(colorScheme)
             .onChange(of: pointerLockAvailable) { _, available in
@@ -408,7 +418,7 @@ private struct SessionWindowToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ForEach(layout.plan(for: controller, slots: nil).inBar) { command in
             ToolbarItem {
-                SessionCommandView(command: command, controller: controller, style: .barItem)
+                SessionCommandView(command: command, controller: controller, style: .windowToolbarItem)
                     .help(String(localized: command.title))
             }
         }

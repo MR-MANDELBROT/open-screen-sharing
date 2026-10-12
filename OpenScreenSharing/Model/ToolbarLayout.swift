@@ -133,11 +133,12 @@ final class ToolbarLayout: ObservableObject {
         return min(maximumSlots, Int((width / itemWidth).rounded(.down)))
     }
 
+    static let itemSize: CGFloat = 44
     static let capsuleGroupSpacing: CGFloat = 8
     static let capsuleGroupPadding: CGFloat = 4
     static let capsuleMargin: CGFloat = 16
     static let dockClearance: CGFloat = 4
-    static let dockMargin: CGFloat = 8
+    static let dockMargin: CGFloat = 16
 }
 
 struct ToolbarPlan: Equatable {
