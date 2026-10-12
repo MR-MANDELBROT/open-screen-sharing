@@ -91,6 +91,10 @@ struct AppCommands: Commands {
         }
 
         #if os(macOS)
+        CommandGroup(after: .appInfo) {
+            CheckForUpdatesButton()
+        }
+
         CommandGroup(replacing: .appSettings) {
             Button("Settings…") { openHome(.settings) }
                 .keyboardShortcut(",")
@@ -266,6 +270,19 @@ struct AppCommands: Commands {
 }
 
 #if os(macOS)
+private struct CheckForUpdatesButton: View {
+    @ObservedObject private var updates = UpdateManager.shared
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Check for Updates…") {
+            openWindow(id: "home")
+            Task { await updates.check(manually: true) }
+        }
+        .disabled(updates.isChecking)
+    }
+}
+
 private struct ComputerLayoutToggles: View {
     @ObservedObject private var settings = AppSettings.shared
 
