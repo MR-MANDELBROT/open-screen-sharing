@@ -26,6 +26,9 @@ final class AppLaunch {
         _ = AppDatabase.shared
         nearby = Demo.current?.nearby ?? NearbyBrowser()
         availabilityMonitor = AvailabilityMonitor(nearby: nearby)
+        #if os(macOS)
+        UpdateManager.shared.checkOnLaunch()
+        #endif
         #if os(iOS) && (DEBUG || SIDELOAD)
         BadgeDots.install()
         if ServerFeature.isAvailable {

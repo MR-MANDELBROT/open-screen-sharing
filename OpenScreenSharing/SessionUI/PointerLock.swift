@@ -115,15 +115,7 @@ final class ConnectedMice: ObservableObject {
     @Published fileprivate(set) var isConnected = !GCMouse.mice().isEmpty
 }
 
-extension View {
-    func requestsPointerLock(_ locked: Bool) -> some View {
-        background {
-            PointerLockRequest(locked: locked)
-        }
-    }
-}
-
-private struct PointerLockRequest: UIViewRepresentable {
+struct PointerLockRequest: UIViewRepresentable {
     let locked: Bool
 
     func makeUIView(context: Context) -> RequestView {

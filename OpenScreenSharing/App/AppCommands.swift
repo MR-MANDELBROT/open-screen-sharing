@@ -58,7 +58,7 @@ struct AppCommands: Commands {
         Button(String(localized: command.title)) {
             if let session { action(session) }
         }
-        .keyboardShortcut(for: shortcut)
+        .modifier(ActionShortcut(action: shortcut))
         .disabled(session.map { !command.isOffered(by: $0) || !command.isEnabled(in: $0) } ?? true)
     }
 
@@ -82,11 +82,11 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .newItem) {
             #if os(iOS)
             Button("New Connection…") { home?.newConnection() }
-                .keyboardShortcut(for: .newConnection)
+                .modifier(ActionShortcut(action: .newConnection))
                 .disabled(!homeEnabled)
             #else
             Button("New Connection…") { openHome(.newConnection) }
-                .keyboardShortcut(for: .newConnection)
+                .modifier(ActionShortcut(action: .newConnection))
             #endif
         }
 
@@ -101,7 +101,7 @@ struct AppCommands: Commands {
             ObservingSession(session: session) {
                 Section {
                     Button("Disconnect") { session?.close() }
-                        .keyboardShortcut(for: .disconnect)
+                        .modifier(ActionShortcut(action: .disconnect))
                         .disabled(session == nil)
                 }
             }
@@ -111,13 +111,13 @@ struct AppCommands: Commands {
             ObservingSession(session: session) {
                 Section {
                     Toggle(isOn: Binding(get: { session?.clipboardSharing ?? false }, set: { session?.setClipboardSharing($0) })) { Label("Sync Clipboard", systemImage: "arrow.up.arrow.down") }
-                        .keyboardShortcut(for: .syncClipboard)
+                        .modifier(ActionShortcut(action: .syncClipboard))
                         .disabled(session == nil)
                     Button { session?.getClipboardFromMac() } label: { Label("Receive Clipboard", systemImage: "doc.on.clipboard") }
-                        .keyboardShortcut(for: .receiveClipboard)
+                        .modifier(ActionShortcut(action: .receiveClipboard))
                         .disabled(!connected || session?.clipboardSharing == true)
                     Button { session?.sendClipboardToMac() } label: { Label("Send Clipboard", systemImage: "arrow.up.doc.on.clipboard") }
-                        .keyboardShortcut(for: .sendClipboard)
+                        .modifier(ActionShortcut(action: .sendClipboard))
                         .disabled(!connected || session?.clipboardSharing == true)
                 }
             }
@@ -132,13 +132,13 @@ struct AppCommands: Commands {
             ObservingSession(session: session) {
                 Section {
                     Toggle("Zoom Mode", isOn: Binding(get: { session?.isZoomModeOn ?? false }, set: { session?.setZoomMode($0) }))
-                        .keyboardShortcut(for: .zoomMode)
+                        .modifier(ActionShortcut(action: .zoomMode))
                         .disabled(session == nil)
                     if session?.pictureMatchesWindow != true {
                         Button(session?.scaleMode == .fit ? "Zoom to Actual Size" : "Zoom to Fit") {
                             session?.setScale(session?.scaleMode == .fit ? .actualSize : .fit)
                         }
-                        .keyboardShortcut(for: .actualSize)
+                        .modifier(ActionShortcut(action: .actualSize))
                         .disabled(session == nil)
                     }
                 }
@@ -152,10 +152,10 @@ struct AppCommands: Commands {
                                     set: { _ in session.selectDisplay(.display(display.id)) }
                                 )
                             )
-                            .keyboardShortcut(for: ShortcutAction.display(at: index))
+                            .modifier(ActionShortcut(action: ShortcutAction.display(at: index)))
                         }
                         Toggle("All Displays", isOn: Binding(get: { session.displaySelection == .all }, set: { _ in session.selectDisplay(.all) }))
-                            .keyboardShortcut(for: .allDisplays)
+                            .modifier(ActionShortcut(action: .allDisplays))
                     }
                     .disabled(session.phase != .connected)
                 }
@@ -165,7 +165,7 @@ struct AppCommands: Commands {
                             Toggle(isOn: Binding(get: { session?.quality == quality }, set: { _ in session?.setQuality(quality) })) {
                                 Text(String(localized: quality.title))
                             }
-                            .keyboardShortcut(for: ShortcutAction.quality(quality))
+                            .modifier(ActionShortcut(action: ShortcutAction.quality(quality)))
                         }
                         .disabled(session == nil)
                     }
@@ -178,17 +178,17 @@ struct AppCommands: Commands {
                     }
                     .disabled(!(session?.offersResolution ?? false) || !controlling)
                     Toggle("High Dynamic Range", isOn: Binding(get: { session?.hdrEnabled ?? false }, set: { session?.setHDR($0) }))
-                        .keyboardShortcut(for: .hdr)
+                        .modifier(ActionShortcut(action: .hdr))
                         .disabled(!(session?.canUseHDR ?? false))
                 }
                 Section {
                     #if os(iOS)
                     Button(session?.isToolbarVisible == true ? "Hide Toolbar" : "Show Toolbar") { session?.toggleToolbar() }
-                        .keyboardShortcut(for: .toolbar)
+                        .modifier(ActionShortcut(action: .toolbar))
                         .disabled(session == nil || session?.isToolbarDocked == true)
                     #endif
                     Button("Customize Toolbar…") { session?.isCustomizingToolbar = true }
-                        .keyboardShortcut(for: .customizeToolbar)
+                        .modifier(ActionShortcut(action: .customizeToolbar))
                         .disabled(session == nil)
                 }
             }
@@ -200,7 +200,7 @@ struct AppCommands: Commands {
                     Toggle(isOn: Binding(get: { session?.remoteAudio == audio }, set: { _ in session?.setRemoteAudio(audio) })) {
                         Text(String(localized: audio.title))
                     }
-                    .keyboardShortcut(for: ShortcutAction.audio(audio))
+                    .modifier(ActionShortcut(action: ShortcutAction.audio(audio)))
                 }
                 .disabled(!(session?.usesHighPerformance ?? false))
             }
@@ -210,14 +210,14 @@ struct AppCommands: Commands {
             ObservingSession(session: session) {
                 Section {
                     Toggle("Observe Mode", isOn: Binding(get: { session?.mode == .observe }, set: { session?.setMode($0 ? .observe : .control) }))
-                        .keyboardShortcut(for: .observe)
+                        .modifier(ActionShortcut(action: .observe))
                         .disabled(!(session?.capabilities.contains(.control) ?? false))
                     Toggle("Pointer Lock", isOn: Binding(get: { session?.isPointerLockOn ?? false }, set: { session?.setPointerLock($0) }))
-                        .keyboardShortcut(for: .pointerLock)
+                        .modifier(ActionShortcut(action: .pointerLock))
                         .disabled(session.map { !SessionCommand.pointerLock.isOffered(by: $0) || !$0.canLockPointer } ?? true)
                     #if os(iOS)
                     Button(session?.isKeyboardVisible == true ? "Hide Keyboard" : "Show Keyboard") { session?.toggleKeyboard() }
-                        .keyboardShortcut(for: .keyboard)
+                        .modifier(ActionShortcut(action: .keyboard))
                         .disabled(!controlling)
                     #endif
                 }
@@ -235,14 +235,14 @@ struct AppCommands: Commands {
                     Section {
                         ForEach(SystemCommand.allCases) { command in
                             Button(String(localized: command.title)) { session?.perform(command) }
-                                .keyboardShortcut(for: ShortcutAction.system(command))
+                                .modifier(ActionShortcut(action: ShortcutAction.system(command)))
                                 .disabled(!controlling || !(session?.canPerform(command) ?? false))
                         }
                         Button("Spotlight") { session?.sendChord(.spotlight) }
-                            .keyboardShortcut(for: .spotlight)
+                            .modifier(ActionShortcut(action: .spotlight))
                             .disabled(!controlling)
                         Button("Command-Tab") { session?.sendChord(.commandTab) }
-                            .keyboardShortcut(for: .commandTab)
+                            .modifier(ActionShortcut(action: .commandTab))
                             .disabled(!controlling)
                     }
                     #if os(macOS)
@@ -272,9 +272,9 @@ private struct ComputerLayoutToggles: View {
     var body: some View {
         Section {
             Toggle("as Icons", isOn: Binding(get: { settings.computerLayout == .grid }, set: { _ in settings.computerLayout = .grid }))
-                .keyboardShortcut(for: .viewAsIcons)
+                .modifier(ActionShortcut(action: .viewAsIcons))
             Toggle("as List", isOn: Binding(get: { settings.computerLayout == .list }, set: { _ in settings.computerLayout = .list }))
-                .keyboardShortcut(for: .viewAsList)
+                .modifier(ActionShortcut(action: .viewAsList))
         }
     }
 }
@@ -285,6 +285,6 @@ private struct DebugInfoToggle: View {
 
     var body: some View {
         Toggle("Debug Panel", isOn: $settings.showsDebugInfo)
-            .keyboardShortcut(for: .debugPanel)
+            .modifier(ActionShortcut(action: .debugPanel))
     }
 }

@@ -31,16 +31,10 @@ final class StorageNotice: ObservableObject {
     }
 }
 
-private struct StorageNoticeAlert: ViewModifier {
+struct StorageNoticeAlert: ViewModifier {
     @ObservedObject private var notice = StorageNotice.shared
 
     func body(content: Content) -> some View {
         content.alert(Binding(get: { notice.alert }, set: { if $0 == nil { notice.dismiss() } }))
-    }
-}
-
-extension View {
-    func storageNoticeAlert() -> some View {
-        modifier(StorageNoticeAlert())
     }
 }

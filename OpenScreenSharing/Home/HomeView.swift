@@ -51,10 +51,10 @@ struct HomeView: View {
                 SessionView(route: route, hasOwnWindow: false) {
                     activeSession = nil
                 }
-                .storageNoticeAlert()
+                .modifier(StorageNoticeAlert())
             }
             #endif
-            .storageNoticeAlert()
+            .modifier(StorageNoticeAlert())
             .alert($alert)
             .sheet(item: $editing) { computer in
                 ComputerEditor(computer: computer)
@@ -72,6 +72,7 @@ struct HomeView: View {
             .onChangeCompat(of: selection) { watchConnections() }
             .focusedSceneValue(\.homeActions, actions)
             #if os(macOS)
+            .modifier(UpdatePresentation())
             .onChangeCompat(of: homeRequest.pending, initial: true) { pending in
                 guard let pending else { return }
                 homeRequest.pending = nil

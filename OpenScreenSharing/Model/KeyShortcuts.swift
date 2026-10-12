@@ -428,7 +428,7 @@ final class KeyShortcuts: ObservableObject {
     #endif
 }
 
-private struct ActionShortcut: ViewModifier {
+struct ActionShortcut: ViewModifier {
     @ObservedObject private var shortcuts = KeyShortcuts.shared
     let action: ShortcutAction?
 
@@ -438,11 +438,5 @@ private struct ActionShortcut: ViewModifier {
         } else {
             content
         }
-    }
-}
-
-extension View {
-    func keyboardShortcut(for action: ShortcutAction?) -> some View {
-        modifier(ActionShortcut(action: action))
     }
 }

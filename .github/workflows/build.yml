@@ -326,16 +326,17 @@ jobs:
           fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" tag -a -f nightly -m "$BUILD_NUMBER" "$GITHUB_SHA"
           git push -f origin refs/tags/nightly
-          if gh release view nightly > /dev/null 2>&1; then
-            gh release edit nightly --prerelease --title "Nightly build" --notes "$NOTES"
-          else
-            gh release create nightly --prerelease --title "Nightly build" --notes "$NOTES"
-          fi
           ASSETS=(dist/OpenScreenSharing.ipa dist/altstore/altstore.json dist/altstore/icon.png)
           if [ -f dist/OpenScreenSharing.pkg ]; then
-            ASSETS+=(dist/OpenScreenSharing.pkg)
+            jq -n --argjson build "$BUILD_NUMBER" '{build: $build}' > dist/metadata.json
+            ASSETS+=(dist/OpenScreenSharing.pkg dist/metadata.json)
           fi
-          gh release upload nightly "${ASSETS[@]}" --clobber
+          gh release create "nightly-$BUILD_NUMBER" --draft --prerelease --target "$GITHUB_SHA" --title "Nightly build" --notes "$NOTES" "${ASSETS[@]}"
+          DRAFT=$(gh release view "nightly-$BUILD_NUMBER" --json apiUrl --jq .apiUrl)
+          if PREVIOUS=$(gh release view nightly --json apiUrl --jq .apiUrl); then
+            gh api -X DELETE "$PREVIOUS"
+          fi
+          gh api -X PATCH "$DRAFT" -f tag_name=nightly -F draft=false > /dev/null
         env:
           BUILD_NUMBER: ${{ needs.calculate_version.outputs.build_number }}
           GH_TOKEN: ${{ github.token }}

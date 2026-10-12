@@ -42,6 +42,9 @@ struct SettingsView: View {
                     Label("Keyboard Shortcuts", systemImage: "keyboard")
                 }
             }
+            #if os(macOS)
+            UpdatesSection()
+            #endif
             Section("About") {
                 Link(destination: Self.sourceCode) {
                     Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
@@ -71,3 +74,115 @@ struct SettingsView: View {
     }
     #endif
 }
+
+#if os(macOS)
+private struct UpdatesSection: View {
+    @ObservedObject private var updates = UpdateManager.shared
+    @State private var isEditingToken = false
+
+    var body: some View {
+        Section("Updates") {
+            Toggle(isOn: $updates.checksAutomatically) {
+                Label("Check for Updates Automatically", systemImage: "clock.arrow.circlepath")
+            }
+            LabeledContentCompat {
+                Button("Set") { isEditingToken = true }
+                    .sheet(isPresented: $isEditingToken) {
+                        GitHubTokenSheet()
+                    }
+            } label: {
+                Label("GitHub Token", systemImage: "key")
+            }
+            Button {
+                Task { await updates.check(manually: true) }
+            } label: {
+                if updates.isChecking {
+                    Label {
+                        Text("Checking…")
+                    } icon: {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                } else {
+                    Label("Check for Updates…", systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
+            .formRowButtonStyleCompat()
+            .disabled(updates.isChecking)
+        }
+    }
+}
+
+private struct GitHubTokenSheet: View {
+    private static let newToken = URL(string: "https://github.com/settings/personal-access-tokens/new")!
+
+    @ObservedObject private var updates = UpdateManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var token = UpdateManager.shared.githubToken
+    @State private var isUsable = false
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContentCompat("GitHub Token") {
+                    TextField("GitHub Token", text: $token, prompt: Text("Optional"))
+                        .multilineTextAlignment(.trailing)
+                        .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity)
+                        .autocorrectionDisabled()
+                        .onSubmit(save)
+                        .onChangeCompat(of: token) { newValue in
+                            token = newValue.filter { !$0.isNewline }
+                        }
+                }
+            } footer: {
+                HStack {
+                    Link("Generate a Token", destination: Self.newToken)
+                    Spacer()
+                    if isUsable {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .frame(width: 420)
+        .fixedSize(horizontal: false, vertical: true)
+        .toolbar {
+            if !updates.githubToken.isEmpty {
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("Delete", role: .destructive) {
+                        updates.githubToken = ""
+                        dismiss()
+                    }
+                }
+            }
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel", role: .cancel) { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save", role: .confirmCompat, action: save)
+            }
+        }
+        .task(id: trimmedToken) {
+            isUsable = false
+            guard !trimmedToken.isEmpty else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+                _ = try await UpdateChecker.check(token: trimmedToken)
+                isUsable = true
+            } catch {}
+        }
+    }
+
+    private var trimmedToken: String {
+        token.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func save() {
+        updates.githubToken = trimmedToken
+        dismiss()
+    }
+}
+#endif

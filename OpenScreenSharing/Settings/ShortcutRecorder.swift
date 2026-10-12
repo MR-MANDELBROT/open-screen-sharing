@@ -14,17 +14,9 @@ enum ShortcutPress {
     #endif
 }
 
-extension View {
-    func recordsShortcuts<Target: Hashable>(
-        _ recording: Binding<Target?>, modifierChord: Target? = nil, onPress: @escaping (Target, ShortcutPress) -> Bool
-    ) -> some View {
-        modifier(ShortcutRecorder(recording: recording, modifierChord: modifierChord, onPress: onPress))
-    }
-}
-
-private struct ShortcutRecorder<Target: Hashable>: ViewModifier {
+struct ShortcutRecorder<Target: Hashable>: ViewModifier {
     @Binding var recording: Target?
-    let modifierChord: Target?
+    var modifierChord: Target? = nil
     let onPress: (Target, ShortcutPress) -> Bool
 
     @ObservedObject private var shortcuts = KeyShortcuts.shared

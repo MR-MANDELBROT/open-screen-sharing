@@ -102,7 +102,7 @@ struct SessionView: View {
             .statusBarHidden(isFullScreen)
             .persistentSystemOverlaysCompat(isFullScreen ? .hidden : .automatic)
             .defersSystemGesturesCompat(on: controller.isControlling ? .all : [])
-            .requestsPointerLock(locksPointer)
+            .background { PointerLockRequest(locked: locksPointer) }
             .onChangeCompat(of: pointerLockAvailable) { available in
                 if !available { controller.setPointerLock(false) }
             }

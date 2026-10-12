@@ -53,9 +53,9 @@ struct KeyboardShortcutsView: View {
             KeyMappingEditor(mapping: mapping, isNew: !shortcuts.mappings.contains { $0.id == mapping.id })
         }
         #if os(macOS)
-        .recordsShortcuts($recording, modifierChord: .pointerRelease, onPress: record)
+        .modifier(ShortcutRecorder(recording: $recording, modifierChord: .pointerRelease, onPress: record))
         #else
-        .recordsShortcuts($recording, onPress: record)
+        .modifier(ShortcutRecorder(recording: $recording, onPress: record))
         #endif
     }
 
@@ -427,7 +427,7 @@ private struct KeyMappingEditor: View {
             }
         }
         .alert($alert)
-        .recordsShortcuts($recording, onPress: record)
+        .modifier(ShortcutRecorder(recording: $recording, onPress: record))
         #if os(macOS)
         .frame(minWidth: 440, minHeight: 400)
         #endif
