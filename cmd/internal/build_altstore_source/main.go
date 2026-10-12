@@ -170,10 +170,19 @@ func renderIcon(path string) {
 		"--output-file", path,
 		"--platform", "iOS",
 		"--rendition", "Default",
-		"--width", "512",
-		"--height", "512",
+		"--width", "568",
+		"--height", "568",
 		"--scale", "1",
 	)
+	command.Stderr = os.Stderr
+	err = command.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// AltStore draws icons on a white background, clipped to a circle or a height/5 corner radius
+	// (AltStore fafd76e, AltStore/Components/AppIconImageView.swift:46-65), so the transparent
+	// corners and edge highlight of the exported squircle show up as a white border.
+	command = exec.Command("sips", "--cropToHeightWidth", "512", "512", path)
 	command.Stderr = os.Stderr
 	err = command.Run()
 	if err != nil {

@@ -6,9 +6,7 @@ Open Screen Sharing aims to develop superior servers and clients based on the pr
 
 ### iOS
 
-<a href='https://altstore.io/source/github.com/nekohasekai/open-screen-sharing/releases/download/nightly/altstore.json?app=io.nekohasekai.screensharing'><img src='https://2606795771-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FAfe8qEztjcTjsjjaMBY2%2Fuploads%2FUjblMQb1NnujZg8y2vxZ%2FDownloadBadge_dark.png?alt=media&token=25419460-9af3-4229-961a-936451128bf9' alt='Download on AltStore' height='40'></a>
-
-To add the source to SideStore (or AltStore) manually:
+Add the source to SideStore or AltStore:
 
 ```
 https://github.com/nekohasekai/open-screen-sharing/releases/download/nightly/altstore.json

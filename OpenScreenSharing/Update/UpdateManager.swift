@@ -110,6 +110,9 @@ final class UpdateManager: ObservableObject {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
         _ = try? await NSWorkspace.shared.openApplication(at: Self.installedApp, configuration: configuration)
+        for sheet in NSApp.windows.compactMap(\.attachedSheet) {
+            sheet.preventsApplicationTerminationWhenModal = false
+        }
         NSApp.terminate(nil)
     }
 }
