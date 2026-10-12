@@ -4,13 +4,16 @@ import SwiftUI
 
 final class ToolbarLayout: ObservableObject {
     #if os(iOS)
-    static let mac = ToolbarLayout(touchScreen: false, key: "SessionToolbar.v1", defaultBar: [.keyboard, .clipboard, .missionControl, .zoomMode, .scale, .displays])
+    static let mac = ToolbarLayout(
+        touchScreen: false, key: "SessionToolbar.v1",
+        defaultBar: [.keyboard, .displays, .resolution, .audio, .pointerLock, .clipboard, .missionControl, .spotlight])
     static let touchScreen = ToolbarLayout(
-        touchScreen: true, key: "SessionToolbar.TouchScreen.v1", defaultBar: [.home, .appSwitcher, .keyboard, .clipboard, .zoomMode, .scale])
+        touchScreen: true, key: "SessionToolbar.TouchScreen.v1", defaultBar: [.keyboard, .audio, .pointerLock, .clipboard, .home, .appSwitcher])
     #else
-    static let mac = ToolbarLayout(touchScreen: false, key: "SessionToolbar.v1", defaultBar: [.scale, .displays, .observe, .missionControl, .clipboard])
+    static let mac = ToolbarLayout(
+        touchScreen: false, key: "SessionToolbar.v1", defaultBar: [.displays, .resolution, .audio, .pointerLock, .clipboard, .missionControl, .spotlight])
     static let touchScreen = ToolbarLayout(
-        touchScreen: true, key: "SessionToolbar.TouchScreen.v1", defaultBar: [.scale, .observe, .home, .appSwitcher, .clipboard])
+        touchScreen: true, key: "SessionToolbar.TouchScreen.v1", defaultBar: [.audio, .pointerLock, .clipboard, .home, .appSwitcher])
     #endif
 
     static func layout(for controller: SessionController) -> ToolbarLayout {
