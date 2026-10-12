@@ -129,7 +129,7 @@ struct FloatingToolbar: View {
                         Label("Disconnect", systemImage: "xmark")
                     }
                     .accessibilityShowsLargeContentViewer()
-                    .barBackground(tint: glassTint, in: Circle())
+                    .glassEffectCompat(tint: glassTint, in: Circle())
                 }
                 if !plan.inBar.isEmpty {
                     AxisStack(axis, spacing: 0) {
@@ -142,7 +142,7 @@ struct FloatingToolbar: View {
                         }
                     }
                     .padding(axis == .vertical ? .vertical : .horizontal, ToolbarLayout.capsuleGroupPadding)
-                    .barBackground(tint: glassTint, in: Capsule())
+                    .glassEffectCompat(tint: glassTint, in: Capsule())
                 }
                 #if os(iOS)
                 Menu {
@@ -156,7 +156,7 @@ struct FloatingToolbar: View {
                         get: { controller.isShowingResolution && !plan.inBar.contains(.resolution) },
                         set: { controller.isShowingResolution = $0 }))
                 .accessibilityShowsLargeContentViewer()
-                .barBackground(tint: glassTint, in: Circle())
+                .glassEffectCompat(tint: glassTint, in: Circle())
                 #else
                 Button {
                     controller.isCustomizingToolbar = true
@@ -164,7 +164,7 @@ struct FloatingToolbar: View {
                     Label("Customize Toolbar…", systemImage: "slider.horizontal.3")
                 }
                 .help("Customize Toolbar")
-                .barBackground(tint: glassTint, in: Circle())
+                .glassEffectCompat(tint: glassTint, in: Circle())
                 #endif
             }
         }
@@ -193,16 +193,5 @@ struct FloatingToolbar: View {
                 .hoverEffect(.highlight)
                 #endif
         }
-    }
-}
-
-extension View {
-    @ViewBuilder
-    fileprivate func barBackground(tint: Color?, in shape: some Shape) -> some View {
-        #if os(iOS)
-        glassEffectCompat(tint: tint, in: shape)
-        #else
-        background(Color(nsColor: .underPageBackgroundColor), in: shape)
-        #endif
     }
 }

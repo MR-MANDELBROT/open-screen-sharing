@@ -96,7 +96,7 @@ final class ToolbarLayout: ObservableObject {
     }
 
     func plan(for controller: SessionController, slots: Int?) -> ToolbarPlan {
-        let offered = bar.filter { $0.isOffered(by: controller) }
+        let offered = bar.filter { $0.isOffered(by: controller) && $0.isEnabled(in: controller) }
         let count = min(max(slots ?? offered.count, 0), offered.count)
         return ToolbarPlan(inBar: Array(offered.prefix(count)), overflow: Array(offered.dropFirst(count)))
     }
