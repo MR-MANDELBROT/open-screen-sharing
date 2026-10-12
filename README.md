@@ -1,5 +1,7 @@
 # Open Screen Sharing
 
+![Open Screen Sharing on iPad connected to macOS and vphone-cli](assets/readme/hero.png)
+
 Open Screen Sharing aims to develop superior servers and clients based on the private protocol used by Apple VNC (macOS's Screen Sharing server and ScreenSharing.app).
 
 ## Installation
