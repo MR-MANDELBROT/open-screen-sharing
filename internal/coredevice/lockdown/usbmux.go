@@ -13,13 +13,16 @@ import (
 	"net"
 	"time"
 
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 	"howett.net/plist"
 )
 
 const (
 	usbmuxdSocket = "/var/run/usbmuxd"
 	// go-ios encodes the usbmuxd header as length, version 1, message type 8
-	// (plist), then tag, all little endian.
+	// (plist), then tag, all little endian (go-ios ca2c56d,
+	// ios/usbmuxconnection.go:100-105, 163-166).
 	usbmuxHeaderLength = 16
 	usbmuxVersion      = 1
 	usbmuxPlist        = 8
@@ -36,7 +39,7 @@ func dialUSBMux(ctx context.Context) (net.Conn, error) {
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "unix", usbmuxdSocket)
 	if err != nil {
-		return nil, fmt.Errorf("connect to usbmuxd: %w", err)
+		return nil, E.Cause(err, "connect to usbmuxd")
 	}
 	return conn, nil
 }
@@ -61,21 +64,21 @@ func usbmuxRequest(ctx context.Context, conn net.Conn, message map[string]any) (
 		_, err = io.ReadFull(conn, header)
 	}
 	if err != nil {
-		return nil, contextError(ctx, fmt.Errorf("usbmuxd: %w", err))
+		return nil, contextError(ctx, E.Cause(err, "request usbmuxd"))
 	}
 	length := binary.LittleEndian.Uint32(header)
 	if length < usbmuxHeaderLength || length > 16<<20 {
-		return nil, fmt.Errorf("usbmuxd: bad message length %d", length)
+		return nil, E.New("usbmuxd: bad message length ", length, ", expected ", usbmuxHeaderLength, " to ", 16<<20)
 	}
 	data = make([]byte, length-usbmuxHeaderLength)
 	_, err = io.ReadFull(conn, data)
 	if err != nil {
-		return nil, contextError(ctx, fmt.Errorf("usbmuxd: %w", err))
+		return nil, contextError(ctx, E.Cause(err, "read usbmuxd reply"))
 	}
 	var reply map[string]any
 	_, err = plist.Unmarshal(data, &reply)
 	if err != nil {
-		return nil, fmt.Errorf("usbmuxd: %w", err)
+		return nil, E.Cause(err, "parse usbmuxd reply")
 	}
 	return reply, nil
 }
@@ -91,16 +94,14 @@ func ListDevices(ctx context.Context) ([]Device, error) {
 		return nil, err
 	}
 	list, _ := reply["DeviceList"].([]any)
-	var devices []Device
-	for _, entry := range list {
-		entry, _ := entry.(map[string]any)
+	return common.Map(list, func(value any) Device {
+		entry, _ := value.(map[string]any)
 		properties, _ := entry["Properties"].(map[string]any)
 		id, _ := entry["DeviceID"].(uint64)
 		udid, _ := properties["SerialNumber"].(string)
 		connectionType, _ := properties["ConnectionType"].(string)
-		devices = append(devices, Device{DeviceID: int(id), UDID: udid, ConnectionType: connectionType})
-	}
-	return devices, nil
+		return Device{DeviceID: int(id), UDID: udid, ConnectionType: connectionType}
+	}), nil
 }
 
 func findDevice(ctx context.Context, udid string) (Device, error) {
@@ -118,7 +119,7 @@ func findDevice(ctx context.Context, udid string) (Device, error) {
 		}
 	}
 	if found == nil {
-		return Device{}, fmt.Errorf("device %s is not connected", udid)
+		return Device{}, E.New("usbmuxd: device ", udid, " is not connected")
 	}
 	return *found, nil
 }
@@ -139,7 +140,7 @@ func OpenUSBMux(ctx context.Context, udid string) (*PairRecord, Dialer, error) {
 	}
 	data, isData := reply["PairRecordData"].([]byte)
 	if !isData {
-		return nil, nil, fmt.Errorf("no pair record for %s (is the device trusted?): %v", udid, reply)
+		return nil, nil, E.New("usbmuxd: no pair record for ", udid, " (is the device trusted?): ", fmt.Sprint(reply))
 	}
 	record, err := ParsePairRecord(data)
 	if err != nil {
@@ -158,7 +159,8 @@ func connectPort(ctx context.Context, device Device, port uint16) (net.Conn, err
 	reply, err := usbmuxRequest(ctx, conn, map[string]any{
 		"MessageType": "Connect",
 		"DeviceID":    device.DeviceID,
-		// go-ios byte-swaps the port before encoding the usbmuxd Connect plist.
+		// go-ios byte-swaps the port before encoding the usbmuxd Connect plist
+		// (go-ios ca2c56d, ios/connect.go:45; ios/utils.go:101-105).
 		"PortNumber": int(port>>8 | port<<8),
 	})
 	if err != nil {
@@ -167,7 +169,7 @@ func connectPort(ctx context.Context, device Device, port uint16) (net.Conn, err
 	}
 	if number, _ := reply["Number"].(uint64); number != 0 {
 		conn.Close()
-		return nil, fmt.Errorf("usbmuxd could not connect to port %d (error %d)", port, number)
+		return nil, E.New("usbmuxd could not connect to port ", port, " (error ", number, ")")
 	}
 	return conn, nil
 }
@@ -185,7 +187,7 @@ func applyContext(ctx context.Context, conn net.Conn) func() {
 
 func contextError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
-		return fmt.Errorf("%w: %v", ctx.Err(), err)
+		return E.Extend(ctx.Err(), err)
 	}
 	return err
 }

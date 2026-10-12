@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
+	"strconv"
 	"sync"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -41,14 +43,17 @@ const (
 )
 
 // idevice uses stream 1 for requests and stream 3 for INIT_HANDSHAKE;
-// recv_any accepts messages from either stream.
+// recv_any accepts messages from either stream (idevice 3854a5d,
+// idevice/src/xpc/mod.rs:18-19, 71-78, 116-130, 176-197).
 const (
 	rootStream  = 1
 	replyStream = 3
 )
 
 // idevice grants a 1 MiB window and 100 concurrent streams;
-// pymobiledevice3 grants a 16 MiB window.
+// pymobiledevice3 grants a 16 MiB window (idevice 3854a5d,
+// idevice/src/xpc/mod.rs:51-60; pymobiledevice3 9c33842,
+// pymobiledevice3/remote/remotexpc.py:49-52).
 const (
 	receiveWindow        = 1 << 20
 	maxConcurrentStreams = 100
@@ -117,7 +122,7 @@ func NewConn(ctx context.Context, conn net.Conn, logger *slog.Logger) (*Conn, er
 	conn.SetWriteDeadline(time.Time{})
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("start RemoteXPC: %w", err)
+		return nil, E.Cause(err, "start RemoteXPC")
 	}
 	go c.readLoop()
 
@@ -134,14 +139,16 @@ func NewConn(ctx context.Context, conn net.Conn, logger *slog.Logger) (*Conn, er
 	}
 	if err != nil {
 		c.fail(err)
-		return nil, fmt.Errorf("start RemoteXPC: %w", err)
+		return nil, E.Cause(err, "start RemoteXPC")
 	}
 	return c, nil
 }
 
 // pymobiledevice3 opens root HEADERS, sends the empty dictionary, opens
-// reply HEADERS, then sends root flags 0x201 and reply INIT_HANDSHAKE.
-// idevice sends INIT_HANDSHAKE before 0x201.
+// reply HEADERS, then sends root flags 0x201 and reply INIT_HANDSHAKE
+// (pymobiledevice3 9c33842, pymobiledevice3/remote/remotexpc.py:416-437).
+// idevice sends INIT_HANDSHAKE before 0x201
+// (idevice 3854a5d, idevice/src/xpc/mod.rs:61-82).
 func (c *Conn) writeHandshake() error {
 	out := []byte(preface)
 	out = appendFrame(out, frameSettings, 0, 0,
@@ -181,7 +188,7 @@ func (c *Conn) writeFrame(kind, flags byte, id uint32, payload []byte) error {
 	_, err := c.conn.Write(frame)
 	c.writeAccess.Unlock()
 	if err != nil {
-		err = fmt.Errorf("write to service: %w", err)
+		err = E.Cause(err, "write to service")
 		c.fail(err)
 	}
 	return err
@@ -193,14 +200,14 @@ func (c *Conn) readLoop() {
 	for {
 		_, err := io.ReadFull(c.reader, header)
 		if err != nil {
-			c.fail(fmt.Errorf("read from service: %w", err))
+			c.fail(E.Cause(err, "read from service"))
 			return
 		}
 		length := int(header[0])<<16 | int(header[1])<<8 | int(header[2])
 		kind, flags := header[3], header[4]
 		id := binary.BigEndian.Uint32(header[5:]) & 0x7fffffff
 		if length > maxReadFrameSize {
-			c.fail(fmt.Errorf("frame of %d bytes is too large", length))
+			c.fail(E.New("xpc: frame of ", length, " bytes is too large, at most ", maxReadFrameSize))
 			return
 		}
 		frame := payload
@@ -213,7 +220,7 @@ func (c *Conn) readLoop() {
 		frame = frame[:length]
 		_, err = io.ReadFull(c.reader, frame)
 		if err != nil {
-			c.fail(fmt.Errorf("read from service: %w", err))
+			c.fail(E.Cause(err, "read from service"))
 			return
 		}
 		err = c.handleFrame(kind, flags, id, frame)
@@ -230,11 +237,11 @@ func (c *Conn) handleFrame(kind, flags byte, id uint32, payload []byte) error {
 		return c.handleData(flags, id, payload)
 	case frameRSTStream:
 		if len(payload) < 4 {
-			return errors.New("short RST_STREAM frame")
+			return E.New("xpc: short RST_STREAM frame of ", len(payload), " bytes, expected 4")
 		}
 		code := binary.BigEndian.Uint32(payload)
 		if id == rootStream || id == replyStream {
-			return fmt.Errorf("service reset stream %d (error code %d)", id, code)
+			return E.New("xpc: service reset stream ", id, " (error code ", code, ")")
 		}
 		c.access.Lock()
 		if s := c.streams[id]; s != nil {
@@ -247,7 +254,7 @@ func (c *Conn) handleFrame(kind, flags byte, id uint32, payload []byte) error {
 			return nil
 		}
 		if len(payload)%6 != 0 {
-			return errors.New("bad SETTINGS frame")
+			return E.New("xpc: SETTINGS frame of ", len(payload), " bytes is not a multiple of 6")
 		}
 		c.access.Lock()
 		for i := 0; i < len(payload); i += 6 {
@@ -275,13 +282,13 @@ func (c *Conn) handleFrame(kind, flags byte, id uint32, payload []byte) error {
 		}
 	case frameGoAway:
 		if len(payload) < 8 {
-			return errors.New("service closed the connection (GOAWAY)")
+			return E.New("xpc: service closed the connection (GOAWAY)")
 		}
-		return fmt.Errorf("service closed the connection (GOAWAY, error code %d: %q)",
-			binary.BigEndian.Uint32(payload[4:]), payload[8:])
+		return E.New("xpc: service closed the connection (GOAWAY, error code ",
+			binary.BigEndian.Uint32(payload[4:]), ": ", strconv.Quote(string(payload[8:])), ")")
 	case frameWindowUpdate:
 		if len(payload) < 4 {
-			return errors.New("short WINDOW_UPDATE frame")
+			return E.New("xpc: short WINDOW_UPDATE frame of ", len(payload), " bytes, expected 4")
 		}
 		increment := int64(binary.BigEndian.Uint32(payload) & 0x7fffffff)
 		c.access.Lock()
@@ -301,7 +308,7 @@ func (c *Conn) handleData(flags byte, id uint32, payload []byte) error {
 	data := payload
 	if flags&flagPadded != 0 {
 		if len(data) == 0 || int(data[0]) >= len(data) {
-			return errors.New("bad DATA padding")
+			return E.New("xpc: bad DATA padding in a ", len(data), "-byte frame")
 		}
 		data = data[1 : len(data)-int(data[0])]
 	}
@@ -334,14 +341,14 @@ func (c *Conn) handleData(flags byte, id uint32, payload []byte) error {
 			c.messages = append(c.messages, message)
 			c.queued += used
 			if c.queued > maxQueued {
-				return errors.New("too many unread messages")
+				return E.New("xpc: too many unread messages: ", c.queued, " bytes queued, at most ", maxQueued)
 			}
 			c.changed.Broadcast()
 		}
 		if len(s.pending) == 0 {
 			s.pending = nil
 		} else if len(s.pending) > maxQueued {
-			return fmt.Errorf("message of more than %d bytes", maxQueued)
+			return E.New("xpc: incomplete message of ", len(s.pending), " bytes exceeds ", maxQueued, " bytes")
 		}
 	}
 	if connectionIncrement > 0 || streamIncrement > 0 {
@@ -414,7 +421,7 @@ func (c *Conn) reserve(ctx context.Context, id uint32, want int) (int, error) {
 		}
 		s := c.streams[id]
 		if s == nil || s.reset {
-			return 0, fmt.Errorf("stream %d was reset by the service", id)
+			return 0, E.New("xpc: stream ", id, " was reset by the service")
 		}
 		if want == 0 {
 			return 0, nil
@@ -470,7 +477,8 @@ func (c *Conn) ReceiveMessage(ctx context.Context) (Message, error) {
 	return message, nil
 }
 
-// idevice skips bodyless messages and empty dictionaries when receiving.
+// idevice skips bodyless messages and empty dictionaries when receiving
+// (idevice 3854a5d, idevice/src/xpc/mod.rs:151-174).
 func (c *Conn) Receive() (map[string]any, error) {
 	for {
 		message, err := c.ReceiveMessage(context.Background())
@@ -501,7 +509,8 @@ func (c *Conn) Request(ctx context.Context, body map[string]any) (map[string]any
 }
 
 // pymobiledevice3 sends the file-transfer preamble, payload and END_STREAM
-// without waiting for a transfer acknowledgement.
+// without waiting for a transfer acknowledgement
+// (pymobiledevice3 9c33842, pymobiledevice3/remote/remotexpc.py:500-531).
 func (c *Conn) SendFile(ctx context.Context, id uint64, content io.Reader, size int64) error {
 	c.access.Lock()
 	if c.err != nil {
@@ -534,7 +543,7 @@ func (c *Conn) SendFile(ctx context.Context, id uint64, content io.Reader, size 
 	}
 	if err != nil {
 		c.writeFrame(frameRSTStream, 0, streamID, binary.BigEndian.AppendUint32(nil, errorCodeCancel))
-		return fmt.Errorf("send file %d: %w", id, err)
+		return E.Cause(err, "send file ", id)
 	}
 	return nil
 }
@@ -551,7 +560,7 @@ func (c *Conn) copyFile(ctx context.Context, streamID uint32, content io.Reader,
 			}
 			sent += int64(n)
 		}
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -559,7 +568,7 @@ func (c *Conn) copyFile(ctx context.Context, streamID uint32, content io.Reader,
 		}
 	}
 	if sent != size {
-		return fmt.Errorf("file has %d bytes, %d announced", sent, size)
+		return E.New("xpc: file has ", sent, " bytes, ", size, " announced")
 	}
 	return nil
 }

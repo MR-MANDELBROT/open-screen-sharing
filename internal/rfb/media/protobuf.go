@@ -2,10 +2,10 @@ package media
 
 import (
 	"encoding/binary"
-	"errors"
-)
+	"slices"
 
-var errProtobuf = errors.New("media: malformed protobuf")
+	E "github.com/sagernet/sing/common/exceptions"
+)
 
 const (
 	protoVarint  = 0
@@ -56,10 +56,11 @@ func (m protoMessage) encode() []byte {
 
 func parseProto(data []byte) (protoMessage, error) {
 	var message protoMessage
+	total := len(data)
 	for len(data) > 0 {
 		tag, n := binary.Uvarint(data)
 		if n <= 0 {
-			return nil, errProtobuf
+			return nil, E.New("media: invalid protobuf field tag at offset ", total-len(data), " of ", total)
 		}
 		data = data[n:]
 		field := protoField{number: tag >> 3, wireType: uint8(tag & 7)}
@@ -67,30 +68,33 @@ func parseProto(data []byte) (protoMessage, error) {
 		case protoVarint:
 			field.value, n = binary.Uvarint(data)
 			if n <= 0 {
-				return nil, errProtobuf
+				return nil, E.New("media: invalid protobuf varint in field ", field.number)
 			}
 			data = data[n:]
 		case protoFixed64:
 			if len(data) < 8 {
-				return nil, errProtobuf
+				return nil, E.New("media: truncated protobuf fixed64 field ", field.number, ": ", len(data), " of 8 bytes")
 			}
 			field.value = binary.LittleEndian.Uint64(data)
 			data = data[8:]
 		case protoFixed32:
 			if len(data) < 4 {
-				return nil, errProtobuf
+				return nil, E.New("media: truncated protobuf fixed32 field ", field.number, ": ", len(data), " of 4 bytes")
 			}
 			field.value = uint64(binary.LittleEndian.Uint32(data))
 			data = data[4:]
 		case protoBytes:
 			length, lengthSize := binary.Uvarint(data)
-			if lengthSize <= 0 || length > uint64(len(data)-lengthSize) {
-				return nil, errProtobuf
+			if lengthSize <= 0 {
+				return nil, E.New("media: invalid protobuf length varint in field ", field.number)
+			}
+			if length > uint64(len(data)-lengthSize) {
+				return nil, E.New("media: truncated protobuf field ", field.number, ": ", len(data)-lengthSize, " of ", length, " bytes")
 			}
 			field.bytes = data[lengthSize : lengthSize+int(length)]
 			data = data[lengthSize+int(length):]
 		default:
-			return nil, errProtobuf
+			return nil, E.New("media: unsupported protobuf wire type ", field.wireType, " in field ", field.number)
 		}
 		message = append(message, field)
 	}
@@ -98,21 +102,23 @@ func parseProto(data []byte) (protoMessage, error) {
 }
 
 func (m protoMessage) uint(number uint64) (uint64, bool) {
-	for _, field := range m {
-		if field.number == number && field.wireType == protoVarint {
-			return field.value, true
-		}
+	index := slices.IndexFunc(m, func(field protoField) bool {
+		return field.number == number && field.wireType == protoVarint
+	})
+	if index < 0 {
+		return 0, false
 	}
-	return 0, false
+	return m[index].value, true
 }
 
 func (m protoMessage) bytes(number uint64) ([]byte, bool) {
-	for _, field := range m {
-		if field.number == number && field.wireType == protoBytes {
-			return field.bytes, true
-		}
+	index := slices.IndexFunc(m, func(field protoField) bool {
+		return field.number == number && field.wireType == protoBytes
+	})
+	if index < 0 {
+		return nil, false
 	}
-	return nil, false
+	return m[index].bytes, true
 }
 
 func (m protoMessage) messages(number uint64) []protoMessage {

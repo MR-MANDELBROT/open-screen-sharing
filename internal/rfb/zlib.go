@@ -3,9 +3,11 @@ package rfb
 import (
 	"bytes"
 	"compress/flate"
+	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const zlibWindow = 32 * 1024
@@ -21,11 +23,11 @@ type zlibStream struct {
 func (z *zlibStream) inflate(compressed []byte, limit int) ([]byte, error) {
 	if !z.started {
 		if len(compressed) < 2 {
-			return nil, errors.New("zlib stream header missing")
+			return nil, E.New("rfb: zlib stream of ", len(compressed), " bytes has no header")
 		}
 		header := uint16(compressed[0])<<8 | uint16(compressed[1])
 		if compressed[0]&0x0f != 8 || header%31 != 0 || compressed[1]&0x20 != 0 {
-			return nil, fmt.Errorf("zlib stream header %x", compressed[:2])
+			return nil, E.New("rfb: zlib stream header ", hex.EncodeToString(compressed[:2]))
 		}
 		compressed = compressed[2:]
 		z.started = true
@@ -47,12 +49,12 @@ func (z *zlibStream) inflate(compressed []byte, limit int) ([]byte, error) {
 		n, err := z.inflater.Read(z.output[len(z.output):cap(z.output)])
 		z.output = z.output[:len(z.output)+n]
 		if len(z.output) > limit {
-			return nil, fmt.Errorf("rectangle inflates past %d bytes", limit)
+			return nil, E.New("rfb: rectangle inflates past ", limit, " bytes")
 		}
 		if err == nil {
 			continue
 		}
-		if (errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)) && z.input.Len() == 0 {
+		if E.IsMulti(err, io.ErrUnexpectedEOF, io.EOF) && z.input.Len() == 0 {
 			break
 		}
 		return nil, err
@@ -69,7 +71,7 @@ func (z *zlibStream) inflate(compressed []byte, limit int) ([]byte, error) {
 
 func inflateIndependent(compressed []byte, limit int) ([]byte, error) {
 	if len(compressed) < 2 {
-		return nil, errors.New("zlib data too short")
+		return nil, E.New("zlib data of ", len(compressed), " bytes has no header")
 	}
 	inflater := flate.NewReader(bytes.NewReader(compressed[2:]))
 	defer inflater.Close()
@@ -79,7 +81,7 @@ func inflateIndependent(compressed []byte, limit int) ([]byte, error) {
 		return nil, err
 	}
 	if output.Len() > limit {
-		return nil, fmt.Errorf("zlib data inflates past %d bytes", limit)
+		return nil, E.New("zlib data inflates past ", limit, " bytes")
 	}
 	return output.Bytes(), nil
 }

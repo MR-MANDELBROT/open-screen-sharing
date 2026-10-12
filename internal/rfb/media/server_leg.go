@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -46,8 +47,17 @@ type pendingDatagram struct {
 	at   time.Time
 }
 
-// ScreensharingAgent binds its local UDP socket to the server port number
-// before connecting it (macOS 26A434 and 26B5101f).
+// ScreensharingAgent writes the same port number into the local and the
+// remote address of each media socket, then binds the socket to the local
+// address and connects it to the remote one (ScreensharingAgent 756.36.5.2,
+// macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+// -[SSUDPSender sendToRemoteAddress:srcAddress:startingUDPPort:audioEncryptionKeyViewerToServer:audioEncryptionKeyServerToViewer:video1EncryptionKeyViewerToServer:video1EncryptionKeyServerToViewer:video2EncryptionKeyViewerToServer:video2EncryptionKeyServerToViewer:sessionID:supports60FPS:sendCursor:avcClientName:]
+// 0x100008f50..0x100008f58, 0x1000092c8..0x1000092d8, 0x100009534..0x100009544,
+// sub_100009aa8 0x100009b2c..0x100009b4c; ScreensharingAgent 766.8,
+// macOS 27.2 26B5101f, UUID D8791A89-6EDB-3A0A-A720-EC3F5FB1AD4F,
+// -[SSUDPSender sendToRemoteAddress:srcAddress:startingUDPPort:audioEncryptionKeyViewerToServer:audioEncryptionKeyServerToViewer:video1EncryptionKeyViewerToServer:video1EncryptionKeyServerToViewer:video2EncryptionKeyViewerToServer:video2EncryptionKeyServerToViewer:sessionID:supports60FPS:sendCursor:avcClientName:]
+// 0x100008f50..0x100008f58, 0x1000092c8..0x1000092d8, 0x100009534..0x100009544,
+// sub_100009aa8 0x100009b2c..0x100009b4c).
 type serverLeg struct {
 	name      string
 	conn      *net.UDPConn
@@ -298,7 +308,7 @@ func (l *serverLeg) receive(handle func(leg *serverLeg, datagram []byte, from ne
 			if errors.Is(err, net.ErrClosed) {
 				return
 			}
-			if isConnectionRefused(err) {
+			if errors.Is(err, syscall.ECONNREFUSED) {
 				continue
 			}
 			l.logger.Debug("media leg read", "leg", l.name, "error", err)

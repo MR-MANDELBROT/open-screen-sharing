@@ -8,9 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
+	E "github.com/sagernet/sing/common/exceptions"
 )
-
-var ErrNoReply = errors.New("the display service did not reply; dtremotedisplayd may be wedged, rebooting the device clears it")
 
 const defaultInvokeTimeout = 15 * time.Second
 
@@ -47,8 +46,8 @@ func IsUnsupported(err error) bool {
 	return errors.As(err, &coreDeviceError) && coreDeviceError.Code == ErrorCodeUnsupported
 }
 
-// pymobiledevice3 1146717 uses CoreDevice 629.3 and DDI protocol 2
-// (remote/core_device/core_device_service.py:19, 78-79).
+// pymobiledevice3 uses CoreDevice 629.3 and DDI protocol 2 (pymobiledevice3
+// 1146717, pymobiledevice3/remote/core_device/core_device_service.py:10-19, 78-79).
 var coreDeviceVersion = map[string]any{
 	"components":              []any{uint64(629), uint64(3)},
 	"originalComponentsCount": int64(2),
@@ -82,7 +81,7 @@ func request(ctx context.Context, conn *xpc.Conn, message map[string]any) (map[s
 		err = ctx.Err()
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return nil, ErrNoReply
+		return nil, E.New("the display service did not reply; dtremotedisplayd may be wedged, rebooting the device clears it")
 	}
 	if err != nil {
 		return nil, err
@@ -93,7 +92,7 @@ func request(ctx context.Context, conn *xpc.Conn, message map[string]any) (map[s
 func invoke(ctx context.Context, conn *xpc.Conn, deviceIdentifier, feature, action string, input map[string]any) (map[string]any, error) {
 	reply, err := request(ctx, conn, coreDeviceRequest(deviceIdentifier, feature, action, input))
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", feature, err)
+		return nil, E.Cause(err, feature)
 	}
 	if output, isDictionary := reply["CoreDevice.output"].(map[string]any); isDictionary {
 		return output, nil
@@ -104,7 +103,7 @@ func invoke(ctx context.Context, conn *xpc.Conn, deviceIdentifier, feature, acti
 func parseCoreDeviceError(feature string, reply map[string]any) error {
 	errorValue := dictionary(reply["CoreDevice.error"])
 	if errorValue == nil {
-		return fmt.Errorf("%s: unexpected reply: %v", feature, reply)
+		return E.New(feature, ": unexpected reply: ", fmt.Sprint(reply))
 	}
 	result := &Error{
 		Feature:     feature,

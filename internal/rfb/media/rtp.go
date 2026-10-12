@@ -1,6 +1,10 @@
 package media
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+
+	E "github.com/sagernet/sing/common/exceptions"
+)
 
 type rtpPacket struct {
 	marker           bool
@@ -19,8 +23,14 @@ func isRTCP(datagram []byte) bool {
 }
 
 func parseRTPHeader(data []byte) (rtpPacket, error) {
-	if len(data) < 12 || data[0]>>6 != 2 || isRTCP(data) {
-		return rtpPacket{}, errNotRTP
+	if len(data) < 12 {
+		return rtpPacket{}, E.New("media: RTP packet of ", len(data), " bytes is shorter than 12")
+	}
+	if data[0]>>6 != 2 {
+		return rtpPacket{}, E.New("media: RTP version ", data[0]>>6, ", expected 2")
+	}
+	if isRTCP(data) {
+		return rtpPacket{}, E.New("media: RTCP packet type ", data[1], " where RTP was expected")
 	}
 	packet := rtpPacket{
 		marker:      data[1]&0x80 != 0,
@@ -32,13 +42,13 @@ func parseRTPHeader(data []byte) (rtpPacket, error) {
 	offset := 12 + 4*int(data[0]&0x0f)
 	if data[0]&0x10 != 0 {
 		if len(data) < offset+4 {
-			return rtpPacket{}, errNotRTP
+			return rtpPacket{}, E.New("media: RTP header extension at offset ", offset, " exceeds the ", len(data), "-byte packet")
 		}
 		packet.extensionProfile = binary.BigEndian.Uint16(data[offset:])
 		offset += 4 + 4*int(binary.BigEndian.Uint16(data[offset+2:]))
 	}
 	if offset > len(data) {
-		return rtpPacket{}, errNotRTP
+		return rtpPacket{}, E.New("media: RTP header of ", offset, " bytes exceeds the ", len(data), "-byte packet")
 	}
 	packet.payloadOffset = offset
 	return packet, nil
@@ -48,11 +58,11 @@ func parseRTPPayload(data []byte, packet rtpPacket) (rtpPacket, error) {
 	end := len(data)
 	if data[0]&0x20 != 0 {
 		if end == packet.payloadOffset {
-			return rtpPacket{}, errNotRTP
+			return rtpPacket{}, E.New("media: padded RTP packet has no payload")
 		}
 		padding := int(data[end-1])
 		if padding == 0 || padding > end-packet.payloadOffset {
-			return rtpPacket{}, errNotRTP
+			return rtpPacket{}, E.New("media: RTP padding of ", padding, " bytes for a ", end-packet.payloadOffset, "-byte payload")
 		}
 		end -= padding
 	}

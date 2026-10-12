@@ -8,7 +8,11 @@ extension View {
 }
 
 // Grouped forms cap their sections at the readable width unless FormContentSizeFittingBehavior is .disabled,
-// which only the View.formContentSizeFittingBehavior(_:) SPI can write (macOS 26A434).
+// which only the View.formContentSizeFittingBehavior(_:) SPI can write (SwiftUI 8.0.84.1.406, macOS 27.0.1 26A434,
+// UUID D3349306-583A-30D3-AFC7-A64E41430375,
+// SwiftUI.EnvironmentValues.(maximumFormContentWidth in _D4A7D3980E4215E189AC24290B549BBF).getter 0x1b97171fc..0x1b971724c,
+// (extension in SwiftUI):SwiftUI.View.formContentSizeFittingBehavior(SwiftUI.FormContentSizeFittingBehavior) -> some
+// 0x1b9c6e56c..0x1b9c6e5dc).
 private let disableFormContentSizeFitting: ((inout EnvironmentValues) -> Void)? = {
     let handle = UnsafeMutableRawPointer(bitPattern: -2)
     guard let behaviorType = _typeByName("7SwiftUI30FormContentSizeFittingBehaviorV") as? any Hashable.Type,

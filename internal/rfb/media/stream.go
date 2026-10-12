@@ -4,20 +4,26 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"net"
 	"net/netip"
 	"os"
 	"sync"
+	"syscall"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
 	videoReceiveBuffer = 4 << 20
 	audioReceiveBuffer = 256 << 10
-	// AVConference startFeedbackSource sets a 50,000,000 ns timer interval:
-	// macOS 27.0.1 (26A434), 0x1c1189bf0–0x1c1189c00;
-	// macOS 27.2 (26B5101f), 0x1c0806298–0x1c08062a8.
+	// AVConference startFeedbackSource sets a 50,000,000 ns timer interval
+	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+	// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// -[VCVideoStreamRateAdaptationFeedbackOnly startFeedbackSource] 0x1c1189bf0..0x1c1189c00;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+	// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// -[VCVideoStreamRateAdaptationFeedbackOnly startFeedbackSource] 0x1c0806298..0x1c08062a8).
 	rateFeedbackInterval = 50 * time.Millisecond
 	reportInterval       = time.Second
 	keyframeInterval     = 250 * time.Millisecond
@@ -33,9 +39,9 @@ const (
 )
 
 var (
-	ErrStreamSilent       = errors.New("media: the server stopped sending on the video leg")
-	ErrStreamNoVideo      = errors.New("media: no video arrived on the video leg")
-	ErrKeyframeUnanswered = errors.New("media: the server did not answer keyframe requests")
+	ErrStreamSilent       = E.New("media: the server stopped sending on the video leg")
+	ErrStreamNoVideo      = E.New("media: no video arrived on the video leg")
+	ErrKeyframeUnanswered = E.New("media: the server did not answer keyframe requests")
 )
 
 type StreamConfig struct {
@@ -150,14 +156,15 @@ func (s *Stream) handlePorts(ports *Ports) error {
 		return os.ErrClosed
 	}
 	if !ports.Video.Enabled || ports.Video.Port == 0 {
-		return fmt.Errorf("media: server did not enable the video leg")
+		return E.New("media: server did not enable the video leg (enabled ", ports.Video.Enabled, ", port ", ports.Video.Port, ")")
 	}
 	if s.ports != nil && s.ports.Video.Port == ports.Video.Port && s.ports.Audio.Port == ports.Audio.Port {
 		s.ports = ports
 		return nil
 	}
 	if s.ports != nil {
-		return fmt.Errorf("media: server moved the media ports")
+		return E.New("media: server moved the media ports from video ", s.ports.Video.Port, " and audio ", s.ports.Audio.Port,
+			" to video ", ports.Video.Port, " and audio ", ports.Audio.Port)
 	}
 	offer := s.config.Offer
 	video, err := s.openLeg(ports.Video.Port, offer.videoSend[:], offer.videoReceive[:], offer.videoSSRC, videoReceiveBuffer)
@@ -212,7 +219,7 @@ func (s *Stream) openLeg(port uint16, sendKey []byte, receiveKey []byte, localSS
 	}
 	conn, err := dialLeg(s.config.Local, netip.AddrPortFrom(s.config.Remote, port), buffer)
 	if err != nil {
-		return nil, fmt.Errorf("media: open UDP port %d: %w", port, err)
+		return nil, E.Cause(err, "media: open UDP port ", port)
 	}
 	return &leg{
 		conn:        conn,
@@ -232,19 +239,21 @@ func (l *leg) send(packet []byte) {
 	_, _ = l.conn.Write(l.sendBuffer)
 }
 
-var ErrNoMicrophone = errors.New("media: the offer did not ask for AudioToServer, or the server has not named its ports")
-
 func (s *Stream) SendAudio(data []byte) error {
 	s.microphoneAccess.Lock()
 	defer s.microphoneAccess.Unlock()
 	s.access.Lock()
-	if s.microphone == nil || s.closed {
+	if s.closed {
 		s.access.Unlock()
-		return ErrNoMicrophone
+		return E.New("media: the stream is closed")
+	}
+	if s.microphone == nil {
+		s.access.Unlock()
+		return E.New("media: the offer did not ask for AudioToServer, or the server has not named its ports")
 	}
 	if len(data) == 0 || len(data) > 0x1fff {
 		s.access.Unlock()
-		return fmt.Errorf("media: audio access unit of %d bytes", len(data))
+		return E.New("media: audio access unit of ", len(data), " bytes, expected 1 to ", 0x1fff)
 	}
 	packet := append(s.microphonePacket[:0], make([]byte, 12)...)
 	packet[0] = 0x80
@@ -266,7 +275,7 @@ func (s *Stream) SendAudio(data []byte) error {
 	audio := s.audio
 	s.access.Unlock()
 	_, err := audio.conn.Write(protected)
-	if err != nil && !isConnectionRefused(err) {
+	if err != nil && !errors.Is(err, syscall.ECONNREFUSED) {
 		return err
 	}
 	return nil
@@ -302,7 +311,9 @@ func (s *Stream) Close() error {
 
 // An avconferenced crash on macOS 27.0.1 (26A434), 2026-10-05 11:12,
 // shows stop waiting for a write lock in VTP_Close while VTPRecvProc is
-// blocked in __recvmsg (AVConference 2235.63.5.2, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B).
+// blocked in __recvmsg (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B, _VTP_Close 0x1c10daf24,
+// _VTPRecvProc 0x1c10d5bc8).
 func (s *Stream) Drain(closed time.Time) {
 	for {
 		s.access.Lock()
@@ -367,8 +378,8 @@ func (s *Stream) receiveVideo(video *leg) {
 			if s.isDone() {
 				return
 			}
-			if !errors.Is(err, os.ErrDeadlineExceeded) && !isConnectionRefused(err) {
-				s.stop(fmt.Errorf("media: video leg: %w", err))
+			if !E.IsMulti(err, os.ErrDeadlineExceeded, syscall.ECONNREFUSED) {
+				s.stop(E.Cause(err, "media: read video leg"))
 				return
 			}
 		}
@@ -489,8 +500,13 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 			return
 		}
 		// AVConference negotiateTilesPerFrame:negotiatedSettings: selects the smaller
-		// of local tilesPerVideoFrame and remote tilesPerFrame (macOS 27.0.1 26A434,
-		// 0x1c12305b4; macOS 27.2 26B5101f, 0x1c08a32ec).
+		// of local tilesPerVideoFrame and remote tilesPerFrame (AVConference
+		// 2235.63.5.2, macOS 27.0.1 26A434, UUID
+		// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+		// -[VCMediaNegotiator negotiateTilesPerFrame:negotiatedSettings:] 0x1c12305b4..0x1c123061c;
+		// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+		// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+		// -[VCMediaNegotiator negotiateTilesPerFrame:negotiatedSettings:] 0x1c08a32ec..0x1c08a3354).
 		bands := s.config.Offer.options.TilesPerFrame
 		s.access.Lock()
 		answer := s.answer
@@ -559,8 +575,8 @@ func (s *Stream) receiveAudio(audio *leg) {
 			if s.isDone() {
 				return
 			}
-			if !errors.Is(err, os.ErrDeadlineExceeded) && !isConnectionRefused(err) {
-				s.stop(fmt.Errorf("media: audio leg: %w", err))
+			if !E.IsMulti(err, os.ErrDeadlineExceeded, syscall.ECONNREFUSED) {
+				s.stop(E.Cause(err, "media: read audio leg"))
 				return
 			}
 		}

@@ -2,8 +2,8 @@ package rfb
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type AccessibilityFeature uint32
@@ -20,17 +20,18 @@ const (
 	AccessibilityShowBorders               AccessibilityFeature = 8
 )
 
-// ScreenSharing 776.27 arm64e writes the integer fields of client messages 36 and 37
-// without byte swaps: RFBEnableAccessibilityFeature 0x1cc149c24 and
-// RFBSendAccessibilityViewerMessage 0x1cc149d78, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50.
+// ScreenSharing writes the integer fields of client messages 36 and 37 without byte swaps
+// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _RFBEnableAccessibilityFeature 0x1cc149c24..0x1cc149c34,
+// _RFBSendAccessibilityViewerMessage 0x1cc149d78..0x1cc149d90).
 const (
 	clientMessageEnableAccessibilityFeature = 36
 	accessibilityServerHeaderSize           = 14
 )
 
-// ScreensharingAgent 756.36.5.2 arm64e returns without applying zero-length settings:
-// agent_SSAgent_EnableAccessibilityFeature_rpc 0x10001d778 branches to 0x10001d960
-// (length from argument x6 at 0x10001d6d8), UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3.
+// ScreensharingAgent's EnableAccessibilityFeature handler returns without applying the
+// setting when the settings data is empty (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434,
+// UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3, sub_10001d6a8 0x10001d6d8, 0x10001d778).
 var accessibilityEmptySettings = []byte{
 	0x62, 0x70, 0x6c, 0x69, 0x73, 0x74, 0x30, 0x30, 0xd4, 0x01, 0x02, 0x03,
 	0x04, 0x05, 0x06, 0x07, 0x0a, 0x58, 0x24, 0x76, 0x65, 0x72, 0x73, 0x69,
@@ -54,8 +55,6 @@ var accessibilityEmptySettings = []byte{
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb4,
 }
 
-var errNoAccessibility = errors.New("the server does not offer accessibility messages")
-
 func (c *Client) receiveAccessibility() error {
 	header, err := c.stream.bytes(accessibilityServerHeaderSize)
 	if err != nil {
@@ -72,10 +71,10 @@ func (c *Client) SetAccessibilitySetting(feature AccessibilityFeature, enabled b
 	case AccessibilityIncreaseContrast, AccessibilityReduceMotion, AccessibilityDifferentiateWithoutColor,
 		AccessibilityReduceTransparency, AccessibilityShowBorders:
 	default:
-		return fmt.Errorf("accessibility feature %d is not a display setting", feature)
+		return E.New("rfb: accessibility feature ", uint32(feature), " is not a display setting")
 	}
 	if !c.info.Accepts(clientMessageEnableAccessibilityFeature) {
-		return errNoAccessibility
+		return E.New("rfb: the server does not offer accessibility messages")
 	}
 	bit := uint32(1) << feature
 	c.access.Lock()

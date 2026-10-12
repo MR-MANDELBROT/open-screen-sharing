@@ -279,27 +279,27 @@ func newDisplayList(layout *rfb.DisplayLayout) *DisplayList {
 		DesktopWidth:      int32(layout.DesktopWidth),
 		DesktopHeight:     int32(layout.DesktopHeight),
 		SessionState:      int64(layout.SessionState),
+		displays: common.Map(layout.Displays, func(display rfb.Display) *Display {
+			return &Display{
+				DisplayID:     int64(display.ID),
+				Density:       display.Density,
+				Scale:         display.Scale,
+				LogicalX:      int32(display.Logical.X),
+				LogicalY:      int32(display.Logical.Y),
+				LogicalWidth:  int32(display.Logical.Width),
+				LogicalHeight: int32(display.Logical.Height),
+				BackingX:      int32(display.Backing.X),
+				BackingY:      int32(display.Backing.Y),
+				BackingWidth:  int32(display.Backing.Width),
+				BackingHeight: int32(display.Backing.Height),
+				IsMain:        display.Flags&rfb.DisplayFlagMain != 0,
+				IsMirrored:    display.Flags&rfb.DisplayFlagMirrored != 0,
+				IsVirtual:     display.Flags&rfb.DisplayFlagVirtual != 0,
+			}
+		}),
 	}
 	if layout.Current == rfb.AllDisplays {
 		list.Current = AllDisplays
-	}
-	for _, display := range layout.Displays {
-		list.displays = append(list.displays, &Display{
-			DisplayID:     int64(display.ID),
-			Density:       display.Density,
-			Scale:         display.Scale,
-			LogicalX:      int32(display.Logical.X),
-			LogicalY:      int32(display.Logical.Y),
-			LogicalWidth:  int32(display.Logical.Width),
-			LogicalHeight: int32(display.Logical.Height),
-			BackingX:      int32(display.Backing.X),
-			BackingY:      int32(display.Backing.Y),
-			BackingWidth:  int32(display.Backing.Width),
-			BackingHeight: int32(display.Backing.Height),
-			IsMain:        display.Flags&rfb.DisplayFlagMain != 0,
-			IsMirrored:    display.Flags&rfb.DisplayFlagMirrored != 0,
-			IsVirtual:     display.Flags&rfb.DisplayFlagVirtual != 0,
-		})
 	}
 	return list
 }
@@ -364,9 +364,10 @@ func (i *ClipboardItem) Get(index int32) *ClipboardFlavor {
 	return i.flavors[index]
 }
 
-// gomobile v0.1.13 borrows NSMutableData bytes for a method argument;
-// for immutable NSData it allocates a copy and frees it after the call
-// (bind/genobjc.go; bind/objc/seq_darwin.m.support).
+// gomobile borrows NSMutableData bytes for a method argument; for
+// immutable NSData it allocates a copy and frees it after the call
+// (sagernet/gomobile v0.1.13, bind/genobjc.go:695, bind/genobjc.go:798-824,
+// bind/genobjc.go:1042-1048, bind/objc/seq_darwin.m.support:184-207).
 func (i *ClipboardItem) AddFlavor(typeIdentifier string, data []byte) {
 	i.flavors = append(i.flavors, &ClipboardFlavor{Type: typeIdentifier, Data: bytes.Clone(data)})
 }

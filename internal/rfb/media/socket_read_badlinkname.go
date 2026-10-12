@@ -9,8 +9,8 @@ import (
 	"unsafe"
 )
 
-// Go 1.26.8 net.rawConn.Read wraps internal/poll.FD.RawRead errors in OpError
-// (src/net/rawconn.go:44–47); the internal RawRead result is unwrapped here.
+// net.rawConn.Read wraps internal/poll.FD.RawRead errors in OpError
+// (Go 1.26.8, src/net/rawconn.go:44-48).
 func newRawRead(conn *net.UDPConn) func(f func(fd uintptr) bool) error {
 	fd := reflect.ValueOf(conn).Elem().FieldByName("fd")
 	if !fd.IsValid() || fd.Kind() != reflect.Pointer || fd.IsNil() {

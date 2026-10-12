@@ -3,7 +3,6 @@ package coredevice
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -16,6 +15,7 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/pairing"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/tlspsk"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/tunnel"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type RemotePairingOptions struct {
@@ -24,7 +24,7 @@ type RemotePairingOptions struct {
 	Logger  *slog.Logger
 }
 
-var ErrLoopbackAddress = errors.New("remote pairing through a loopback address is refused: " +
+var ErrLoopbackAddress = E.New("remote pairing through a loopback address is refused: " +
 	"it leaves the device's remotepairingd unable to set up tunnels until Developer Mode is turned off and on again; " +
 	"use the VPN's loopback address (such as 10.7.0.1) instead")
 
@@ -51,7 +51,7 @@ func connectRemotePairing(ctx context.Context, address netip.AddrPort, record *p
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "tcp", address.String())
 	if err != nil {
-		return nil, fmt.Errorf("connect to remote pairing: %w", err)
+		return nil, E.Cause(err, "connect to remote pairing")
 	}
 	session, err := pairing.Verify(ctx, conn, record, logger)
 	if err != nil {
@@ -66,12 +66,12 @@ func connectRemotePairing(ctx context.Context, address netip.AddrPort, record *p
 	tunnelConn, err := dialer.DialContext(ctx, "tcp", netip.AddrPortFrom(address.Addr(), port).String())
 	if err != nil {
 		session.Close()
-		return nil, fmt.Errorf("connect to tunnel port: %w", err)
+		return nil, E.Cause(err, "connect to tunnel port")
 	}
 	secureConn, err := tlspsk.Client(ctx, tunnelConn, session.Key())
 	if err != nil {
 		session.Close()
-		return nil, fmt.Errorf("tunnel TLS: %w", err)
+		return nil, E.Cause(err, "tunnel TLS")
 	}
 	tun, err := tunnel.Open(ctx, secureConn, logger)
 	if err != nil {
@@ -115,7 +115,7 @@ func connectLockdown(ctx context.Context, record *lockdown.PairRecord, dial lock
 }
 
 // pymobiledevice3 sends a stable host UUID in RSD handshakes
-// (remote/remotexpc.py, default_handshake_uuid).
+// (pymobiledevice3 9c33842, pymobiledevice3/remote/remotexpc.py:82-110).
 func handshakeIdentity(name string) uuid.UUID {
 	identity, err := uuid.Parse(name)
 	if err != nil {
@@ -143,15 +143,11 @@ func isTransient(err error) bool {
 	var rejected *pairing.PairingRejectedError
 	var alert *tlspsk.AlertError
 	switch {
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded),
-		errors.Is(err, pairing.ErrPairVerifyFailed), errors.As(err, &rejected), errors.As(err, &alert):
+	case E.IsCanceled(err), errors.Is(err, pairing.ErrPairVerifyFailed), errors.As(err, &rejected), errors.As(err, &alert):
 		return false
-	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF),
-		errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.ECONNREFUSED),
-		errors.Is(err, syscall.EPIPE), errors.Is(err, syscall.ECONNABORTED),
-		errors.Is(err, syscall.ETIMEDOUT), errors.Is(err, net.ErrClosed):
+	case E.IsMulti(err, io.EOF, io.ErrUnexpectedEOF, syscall.ECONNRESET, syscall.ECONNREFUSED,
+		syscall.EPIPE, syscall.ECONNABORTED, syscall.ETIMEDOUT, net.ErrClosed):
 		return true
 	}
-	var netError net.Error
-	return errors.As(err, &netError) && netError.Timeout()
+	return E.IsTimeout(err)
 }

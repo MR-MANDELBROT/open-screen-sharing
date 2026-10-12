@@ -9,10 +9,11 @@ import (
 	"unsafe"
 )
 
-// For AES blocks, Go 1.26.8 cipher.NewCTR returns an aesCtrWrapper holding
-// *aes.CTR. The internal CTR stores ivlo, ivhi and offset as uint64;
-// newCTR copies the AES Block and resets offset (crypto/cipher/ctr.go and
-// crypto/internal/fips140/aes/ctr.go, c293dd4).
+// For AES blocks, cipher.NewCTR returns an aesCtrWrapper holding *aes.CTR.
+// The internal CTR stores ivlo, ivhi and offset as uint64; newCTR copies the
+// AES Block and resets offset (Go 1.26.8, src/crypto/cipher/ctr.go:41-44,
+// src/crypto/cipher/ctr.go:66-69, src/crypto/internal/fips140/aes/ctr.go:15-19,
+// src/crypto/internal/fips140/aes/ctr.go:28-39).
 type keyStream struct {
 	stream cipher.Stream
 	low    *uint64

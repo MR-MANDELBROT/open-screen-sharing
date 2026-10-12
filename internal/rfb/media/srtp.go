@@ -7,8 +7,9 @@ import (
 	"crypto/sha1"
 	"crypto/subtle"
 	"encoding/binary"
-	"errors"
 	"hash"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -18,11 +19,7 @@ const (
 	replayWindowSize  = replayWindowWords * 64
 )
 
-var (
-	errNotRTP         = errors.New("media: not an RTP packet")
-	errAuthentication = errors.New("media: SRTP authentication failed")
-	errReplay         = errors.New("media: SRTP replayed or too old")
-)
+var errAuthentication = E.New("media: SRTP authentication failed")
 
 type sessionKeys struct {
 	block  cipher.Block
@@ -176,7 +173,7 @@ func newSRTPReceiver(master []byte) (*srtpReceiver, error) {
 
 func (r *srtpReceiver) unprotect(datagram []byte) (rtpPacket, error) {
 	if len(datagram) < 12+authTagLength {
-		return rtpPacket{}, errNotRTP
+		return rtpPacket{}, E.New("media: SRTP packet of ", len(datagram), " bytes is shorter than ", 12+authTagLength)
 	}
 	body := datagram[:len(datagram)-authTagLength]
 	packet, err := parseRTPHeader(body)
@@ -189,7 +186,7 @@ func (r *srtpReceiver) unprotect(datagram []byte) (rtpPacket, error) {
 	}
 	index := stream.estimateIndex(packet.sequence)
 	if !stream.replay.check(index) {
-		return rtpPacket{}, errReplay
+		return rtpPacket{}, E.New("media: SRTP packet ", index, " of SSRC ", packet.ssrc, " is replayed or too old")
 	}
 	if subtle.ConstantTimeCompare(r.keys.rtpTag(body, uint32(index>>16)), datagram[len(body):]) != 1 {
 		return rtpPacket{}, errAuthentication
@@ -222,7 +219,7 @@ func newSRTCPReceiver(master []byte) (*srtcpReceiver, error) {
 
 func (r *srtcpReceiver) unprotect(datagram []byte) ([]byte, error) {
 	if len(datagram) < 8+4+authTagLength {
-		return nil, errNotRTP
+		return nil, E.New("media: SRTCP packet of ", len(datagram), " bytes is shorter than ", 8+4+authTagLength)
 	}
 	end := len(datagram) - authTagLength
 	if subtle.ConstantTimeCompare(r.keys.tag(datagram[:end]), datagram[end:]) != 1 {
@@ -240,7 +237,7 @@ func (r *srtcpReceiver) unprotect(datagram []byte) ([]byte, error) {
 		r.replays[ssrc] = replay
 	}
 	if !replay.check(uint64(index)) {
-		return nil, errReplay
+		return nil, E.New("media: SRTCP packet ", index, " of SSRC ", ssrc, " is replayed or too old")
 	}
 	replay.accept(uint64(index))
 	packet := datagram[:end-4]

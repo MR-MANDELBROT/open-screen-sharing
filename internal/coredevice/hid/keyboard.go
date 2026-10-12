@@ -2,24 +2,26 @@ package hid
 
 import (
 	"context"
-	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-// The createService XPC types match idevice d32c818,
-// idevice/src/services/core_device/hid.rs:276-321: PrimaryUsage,
-// PrimaryUsagePage and _ServiceID are uint64 at the top level, while the
-// Codable storage repeats properties in typed dictionaries.
+// The createService XPC types match idevice: PrimaryUsage, PrimaryUsagePage
+// and _ServiceID are uint64 at the top level, while the Codable storage
+// repeats properties in typed dictionaries (idevice d32c818,
+// idevice/src/services/core_device/hid.rs:142-146, 276-321).
 const (
 	keyboardUsagePage = 0x01
 	keyboardUsage     = 0x06
 	keyboardVendorID  = 0x05ac
 	keyboardProductID = 0x0250
-	// pymobiledevice3 1146717 uses 0x100002001 as its default virtual
-	// keyboard service ID (remote/core_device/hid_service.py:123, 445).
+	// pymobiledevice3 uses 0x100002001 as its default virtual keyboard
+	// service ID (pymobiledevice3 1146717,
+	// pymobiledevice3/remote/core_device/hid_service.py:123, 445).
 	keyboardServiceID = 0x1_0000_2001
 
 	keyboardProduct      = "Screen Sharing Keyboard"
@@ -79,39 +81,32 @@ func (c *Client) createKeyboard(ctx context.Context) error {
 	}
 	if err != nil {
 		c.closeUniversal()
-		return fmt.Errorf("hid: create keyboard: %w", err)
+		return E.Cause(err, "hid: create keyboard")
 	}
 	serviceID, ok := uintValue(reply["serviceID"])
 	if !ok || serviceID == 0 {
-		return fmt.Errorf("hid: create keyboard: reply without a service ID: %v", slices.Sorted(maps.Keys(reply)))
+		return E.New("hid: create keyboard: reply without a service ID: ", strings.Join(slices.Sorted(maps.Keys(reply)), ", "))
 	}
 	c.keyboard = serviceID
 	c.logger.Debug("created keyboard", "service", serviceID)
 	return nil
 }
 
-func (c *Client) removeKeyboard(ctx context.Context) error {
-	if c.keyboard == 0 && c.staleKeyboard == 0 {
-		return nil
-	}
-	conn, err := c.universalConn(ctx)
-	if err != nil {
-		return fmt.Errorf("hid: remove keyboard: %w", err)
-	}
+func (c *Client) removeKeyboard() error {
 	if c.keyboard == 0 {
 		return nil
 	}
-	if err = removeService(conn, c.keyboard); err != nil {
+	if err := removeService(c.universal, c.keyboard); err != nil {
 		c.closeUniversal()
-		return fmt.Errorf("hid: remove keyboard: %w", err)
+		return E.Cause(err, "hid: remove keyboard")
 	}
 	c.keyboard = 0
 	c.pressed = [keyboardBitmapSize]byte{}
 	return nil
 }
 
-// idevice d32c818 sends resetGestureState before removeService,
-// without reply flags (idevice/src/services/core_device/hid.rs:886-889, 988-997).
+// idevice sends resetGestureState before removeService, without reply
+// flags (idevice d32c818, idevice/src/services/core_device/hid.rs:886-891, 987-997).
 func removeService(conn *xpc.Conn, serviceID uint64) error {
 	for _, call := range []string{"resetGestureState", "removeService"} {
 		err := conn.Send(universalRequest(map[string]any{

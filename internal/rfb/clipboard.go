@@ -4,17 +4,19 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"io"
+	"strconv"
 	"unicode/utf8"
+
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
 	TypeUTF8PlainText = "public.utf8-plain-text"
-	// ScreensharingAgent 756.36.5.2 arm64e rejects compressed or uncompressed pasteboards
-	// above 100 MiB: agent_SSAgent_SetPasteboard_rpc 0x100019c74..0x100019c8c,
-	// UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3.
+	// ScreensharingAgent's SetPasteboard handler rejects a pasteboard whose compressed or
+	// uncompressed size is above 100 MiB (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434,
+	// UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3, sub_100019b98 0x100019c74..0x100019c8c).
 	maximumPasteboard = 100 << 20
 )
 
@@ -73,7 +75,7 @@ func parsePasteboardArchive(archive []byte) (*Clipboard, error) {
 		}
 		size := int(binary.BigEndian.Uint32(length))
 		if size > limit {
-			reader.err = fmt.Errorf("pasteboard field of %d bytes", size)
+			reader.err = E.New("rfb: pasteboard field of ", size, " bytes is over the ", limit, "-byte limit")
 			return nil
 		}
 		return reader.take(size)
@@ -89,7 +91,7 @@ func parsePasteboardArchive(archive []byte) (*Clipboard, error) {
 	for len(reader.data) > 0 && reader.err == nil {
 		flavorCount := number()
 		if flavorCount > 1024 {
-			return nil, fmt.Errorf("pasteboard item with %d flavors", flavorCount)
+			return nil, E.New("rfb: pasteboard item with ", flavorCount, " flavors, over the limit of 1024")
 		}
 		var item ClipboardItem
 		for i := 0; i < flavorCount && reader.err == nil; i++ {
@@ -98,7 +100,7 @@ func parsePasteboardArchive(archive []byte) (*Clipboard, error) {
 			number()
 			tagCount := number()
 			if tagCount > 256 {
-				return nil, fmt.Errorf("pasteboard flavor with %d tags", tagCount)
+				return nil, E.New("rfb: pasteboard flavor with ", tagCount, " tags, over the limit of 256")
 			}
 			for j := 0; j < tagCount && reader.err == nil; j++ {
 				key := string(counted(4096))
@@ -112,7 +114,7 @@ func parsePasteboardArchive(archive []byte) (*Clipboard, error) {
 		clipboard.Items = append(clipboard.Items, item)
 	}
 	if reader.err != nil {
-		return nil, fmt.Errorf("parse pasteboard: %w", reader.err)
+		return nil, E.Cause(reader.err, "parse pasteboard")
 	}
 	return clipboard, nil
 }
@@ -174,14 +176,14 @@ func compressPasteboard(archive []byte) ([]byte, error) {
 func pasteboardMessage(clipboard *Clipboard, echo uint32) ([]byte, error) {
 	archive := buildPasteboardArchive(clipboard)
 	if len(archive) > maximumPasteboard {
-		return nil, fmt.Errorf("pasteboard of %d bytes is over the 100 MiB limit", len(archive))
+		return nil, E.New("rfb: pasteboard of ", len(archive), " bytes is over the 100 MiB limit")
 	}
 	compressed, err := compressPasteboard(archive)
 	if err != nil {
 		return nil, err
 	}
 	if len(compressed) > maximumPasteboard {
-		return nil, fmt.Errorf("pasteboard of %d compressed bytes is over the 100 MiB limit", len(compressed))
+		return nil, E.New("rfb: pasteboard of ", len(compressed), " compressed bytes is over the 100 MiB limit")
 	}
 	message := []byte{0x1f, 0, boolByte(clipboard.Promise), 0}
 	message = binary.BigEndian.AppendUint32(message, echo)
@@ -199,7 +201,7 @@ func (c *Client) receivePasteboard() error {
 	uncompressed := binary.BigEndian.Uint32(header[7:])
 	compressedSize := binary.BigEndian.Uint32(header[11:])
 	if uncompressed > maximumPasteboard || compressedSize > maximumPasteboard {
-		return fmt.Errorf("pasteboard of %d bytes, %d compressed", uncompressed, compressedSize)
+		return E.New("rfb: pasteboard of ", uncompressed, " bytes, ", compressedSize, " compressed, is over the 100 MiB limit")
 	}
 	compressed, err := c.stream.bytes(int(compressedSize))
 	if err != nil {
@@ -210,7 +212,7 @@ func (c *Client) receivePasteboard() error {
 	c.access.Unlock()
 	archive, err := inflatePasteboard(compressed, uncompressed)
 	if err != nil {
-		return fmt.Errorf("pasteboard: %w", err)
+		return E.Cause(err, "inflate pasteboard")
 	}
 	clipboard, err := parsePasteboardArchive(archive)
 	if err != nil {
@@ -227,7 +229,7 @@ func (c *Client) receivePasteboard() error {
 
 func (c *Client) RequestClipboard() error {
 	if c.info.Dialect != DialectApple {
-		return errors.New("only a Mac can be asked for its pasteboard")
+		return E.New("rfb: only a Mac can be asked for its pasteboard")
 	}
 	c.access.Lock()
 	c.clipboardEcho++
@@ -240,7 +242,7 @@ func (c *Client) RequestClipboard() error {
 
 func (c *Client) SetSharedClipboard(enabled bool) error {
 	if c.info.Dialect != DialectApple {
-		return errors.New("only a Mac shares its pasteboard")
+		return E.New("rfb: only a Mac shares its pasteboard")
 	}
 	c.access.Lock()
 	c.sharedClipboard = enabled
@@ -256,7 +258,7 @@ func (c *Client) SetClipboard(clipboard *Clipboard) error {
 	if c.info.Dialect != DialectApple {
 		text, found := clipboard.Text()
 		if !found {
-			return errors.New("the clipboard has no text, and the server takes only text")
+			return E.New("rfb: the clipboard has no text, and the server takes only text")
 		}
 		encoded, err := encodeLatin1(text)
 		if err != nil {
@@ -293,7 +295,7 @@ func (c *Client) receiveCutText() error {
 		return c.stream.discard(int(-length))
 	}
 	if length > maximumPasteboard {
-		return fmt.Errorf("cut text of %d bytes", length)
+		return E.New("rfb: cut text of ", length, " bytes is over the 100 MiB limit")
 	}
 	text, err := c.stream.bytes(int(length))
 	if err != nil {
@@ -304,11 +306,9 @@ func (c *Client) receiveCutText() error {
 }
 
 func decodeLatin1(text []byte) string {
-	runes := make([]rune, len(text))
-	for i, value := range text {
-		runes[i] = rune(value)
-	}
-	return string(runes)
+	return string(common.Map(text, func(value byte) rune {
+		return rune(value)
+	}))
 }
 
 func encodeLatin1(text string) ([]byte, error) {
@@ -317,7 +317,7 @@ func encodeLatin1(text string) ([]byte, error) {
 		value, size := utf8.DecodeRuneInString(text)
 		text = text[size:]
 		if value > 0xff {
-			return nil, fmt.Errorf("the server's clipboard takes only Latin-1 text, not %q", value)
+			return nil, E.New("rfb: the server's clipboard takes only Latin-1 text, not ", strconv.QuoteRune(value))
 		}
 		encoded = append(encoded, byte(value))
 	}

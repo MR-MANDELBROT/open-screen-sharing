@@ -3,7 +3,6 @@ package media
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -11,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -111,7 +112,7 @@ func ListenServerStream(config ServerStreamConfig) (*ServerStream, error) {
 	}
 	videoConn, err := config.ListenUDP(config.VideoPort)
 	if err != nil {
-		return nil, fmt.Errorf("media: listen on UDP port %d: %w", config.VideoPort, err)
+		return nil, E.Cause(err, "media: listen on UDP port ", config.VideoPort)
 	}
 	_ = videoConn.SetReadBuffer(serverReadBuffer)
 	_ = videoConn.SetWriteBuffer(videoSendBuffer)
@@ -128,7 +129,7 @@ func ListenServerStream(config ServerStreamConfig) (*ServerStream, error) {
 		if err != nil {
 			cancel()
 			_ = videoConn.Close()
-			return nil, fmt.Errorf("media: listen on UDP port %d: %w", config.AudioPort, err)
+			return nil, E.Cause(err, "media: listen on UDP port ", config.AudioPort)
 		}
 		_ = audioConn.SetReadBuffer(serverReadBuffer)
 		s.audio = newServerLeg("audio", audioConn, audioSampleRate, initial, config.Logger)
@@ -183,7 +184,7 @@ func (s *ServerStream) HandleOffer(message []byte) error {
 	}
 	if err != nil {
 		s.stats.Errors++
-		return errors.Join(err, s.config.Send(ErrorMessage(ServerErrorBadConfiguration, 0)))
+		return E.Errors(err, s.config.Send(ErrorMessage(ServerErrorBadConfiguration, 0)))
 	}
 	ctx, cancel := context.WithTimeout(s.ctx, serverOpenLimit)
 	s.cancelOpen = cancel
@@ -212,7 +213,7 @@ func (s *ServerStream) open(ctx context.Context, cancel context.CancelFunc, gene
 		MaximumBitrate: offer.Video.MaximumBitrate,
 	})
 	if err != nil {
-		s.openFailed(generation, fmt.Errorf("open the device video: %w", err))
+		s.openFailed(generation, E.Cause(err, "open the device video"))
 		return
 	}
 	var audio ServerAudioSource
@@ -328,8 +329,15 @@ func (s *ServerStream) detachLocked() *serverSession {
 	return session
 }
 
-// ScreenSharing ignores a new ports message while its media negotiation
-// flag is set; processing the answer clears it (macOS 26A434 and 26B5101f).
+// ScreenSharing ignores a new ports message while its
+// mediaStreamMessage1Received flag is set; it sets the flag after handling a
+// ports message, and handling the answer clears it (ScreenSharing 776.27,
+// macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// -[SSSession handleAVCMediaEncoding:] 0x1cc0e48dc..0x1cc0e495c,
+// 0x1cc0e5c54..0x1cc0e5c5c, 0x1cc0e49d4..0x1cc0e49e8; ScreenSharing 786.3,
+// macOS 27.2 26B5101f, UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+// -[SSSession handleAVCMediaEncoding:] 0x22e52795c..0x22e5279dc,
+// 0x22e528cd4..0x22e528cdc, 0x22e527a54..0x22e527a68).
 func (s *ServerStream) Renegotiate() error {
 	s.access.Lock()
 	if s.closed {

@@ -3,7 +3,10 @@ package rfb
 import (
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Dialect int
@@ -60,7 +63,7 @@ func ParseQuality(name string) (Quality, error) {
 			return quality, nil
 		}
 	}
-	return 0, fmt.Errorf("unknown quality %q", name)
+	return 0, E.New("rfb: unknown quality ", strconv.Quote(name))
 }
 
 type Mode int

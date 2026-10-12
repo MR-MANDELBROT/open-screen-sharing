@@ -40,7 +40,13 @@ final class ScreenDrag: NSObject, UIDragInteractionDelegate {
         #if DEBUG || SIDELOAD
         // -[UIDragInteraction _immediatelyBeginDragWithTouch:completion:] skips the lift gesture: it asks the
         // delegate for items and a lift preview at once, then moves the touch, still down, into a system drag
-        // session and cancels it in the view. UIKit tears sheets off into new windows this way.
+        // session and cancels it in the view. UIKit tears sheets off into new windows this way
+        // (UIKitCore 9127.1.12.1.101, iPadOS 27.2 24B5099f, UUID AC1DE7C2-BE96-3C32-8C62-77AD2B97AD03,
+        // -[UIDragInteraction _immediatelyBeginDragWithTouch:completion:] 0x1853d2600..0x1853d275c,
+        // ___63-[UIDragInteraction _immediatelyBeginDragWithTouch:completion:]_block_invoke 0x1853d27d8..0x1853d2850,
+        // -[UIDragInteraction _beginLiftForItems:session:animated:] 0x1853d3de0,
+        // -[UIView(UIDragging) _beginDragWithTouches:orInitialCentroid:accessibilityEndpoint:] 0x1853fdc10..0x1853fdc7c,
+        // -[UISheetPresentationController sheetInteraction:didChangeOffset:] 0x184f93f40..0x184f940a8).
         let selector = NSSelectorFromString("_immediatelyBeginDragWithTouch:completion:")
         guard interaction.responds(to: selector) else { return }
         typealias Begin = @convention(c) (AnyObject, Selector, UITouch, @convention(block) (Bool) -> Void) -> Void
@@ -144,8 +150,12 @@ final class ScreenDrag: NSObject, UIDragInteractionDelegate {
     }
 
     // Files takes a drag only when every item conforms to public.content, public.directory or one
-    // of a few data types such as archives (DOCAcceptableDragPasteboardTypes), so plain data goes
-    // as content too.
+    // of a few data types such as archives (DOCAcceptableDragPasteboardTypes) (DocumentManagerExecutables 403.1.8,
+    // iPadOS 27.2 24B5099f, UUID 1DAC9909-A490-3241-88D4-91DF8E8C2F6D,
+    // one-time initialization function for DOCAcceptableDragPasteboardTypes 0x2639c2ae4..0x2639c2d44,
+    // function signature specialization <Arg[0] = Dead, Arg[2] = Dead> of
+    // DocumentManagerExecutables.DOCItemCollectionViewController.collectionView(_: __C.UICollectionView, canHandle:
+    // __C.UIDropSession) -> Swift.Bool 0x2637d4010..0x2637d42b0).
     private func itemProvider(for item: RemoteDragItem, in folder: URL) -> NSItemProvider {
         let name = (item.path as NSString).lastPathComponent
         let provider = NSItemProvider()

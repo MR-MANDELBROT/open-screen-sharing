@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const gestureStep = 16 * time.Millisecond
@@ -58,7 +58,7 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 	case "swipe":
 		parts := strings.Split(argument, ",")
 		if len(parts) != 3 {
-			return true, fmt.Errorf("%q is not X,Y,DIRECTION", argument)
+			return true, E.New(strconv.Quote(argument), " is not X,Y,DIRECTION")
 		}
 		numbers, err := parseNumbers(strings.Join(parts[:2], ","), 2, strconv.Atoi)
 		if err != nil {
@@ -67,7 +67,7 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 		directions := map[string]rfb.SwipeDirection{"back": rfb.SwipeBack, "forward": rfb.SwipeForward, "up": rfb.SwipeUp, "down": rfb.SwipeDown}
 		direction, found := directions[parts[2]]
 		if !found {
-			return true, fmt.Errorf("unknown swipe direction %q", parts[2])
+			return true, E.New("unknown swipe direction ", strconv.Quote(parts[2]))
 		}
 		return true, client.SendSwipe(numbers[0], numbers[1], direction)
 	case "flick":

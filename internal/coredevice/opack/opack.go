@@ -6,14 +6,15 @@ package opack
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"maps"
 	"math"
+	"reflect"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 var appleEpoch = time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -46,14 +47,14 @@ func encode(buffer *bytes.Buffer, v any) error {
 			buffer.WriteString(key)
 			err := encode(buffer, value[key])
 			if err != nil {
-				return fmt.Errorf("key %s: %w", key, err)
+				return E.Cause(err, "encode ", key)
 			}
 		}
 		if len(value) >= 15 {
 			buffer.WriteByte(0x03)
 		}
 	default:
-		return fmt.Errorf("unsupported type %T", v)
+		return E.New("opack: unsupported type ", reflect.TypeOf(v))
 	}
 	return nil
 }
@@ -84,12 +85,10 @@ func Unmarshal(data []byte) (any, error) {
 		return nil, err
 	}
 	if decoder.offset != len(data) {
-		return nil, fmt.Errorf("%d unexpected trailing bytes", len(data)-decoder.offset)
+		return nil, E.New("opack: ", len(data)-decoder.offset, " unexpected trailing bytes")
 	}
 	return value, nil
 }
-
-var errTerminator = errors.New("unexpected terminator")
 
 type decoder struct {
 	data    []byte
@@ -99,7 +98,7 @@ type decoder struct {
 
 func (d *decoder) read(n int) ([]byte, error) {
 	if n < 0 || len(d.data)-d.offset < n {
-		return nil, fmt.Errorf("unexpected end of data at offset %d", d.offset)
+		return nil, E.New("opack: unexpected end of data at offset ", d.offset)
 	}
 	value := d.data[d.offset : d.offset+n]
 	d.offset += n
@@ -119,12 +118,11 @@ func (d *decoder) readUint(n int) (uint64, error) {
 }
 
 func (d *decoder) remember(value any) any {
-	for _, object := range d.objects {
-		if equalScalar(object, value) {
-			return value
-		}
+	if !slices.ContainsFunc(d.objects, func(object any) bool {
+		return equalScalar(object, value)
+	}) {
+		d.objects = append(d.objects, value)
 	}
-	d.objects = append(d.objects, value)
 	return value
 }
 
@@ -156,7 +154,7 @@ func (d *decoder) decode() (any, error) {
 	case tag == 0x02:
 		return false, nil
 	case tag == 0x03:
-		return nil, errTerminator
+		return nil, E.New("opack: unexpected terminator at offset ", d.offset-1)
 	case tag == 0x04:
 		return nil, nil
 	case tag == 0x05:
@@ -225,7 +223,7 @@ func (d *decoder) decode() (any, error) {
 	case tag >= 0xE0 && tag <= 0xEF:
 		return d.decodeDictionary(int(tag-0xE0), tag == 0xEF)
 	default:
-		return nil, fmt.Errorf("unsupported tag 0x%02x at offset %d", tag, d.offset-1)
+		return nil, E.New("opack: unsupported tag 0x", strconv.FormatUint(uint64(tag), 16), " at offset ", d.offset-1)
 	}
 }
 
@@ -238,14 +236,14 @@ func (d *decoder) sizedLength(tag byte, inlineBase byte, sizedBase byte) (int, e
 		return 0, err
 	}
 	if length > uint64(len(d.data)) {
-		return 0, fmt.Errorf("length %d exceeds data size", length)
+		return 0, E.New("opack: length ", length, " exceeds data size ", len(d.data))
 	}
 	return int(length), nil
 }
 
 func (d *decoder) lookup(index uint64) (any, error) {
 	if index >= uint64(len(d.objects)) {
-		return nil, fmt.Errorf("back reference %d out of range, %d objects seen", index, len(d.objects))
+		return nil, E.New("opack: back reference ", index, " out of range, ", len(d.objects), " objects seen")
 	}
 	return d.objects[index], nil
 }
@@ -283,11 +281,11 @@ func (d *decoder) decodeDictionary(count int, terminated bool) (map[string]any, 
 		}
 		key, isString := keyValue.(string)
 		if !isString {
-			return nil, fmt.Errorf("dictionary key is %T, not a string", keyValue)
+			return nil, E.New("opack: dictionary key is ", reflect.TypeOf(keyValue), ", not a string")
 		}
 		value, err := d.decode()
 		if err != nil {
-			return nil, fmt.Errorf("key %s: %w", key, err)
+			return nil, E.Cause(err, "decode ", key)
 		}
 		dictionary[key] = value
 	}

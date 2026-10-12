@@ -8,20 +8,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-// pymobiledevice3 services/cryptexd.py sends client-version 3, image type 10,
-// persistence 2 and nonce-persistence 1 for the DDI cryptex.
+// pymobiledevice3 sends client-version 3, image type 10, persistence 2 and
+// nonce-persistence 1 for the DDI cryptex (pymobiledevice3 9c33842,
+// pymobiledevice3/services/cryptexd.py:142,150,164-165,435-437).
 const (
 	cryptexClientVersion  = 3
 	cryptexImageTypeIndex = 10
 	cryptexPersistence    = 2
-	// idevice d32c818 sends nonce_persistence for both persistence fields.
+	// idevice sends nonce_persistence for both persistence fields
+	// (idevice d32c818, idevice/src/services/cryptexd.rs:273-274).
 	cryptexNoncePersistence = 1
 )
 
@@ -101,11 +104,13 @@ func (c *Client) MountCryptex(ctx context.Context, dir string) error {
 	if err != nil {
 		return err
 	}
-	// idevice and pymobiledevice3 accept Cryptex1,Ticket or ApImg4Ticket.
+	// idevice and pymobiledevice3 accept Cryptex1,Ticket or ApImg4Ticket
+	// (idevice 3854a5d, idevice/src/services/cryptexd.rs:410-417;
+	// pymobiledevice3 9c33842, pymobiledevice3/services/cryptexd.py:574).
 	ticket, ok := response["Cryptex1,Ticket"].([]byte)
 	if !ok {
 		if ticket, ok = response["ApImg4Ticket"].([]byte); !ok {
-			return errors.New("imagemounter: TSS response without Cryptex1,Ticket")
+			return E.New("imagemounter: TSS response without Cryptex1,Ticket or ApImg4Ticket")
 		}
 	}
 	if err = c.install(ctx, files, ticket, properties); err != nil {
@@ -116,13 +121,14 @@ func (c *Client) MountCryptex(ctx context.Context, dir string) error {
 }
 
 // pymobiledevice3 encodes Cryptex1,SubType and Cryptex1,NonceDomain as
-// XPC uint64 in cryptex1-properties.
+// XPC uint64 in cryptex1-properties (pymobiledevice3 9c33842,
+// pymobiledevice3/services/cryptexd.py:347-354).
 func cryptexProperties(identity buildIdentity) (map[string]any, error) {
 	properties := map[string]any{"MountedCryptex": false}
 	for _, key := range []string{"Cryptex1,SubType", "Cryptex1,NonceDomain"} {
 		number, ok := numberValue(identity[key])
 		if !ok {
-			return nil, fmt.Errorf("imagemounter: the cryptex identity has no %s", key)
+			return nil, E.New("imagemounter: the cryptex identity has no ", key)
 		}
 		properties[key] = number
 	}
@@ -133,7 +139,7 @@ func cryptexProperties(identity buildIdentity) (map[string]any, error) {
 	} {
 		value, ok := identity[manifestKey]
 		if !ok {
-			return nil, fmt.Errorf("imagemounter: the cryptex identity has no %s", manifestKey)
+			return nil, E.New("imagemounter: the cryptex identity has no ", manifestKey)
 		}
 		properties[key] = value
 	}
@@ -141,7 +147,8 @@ func cryptexProperties(identity buildIdentity) (map[string]any, error) {
 }
 
 // pymobiledevice3 announces image, trustcache, im4m, info and volumehash as
-// transfer IDs 1 through 5, sends all five, then reads the install reply.
+// transfer IDs 1 through 5, sends all five, then reads the install reply
+// (pymobiledevice3 9c33842, pymobiledevice3/services/cryptexd.py:476-500).
 func (c *Client) install(ctx context.Context, files []resolvedFile, ticket []byte, properties map[string]any) error {
 	argv := map[string]any{
 		"auth":                uint64(0),
@@ -158,7 +165,7 @@ func (c *Client) install(ctx context.Context, files []resolvedFile, ticket []byt
 		} else {
 			info, err := os.Stat(files[index].path)
 			if err != nil {
-				return fmt.Errorf("imagemounter: %w", err)
+				return E.Cause(err, "imagemounter")
 			}
 			sizes[index] = info.Size()
 		}
@@ -168,18 +175,18 @@ func (c *Client) install(ctx context.Context, files []resolvedFile, ticket []byt
 		for index, file := range cryptexFiles {
 			if file.key == "" {
 				if err := conn.SendFile(ctx, uint64(index+1), bytes.NewReader(ticket), sizes[index]); err != nil {
-					return fmt.Errorf("imagemounter: send %s: %w", file.argument, err)
+					return E.Cause(err, "imagemounter: send ", file.argument)
 				}
 				continue
 			}
 			content, err := os.Open(files[index].path)
 			if err != nil {
-				return fmt.Errorf("imagemounter: %w", err)
+				return E.Cause(err, "imagemounter")
 			}
 			err = conn.SendFile(ctx, uint64(index+1), content, sizes[index])
 			content.Close()
 			if err != nil {
-				return fmt.Errorf("imagemounter: send %s: %w", file.argument, err)
+				return E.Cause(err, "imagemounter: send ", file.argument)
 			}
 		}
 		return nil
@@ -191,8 +198,10 @@ func (c *Client) readPersonalizationID(ctx context.Context) (map[string]any, err
 	return c.invokeCryptexd(ctx, "read-personalization-id", map[string]any{}, nil)
 }
 
-// DDI build 27A9266e sets Cryptex1,NonceDomain to 4; pymobiledevice3 sends
-// that value as nonce-domain-handle, not nonce-domain.
+// DDI build 27A9266e sets Cryptex1,NonceDomain to 4 (BuildManifest.plist,
+// DDI 27A9266e); pymobiledevice3 sends that value as nonce-domain-handle, not
+// nonce-domain (pymobiledevice3 9c33842,
+// pymobiledevice3/services/cryptexd.py:520,536,571).
 func (c *Client) cryptexNonce(ctx context.Context, domain uint64) ([]byte, error) {
 	argv, err := c.invokeCryptexd(ctx, "get-nonce", map[string]any{"nonce-domain-handle": domain}, nil)
 	if err != nil {
@@ -200,20 +209,21 @@ func (c *Client) cryptexNonce(ctx context.Context, domain uint64) ([]byte, error
 	}
 	blob, ok := argv["nonce"].([]byte)
 	if !ok {
-		return nil, errors.New("imagemounter: get-nonce reply without a nonce")
+		return nil, E.New("imagemounter: get-nonce reply without a nonce")
 	}
 	return unwrapNonce(blob)
 }
 
 // idevice unwrap_nonce reads the nonce at byte 2 and its length from the
-// last four bytes as little endian.
+// last four bytes as little endian (idevice 3854a5d,
+// idevice/src/services/cryptexd.rs:360-370).
 func unwrapNonce(blob []byte) ([]byte, error) {
 	if len(blob) < 6 {
-		return nil, fmt.Errorf("imagemounter: nonce structure of %d bytes", len(blob))
+		return nil, E.New("imagemounter: nonce structure of ", len(blob), " bytes")
 	}
 	length := binary.LittleEndian.Uint32(blob[len(blob)-4:])
 	if uint64(length) > uint64(len(blob)-6) {
-		return nil, fmt.Errorf("imagemounter: nonce of %d bytes in a %d-byte structure", length, len(blob))
+		return nil, E.New("imagemounter: nonce of ", length, " bytes in a ", len(blob), "-byte structure")
 	}
 	return blob[2 : 2+length], nil
 }
@@ -224,17 +234,15 @@ func (c *Client) ddiCryptexInstalled(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	items, _ := argv["remote-cryptex-array"].([]any)
-	for _, item := range items {
+	return slices.ContainsFunc(items, func(item any) bool {
 		entry, _ := item.(map[string]any)
-		if entry["remote-cryptex-identifier"] == ddiCryptexIdentifier {
-			return true, nil
-		}
-	}
-	return false, nil
+		return entry["remote-cryptex-identifier"] == ddiCryptexIdentifier
+	}), nil
 }
 
 // pymobiledevice3 opens and closes a RemoteXPC connection for each cryptexd
-// routine, including install.
+// routine, including install (pymobiledevice3 9c33842,
+// pymobiledevice3/services/cryptexd.py:395-409,494-507).
 func (c *Client) invokeCryptexd(ctx context.Context, routine string, argv map[string]any, send func(conn *xpc.Conn) error) (map[string]any, error) {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
@@ -243,14 +251,14 @@ func (c *Client) invokeCryptexd(ctx context.Context, routine string, argv map[st
 	}
 	conn, err := c.device.DialXPC(ctx, cryptexService)
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
 	reply, err := exchangeCryptexd(conn, routine, argv, send)
 	if err != nil && ctx.Err() != nil {
-		return nil, fmt.Errorf("imagemounter: cryptexd %s: %w", routine, ctx.Err())
+		return nil, E.Cause(ctx.Err(), "imagemounter: cryptexd ", routine)
 	}
 	return reply, err
 }
@@ -258,7 +266,7 @@ func (c *Client) invokeCryptexd(ctx context.Context, routine string, argv map[st
 func exchangeCryptexd(conn *xpc.Conn, routine string, argv map[string]any, send func(conn *xpc.Conn) error) (map[string]any, error) {
 	err := conn.Send(map[string]any{"routine": routine, "argv": argv}, true)
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: send cryptexd %s: %w", routine, err)
+		return nil, E.Cause(err, "imagemounter: send cryptexd ", routine)
 	}
 	if send != nil {
 		if err = send(conn); err != nil {
@@ -267,13 +275,14 @@ func exchangeCryptexd(conn *xpc.Conn, routine string, argv map[string]any, send 
 	}
 	reply, err := conn.Receive()
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: receive cryptexd %s reply: %w", routine, err)
+		return nil, E.Cause(err, "imagemounter: receive cryptexd ", routine, " reply")
 	}
 	return cryptexReply(routine, reply)
 }
 
 // idevice treats a missing error field as zero, including for
-// read-personalization-id.
+// read-personalization-id (idevice 3854a5d,
+// idevice/src/services/cryptexd.rs:342-346).
 func cryptexReply(routine string, reply map[string]any) (map[string]any, error) {
 	if cferr, ok := reply["cferr"].(map[string]any); ok {
 		cryptexError := &CryptexError{Routine: routine}

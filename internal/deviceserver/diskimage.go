@@ -3,17 +3,18 @@ package deviceserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"path/filepath"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/imagemounter"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-var errRemounted = errors.New("the Developer Disk Image is mounted now; reconnecting to reach its services")
+var errRemounted = E.New("the Developer Disk Image is mounted now; reconnecting to reach its services")
 
-// DDI 27A9266e has a Cryptex identity without ApBoardID or ApChipID; its personalized identities include both.
+// The Developer Disk Image has a Cryptex identity without ApBoardID or ApChipID; its personalized identities include both
+// (DDI 27A9266e, BuildManifest.plist, BuildIdentities 0..139 and 140).
 var diskImageVariants = []imagemounter.Variant{imagemounter.Cryptex, imagemounter.Personalized}
 
 func (s *Server) prepareDiskImage(ctx context.Context, device *coredevice.Device, images *imagemounter.Client) error {
@@ -25,7 +26,7 @@ func (s *Server) prepareDiskImage(ctx context.Context, device *coredevice.Device
 	status, err := images.Status(statusContext)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("read the Developer Disk Image's state: %w", err)
+		return E.Cause(err, "read the Developer Disk Image's state")
 	}
 	if status.Mounted() {
 		if !s.relisted {
@@ -44,9 +45,8 @@ func (s *Server) prepareDiskImage(ctx context.Context, device *coredevice.Device
 	var failure error
 	variants := diskImageVariants
 	if status.CryptexError != nil {
-		// The Cryptex variant uses com.apple.security.cryptexd.remote; the personalized variant uses mobile_image_mounter.
 		s.logger.Warn("cryptexd failed; trying the personalized disk image first", "error", status.CryptexError)
-		failure = fmt.Errorf("cryptexd: %w", status.CryptexError)
+		failure = E.Cause(status.CryptexError, "list installed cryptexes")
 		variants = []imagemounter.Variant{imagemounter.Personalized, imagemounter.Cryptex}
 	}
 	found, hasCopy := false, false
@@ -57,7 +57,7 @@ func (s *Server) prepareDiskImage(ctx context.Context, device *coredevice.Device
 				return ctx.Err()
 			}
 			s.logger.Info("disk image files", "variant", variant, "error", err)
-			failure = errors.Join(failure, err)
+			failure = E.Errors(failure, err)
 			hasCopy = hasCopy || !errors.Is(err, fs.ErrNotExist)
 			continue
 		}
@@ -79,13 +79,13 @@ func (s *Server) prepareDiskImage(ctx context.Context, device *coredevice.Device
 			return ctx.Err()
 		}
 		s.logger.Warn("mount the Developer Disk Image", "variant", variant, "error", err)
-		failure = errors.Join(failure, fmt.Errorf("mount %v: %w", variant, err))
+		failure = E.Errors(failure, E.Cause(err, "mount ", variant))
 	}
 	if !found && !s.options.DownloadDiskImage {
 		if !hasCopy {
 			return newError(ProblemNoDiskImage, "the Developer Disk Image is not mounted, and there is no copy of it to mount")
 		}
-		return &Error{Problem: ProblemNoDiskImage, Err: fmt.Errorf("the Developer Disk Image is not mounted, and %s has no usable copy: %w", directory, failure)}
+		return &Error{Problem: ProblemNoDiskImage, Err: E.Cause(failure, "the Developer Disk Image is not mounted, and ", directory, " has no usable copy")}
 	}
 	return &Error{Problem: ProblemDiskImage, Err: failure}
 }
@@ -100,7 +100,7 @@ func (s *Server) diskImageFiles(ctx context.Context, directory string, variant i
 		return own, nil
 	}
 	if !s.options.DownloadDiskImage {
-		return "", fmt.Errorf("%v: %w", variant, err)
+		return "", E.Cause(err, "verify ", variant)
 	}
 	source, err := imagemounter.HTTPSource(imagemounter.RepositoryURL(variant))
 	if err != nil {
@@ -111,10 +111,10 @@ func (s *Server) diskImageFiles(ctx context.Context, directory string, variant i
 		s.notify(func(observer Observer) { observer.DiskImageProgress(received) })
 	})
 	if err != nil {
-		return "", fmt.Errorf("download %v: %w", variant, err)
+		return "", E.Cause(err, "download ", variant)
 	}
 	if err = imagemounter.Verify(own, variant); err != nil {
-		return "", fmt.Errorf("download %v: %w", variant, err)
+		return "", E.Cause(err, "download ", variant)
 	}
 	return own, nil
 }

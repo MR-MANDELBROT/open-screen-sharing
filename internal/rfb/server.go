@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"log/slog"
 	"maps"
 	"net"
@@ -14,9 +13,10 @@ import (
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-var ErrServerClosed = errors.New("rfb: server closed")
+var ErrServerClosed = E.New("rfb: server closed")
 
 const (
 	handshakeTimeout     = 30 * time.Second
@@ -90,7 +90,7 @@ type Server struct {
 
 func NewServer(options ServerOptions) (*Server, error) {
 	if options.Password == "" && !options.NoAuthentication {
-		return nil, errors.New("rfb: the server needs a password")
+		return nil, E.New("rfb: the server needs a password")
 	}
 	if options.Flags == 0 {
 		options.Flags = DefaultServerFlags
@@ -116,7 +116,7 @@ func NewServer(options ServerOptions) (*Server, error) {
 		}
 		bitmap, err := commandBitmap(commands)
 		if err != nil {
-			return nil, fmt.Errorf("rfb: %w", err)
+			return nil, err
 		}
 		s.commands = bitmap
 	}
@@ -200,7 +200,7 @@ func (s *Server) Close() error {
 	s.access.Unlock()
 	var err error
 	for _, listener := range listeners {
-		err = errors.Join(err, listener.Close())
+		err = E.Errors(err, listener.Close())
 	}
 	for _, conn := range conns {
 		_ = conn.Close()

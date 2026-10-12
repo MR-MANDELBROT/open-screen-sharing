@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"time"
+
+	"github.com/sagernet/sing/common"
 )
 
 const (
@@ -153,15 +155,15 @@ func (l *serverLeg) measureClientRTTLocked(lastReport, delay uint32, now time.Ti
 	if lastReport == 0 {
 		return
 	}
-	for _, sent := range l.sentReports {
-		if sent.middle != lastReport || sent.at.IsZero() {
-			continue
-		}
-		rtt := now.Sub(sent.at) - time.Duration(float64(delay)/65536*float64(time.Second))
-		if rtt >= 0 {
-			l.clientRTT = rtt
-		}
+	sent := common.Find(l.sentReports[:], func(sent sentReport) bool {
+		return sent.middle == lastReport && !sent.at.IsZero()
+	})
+	if sent.at.IsZero() {
 		return
+	}
+	rtt := now.Sub(sent.at) - time.Duration(float64(delay)/65536*float64(time.Second))
+	if rtt >= 0 {
+		l.clientRTT = rtt
 	}
 }
 

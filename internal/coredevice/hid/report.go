@@ -16,9 +16,9 @@ const (
 	keyboardTimestampOffset = 31
 )
 
-// The descriptor and 39-byte report match idevice d32c818, hid.rs:152-159,
-// 344-353: report ID, 29 usage bytes, one constant byte, six timestamp
-// bytes and two zero bytes.
+// The descriptor and 39-byte report match idevice: report ID, 29 usage
+// bytes, one constant byte, six timestamp bytes and two zero bytes (idevice
+// d32c818, idevice/src/services/core_device/hid.rs:152-159, 344-354).
 var keyboardReportDescriptor = []byte{
 	0x85, 0x01, 0x05, 0x07, 0x19, 0x01, 0x29, 0xe7, 0x96, 0xe8, 0x00, 0x75, 0x01, 0x15, 0x01, 0x26,
 	0xe7, 0x00, 0x81, 0x02, 0xa1, 0x02, 0x06, 0x1a, 0xff, 0x0a, 0xf1, 0xe0, 0x19, 0x00, 0x29, 0x00,

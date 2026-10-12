@@ -2,20 +2,20 @@ package filecopy
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"io"
 	"maps"
 	"net"
 	"slices"
 	"sync"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 var (
-	ErrUnsupported = errors.New("filecopy: the Mac does not accept file copy")
-	ErrObserveOnly = errors.New("filecopy: the Mac only allows observing")
-	ErrCanceled    = errors.New("filecopy: transfer canceled")
+	ErrUnsupported = E.New("filecopy: the Mac does not accept file copy")
+	ErrObserveOnly = E.New("filecopy: the Mac only allows observing")
+	ErrCanceled    = E.New("filecopy: transfer canceled")
 )
 
 type Conn interface {
@@ -64,7 +64,7 @@ func (m *Manager) ReadMessage(r io.Reader) error {
 	}
 	size := binary.BigEndian.Uint32(message[2:])
 	if size < headerSize-6 || size > maximumServerMessageSize {
-		return fmt.Errorf("filecopy: server message of %d bytes", size)
+		return E.New("filecopy: server message size ", size, " is not between ", headerSize-6, " and ", maximumServerMessageSize)
 	}
 	message = slices.Grow(message, int(size))[:6+int(size)]
 	_, err = io.ReadFull(r, message[6:])

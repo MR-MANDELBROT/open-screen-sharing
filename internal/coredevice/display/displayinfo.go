@@ -1,9 +1,14 @@
 package display
 
-import "context"
+import (
+	"context"
 
-// pymobiledevice3 1146717 sends getdisplayinfo to deviceinfo with no
-// action identifier (remote/core_device/device_info.py:12-27).
+	"github.com/sagernet/sing/common"
+)
+
+// pymobiledevice3 sends getdisplayinfo to deviceinfo with no action
+// identifier (pymobiledevice3 1146717,
+// pymobiledevice3/remote/core_device/device_info.py:12, 23-27).
 const (
 	deviceInfoServiceName = "com.apple.coredevice.deviceinfo"
 	featureDisplayInfo    = "com.apple.coredevice.feature.getdisplayinfo"
@@ -14,7 +19,7 @@ type DisplayInfo struct {
 	Primary       bool
 	Width, Height int
 	// devicectl 651.13.2 reported nativeSize=[2420,1668] and
-	// nativeOrientation=rot270 for iPad17,1.
+	// nativeOrientation=rot270 (observed on iPad17,1).
 	NativeWidth, NativeHeight int
 	CurrentOrientation        string
 	PointScale                int
@@ -30,8 +35,7 @@ func (c *Client) Displays(ctx context.Context) ([]DisplayInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	var displays []DisplayInfo
-	for _, value := range array(output["displays"]) {
+	return common.Map(array(output["displays"]), func(value any) DisplayInfo {
 		display := dictionary(value)
 		info := DisplayInfo{
 			ID:                 intField(display, "displayId"),
@@ -41,9 +45,8 @@ func (c *Client) Displays(ctx context.Context) ([]DisplayInfo, error) {
 		info.Primary, _ = boolValue(display["primary"])
 		info.Width, info.Height = sizeValue(dictionary(display["currentMode"])["size"])
 		info.NativeWidth, info.NativeHeight = sizeValue(display["nativeSize"])
-		displays = append(displays, info)
-	}
-	return displays, nil
+		return info
+	}), nil
 }
 
 func sizeValue(value any) (int, int) {

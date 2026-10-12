@@ -3,7 +3,6 @@ package display
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"net"
 	"net/netip"
 	"sync"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/tunnel"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -115,7 +115,7 @@ func (s *Stream) waitFirstPacket(ctx context.Context) error {
 func (s *Stream) WriteRTCP(packet []byte) error {
 	_, err := s.conn.WriteTo(packet, s.info.DeviceAddress)
 	if err != nil {
-		return fmt.Errorf("write rtcp: %w", err)
+		return E.Cause(err, "write rtcp")
 	}
 	if len(packet) >= 2 && (packet[1] == 200 || packet[1] == 201 || packet[1] == 204) {
 		s.lastRTCP.Store(time.Now().UnixNano())
@@ -162,8 +162,9 @@ func (s *Stream) sendKeyFrameLocked() error {
 	return s.WriteRTCP(keyFrameRequest(s.info.SSRC, s.info.DeviceSSRC, s.firSequence))
 }
 
-// pymobiledevice3 1146717 uses this empty-CNAME SDES in
-// _build_rtcp_sdes (remote/core_device/screen_stream.py:1305-1321).
+// pymobiledevice3 uses this empty-CNAME SDES in _build_rtcp_sdes
+// (pymobiledevice3 1146717,
+// pymobiledevice3/remote/core_device/screen_stream.py:1305-1322).
 func keepaliveReport(ssrc uint32) []byte {
 	report := binary.BigEndian.AppendUint32([]byte{0x80, 201, 0, 1}, ssrc)
 	report = append(report, 0x81, 202, 0, 2)
@@ -206,7 +207,7 @@ func (s *Stream) Close() error {
 		defer cancel()
 		stopped, err := s.client.stop(ctx, s.info.SSRC)
 		if err != nil {
-			s.closeErr = fmt.Errorf("stop %s stream: %w", s.info.Type, err)
+			s.closeErr = E.Cause(err, "stop ", string(s.info.Type), " stream")
 		} else {
 			s.client.logger.Debug("display stream stopped", "ssrc", s.info.SSRC, "stopped", stopped)
 		}

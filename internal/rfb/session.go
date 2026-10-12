@@ -2,9 +2,11 @@ package rfb
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type SessionRequest struct {
@@ -33,15 +35,14 @@ func (s SessionChoice) String() string {
 	}
 }
 
-var ErrSessionCancelled = errors.New("session selection cancelled")
+var ErrSessionCancelled = E.New("rfb: session selection cancelled")
 
 func (c *Client) selectSession() error {
 	// ScreenSharing writes the session choice at byte 6 of the response body;
 	// its credential-bearing response has a 200-byte body with two 64-byte
-	// credential slots starting at body offset 0x48.
-	// Verified in macOS 27.0.1 (26A434), ScreenSharing UUID
-	// EC0B2C20-F816-3FCE-822D-F9403C09EB50, _RFBSelectSession,
-	// 0x1cc05ead0, 0x1cc05eb04-0x1cc05eb50 and 0x1cc05f494.
+	// credential slots starting at body offset 0x48 (ScreenSharing 776.27,
+	// macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _RFBSelectSession 0x1cc05ead0, 0x1cc05eb04..0x1cc05eb50, 0x1cc05f494).
 	prompt, err := c.stream.bytes(4)
 	if err != nil {
 		return err
@@ -53,15 +54,15 @@ func (c *Client) selectSession() error {
 	}
 	prompt = append(prompt, rest...)
 	if len(prompt) < 13 {
-		return fmt.Errorf("session selection of %d bytes", len(prompt))
+		return E.New("rfb: session selection of ", len(prompt), " bytes, want at least 13")
 	}
 	flags := binary.BigEndian.Uint32(prompt[4:])
 	consoleUser, _, _ := strings.Cut(string(prompt[12:]), "\x00")
-	request := SessionRequest{ConsoleUser: consoleUser}
-	for _, choice := range []SessionChoice{SessionShareConsole, SessionOwn} {
-		if flags&(1<<choice) != 0 {
-			request.Choices = append(request.Choices, choice)
-		}
+	request := SessionRequest{
+		ConsoleUser: consoleUser,
+		Choices: common.Filter([]SessionChoice{SessionShareConsole, SessionOwn}, func(choice SessionChoice) bool {
+			return flags&(1<<choice) != 0
+		}),
 	}
 	c.logger.Debug("session selection", "console", consoleUser, "flags", fmt.Sprintf("%#x", flags))
 	c.handler.StateChanged(StateChoosingSession)
@@ -77,8 +78,11 @@ func (c *Client) selectSession() error {
 		copy(body[8:71], consoleUser)
 		c.handler.StateChanged(StateWaitingForApproval)
 	case SessionOwn:
-		if len(c.options.Username) > 63 || len(c.options.Password) > 63 {
-			return errLongCredentials
+		if len(c.options.Username) > 63 {
+			return E.New("rfb: user name of ", len(c.options.Username), " bytes is over the 63-byte limit")
+		}
+		if len(c.options.Password) > 63 {
+			return E.New("rfb: password is over the 63-byte limit")
 		}
 		body = make([]byte, 200)
 		binary.BigEndian.PutUint16(body, 2)

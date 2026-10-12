@@ -10,12 +10,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/rsd"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 // pymobiledevice3 queries the device for an existing personalization
-// manifest before requesting a ticket from TSS.
+// manifest before requesting a ticket from TSS (pymobiledevice3 9c33842,
+// pymobiledevice3/services/mobile_image_mounter.py:396-406).
 func (c *Client) MountPersonalized(ctx context.Context, dir string) error {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
@@ -55,7 +58,9 @@ func (c *Client) MountPersonalized(ctx context.Context, dir string) error {
 		if err = image.verify(); err != nil {
 			return err
 		}
-		// pymobiledevice3 uses the image SHA-384 for QueryPersonalizationManifest.
+		// pymobiledevice3 uses the image SHA-384 for QueryPersonalizationManifest
+		// (pymobiledevice3 9c33842,
+		// pymobiledevice3/services/mobile_image_mounter.py:401-403).
 		ticket, err = conn.personalizationManifest(image.digest)
 		return err
 	})
@@ -63,7 +68,9 @@ func (c *Client) MountPersonalized(ctx context.Context, dir string) error {
 		return err
 	}
 	// go-ios and pymobiledevice3 query the nonce on the connection used to
-	// upload and mount the image.
+	// upload and mount the image (go-ios ca2c56d,
+	// ios/imagemounter/personalized_image_mounter.go:88-140; pymobiledevice3
+	// 9c33842, pymobiledevice3/services/mobile_image_mounter.py:404-414,432).
 	return c.withMounter(ctx, func(conn *mounterConn) error {
 		if ticket == nil {
 			c.logger.Info("requesting a Developer Disk Image ticket from Apple")
@@ -102,7 +109,7 @@ func (c *Client) personalizedTicket(ctx context.Context, conn *mounterConn, iden
 	}
 	ticket, ok := response["ApImg4Ticket"].([]byte)
 	if !ok {
-		return nil, errors.New("imagemounter: TSS response without ApImg4Ticket")
+		return nil, E.New("imagemounter: TSS response without ApImg4Ticket")
 	}
 	return ticket, nil
 }
@@ -115,13 +122,13 @@ func (c *Client) withMounter(ctx context.Context, fn func(conn *mounterConn) err
 	}
 	conn, err := c.device.DialShim(ctx, mounterService)
 	if err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	err = fn(&mounterConn{conn: conn})
 	if !stop() && err != nil && ctx.Err() != nil {
-		return fmt.Errorf("imagemounter: image mounter: %w", ctx.Err())
+		return E.Cause(ctx.Err(), "imagemounter: image mounter")
 	}
 	return err
 }
@@ -133,7 +140,7 @@ type mounterConn struct {
 func (m *mounterConn) request(message map[string]any) (map[string]any, error) {
 	command, _ := message["Command"].(string)
 	if err := m.conn.Send(message); err != nil {
-		return nil, fmt.Errorf("imagemounter: send %s: %w", command, err)
+		return nil, E.Cause(err, "imagemounter: send ", command)
 	}
 	return m.receive(command)
 }
@@ -141,7 +148,7 @@ func (m *mounterConn) request(message map[string]any) (map[string]any, error) {
 func (m *mounterConn) receive(command string) (map[string]any, error) {
 	reply, err := m.conn.Receive()
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: receive %s reply: %w", command, err)
+		return nil, E.Cause(err, "imagemounter: receive ", command, " reply")
 	}
 	if message, ok := reply["Error"]; ok {
 		detail, _ := reply["DetailedError"].(string)
@@ -152,7 +159,7 @@ func (m *mounterConn) receive(command string) (map[string]any, error) {
 
 func (m *mounterConn) expectStatus(command string, reply map[string]any, want string) error {
 	if status, _ := reply["Status"].(string); status != want {
-		return fmt.Errorf("imagemounter: %s: Status %q, want %q", command, reply["Status"], want)
+		return E.New("imagemounter: ", command, ": Status ", strconv.Quote(status), ", want ", strconv.Quote(want))
 	}
 	return nil
 }
@@ -164,7 +171,7 @@ func (m *mounterConn) developerModeStatus() (bool, error) {
 	}
 	enabled, ok := reply["DeveloperModeStatus"].(bool)
 	if !ok {
-		return false, errors.New("imagemounter: QueryDeveloperModeStatus reply without DeveloperModeStatus")
+		return false, E.New("imagemounter: QueryDeveloperModeStatus reply without DeveloperModeStatus")
 	}
 	return enabled, nil
 }
@@ -176,7 +183,7 @@ func (m *mounterConn) imageMounted(imageType string) (bool, error) {
 	}
 	signatures, ok := reply["ImageSignature"].([]any)
 	if !ok {
-		return false, errors.New("imagemounter: LookupImage reply without ImageSignature")
+		return false, E.New("imagemounter: LookupImage reply without ImageSignature")
 	}
 	return len(signatures) > 0, nil
 }
@@ -191,13 +198,14 @@ func (m *mounterConn) personalizationIdentifiers() (map[string]any, error) {
 	}
 	identifiers, ok := reply["PersonalizationIdentifiers"].(map[string]any)
 	if !ok {
-		return nil, errors.New("imagemounter: QueryPersonalizationIdentifiers reply without PersonalizationIdentifiers")
+		return nil, E.New("imagemounter: QueryPersonalizationIdentifiers reply without PersonalizationIdentifiers")
 	}
 	return identifiers, nil
 }
 
 // pymobiledevice3 opens a new mounter connection after MissingManifestError
-// before requesting a TSS ticket and uploading.
+// before requesting a TSS ticket and uploading (pymobiledevice3 9c33842,
+// pymobiledevice3/services/mobile_image_mounter.py:404-408).
 func (m *mounterConn) personalizationManifest(digest []byte) ([]byte, error) {
 	reply, err := m.request(map[string]any{
 		"Command":               "QueryPersonalizationManifest",
@@ -212,7 +220,9 @@ func (m *mounterConn) personalizationManifest(digest []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// pymobiledevice3 uses the returned ImageSignature as the upload and mount ticket.
+	// pymobiledevice3 uses the returned ImageSignature as the upload and mount
+	// ticket (pymobiledevice3 9c33842,
+	// pymobiledevice3/services/mobile_image_mounter.py:303,408,414).
 	ticket, _ := reply["ImageSignature"].([]byte)
 	return ticket, nil
 }
@@ -220,7 +230,8 @@ func (m *mounterConn) personalizationManifest(digest []byte) ([]byte, error) {
 func (m *mounterConn) nonce() ([]byte, error) {
 	reply, err := m.request(map[string]any{
 		"Command": "QueryNonce",
-		// go-ios sends HostProcessName CoreDeviceService with QueryNonce.
+		// go-ios sends HostProcessName CoreDeviceService with QueryNonce
+		// (go-ios ca2c56d, ios/imagemounter/personalized_image_mounter.go:207-211).
 		"HostProcessName":       "CoreDeviceService",
 		"PersonalizedImageType": personalizedDDIType,
 	})
@@ -229,7 +240,7 @@ func (m *mounterConn) nonce() ([]byte, error) {
 	}
 	nonce, ok := reply["PersonalizationNonce"].([]byte)
 	if !ok {
-		return nil, errors.New("imagemounter: QueryNonce reply without PersonalizationNonce")
+		return nil, E.New("imagemounter: QueryNonce reply without PersonalizationNonce")
 	}
 	return nonce, nil
 }
@@ -237,12 +248,12 @@ func (m *mounterConn) nonce() ([]byte, error) {
 func (m *mounterConn) upload(image resolvedFile, ticket []byte) error {
 	file, err := os.Open(image.path)
 	if err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	const command = "ReceiveBytes"
 	reply, err := m.request(map[string]any{
@@ -259,10 +270,10 @@ func (m *mounterConn) upload(image resolvedFile, ticket []byte) error {
 	}
 	written, err := io.Copy(m.conn, file)
 	if err != nil {
-		return fmt.Errorf("imagemounter: upload the image: %w", err)
+		return E.Cause(err, "imagemounter: upload the image")
 	}
 	if written != info.Size() {
-		return fmt.Errorf("imagemounter: uploaded %d of %d bytes", written, info.Size())
+		return E.New("imagemounter: uploaded ", written, " of ", info.Size(), " bytes")
 	}
 	reply, err = m.receive(command)
 	if err != nil {
@@ -285,10 +296,11 @@ func (m *mounterConn) mount(ticket, trustCache []byte) error {
 	return m.expectStatus(command, reply, "Complete")
 }
 
-// go-ios sends Hangup without reading a reply.
+// go-ios sends Hangup without reading a reply (go-ios ca2c56d,
+// ios/imagemounter/imagemounter.go:266-272).
 func (m *mounterConn) hangUp() error {
 	if err := m.conn.Send(map[string]any{"Command": "Hangup"}); err != nil {
-		return fmt.Errorf("imagemounter: send Hangup: %w", err)
+		return E.Cause(err, "imagemounter: send Hangup")
 	}
 	return nil
 }

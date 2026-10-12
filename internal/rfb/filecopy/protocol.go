@@ -2,18 +2,20 @@ package filecopy
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"io/fs"
 	"math"
+	"strconv"
 	"strings"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const MessageType = 0x22
 
-// ScreenSharing 776.27 (macOS 27.0.1, arm64e UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50)
-// checks the server's size field against 8..0x400000 at 0x1cc06202c..0x1cc06204c.
+// ScreenSharing checks the server's size field against 8..0x400000 (ScreenSharing 776.27,
+// macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _HandleServerMessage 0x1cc06202c..0x1cc06204c).
 const maximumServerMessageSize = 4 << 20
 
 const maximumClientMessageSize = 1 << 20
@@ -59,8 +61,6 @@ const (
 	nodeFlagDirectory = 0x0010
 )
 
-var errMalformed = errors.New("filecopy: malformed message")
-
 type header struct {
 	command uint16
 	session uint32
@@ -75,12 +75,15 @@ func appendHeader(message []byte, command uint16, session uint32, bodySize int) 
 }
 
 func parseMessage(message []byte) (header, []byte, error) {
-	if len(message) < headerSize || message[0] != MessageType {
-		return header{}, nil, errMalformed
+	if len(message) < headerSize {
+		return header{}, nil, E.New("filecopy: message of ", len(message), " bytes is shorter than its ", headerSize, "-byte header")
+	}
+	if message[0] != MessageType {
+		return header{}, nil, E.New("filecopy: message type 0x", strconv.FormatUint(uint64(message[0]), 16), " is not 0x", strconv.FormatUint(MessageType, 16))
 	}
 	size := binary.BigEndian.Uint32(message[2:])
 	if uint64(size)+6 != uint64(len(message)) {
-		return header{}, nil, fmt.Errorf("%w: size field %d for %d bytes", errMalformed, size, len(message))
+		return header{}, nil, E.New("filecopy: message of ", len(message), " bytes has size field ", size, ", expected ", len(message)-6)
 	}
 	parsed := header{
 		command: binary.BigEndian.Uint16(message[8:]),
@@ -129,7 +132,7 @@ func itemInfoMessage(session uint32, info totals) []byte {
 
 func parseItemInfo(body []byte) (totals, error) {
 	if len(body) < itemInfoBodySize {
-		return totals{}, fmt.Errorf("%w: item info of %d bytes", errMalformed, len(body))
+		return totals{}, E.New("filecopy: item info of ", len(body), " bytes is shorter than ", itemInfoBodySize)
 	}
 	return totals{
 		singleFile: binary.BigEndian.Uint32(body)&itemInfoSingleFile != 0,
@@ -169,16 +172,17 @@ func newItemMessage(session uint32, item *wireItem) ([]byte, error) {
 	var linkLength uint16
 	if item.itemType == itemTypeLink {
 		if item.linkTarget == "" {
-			return nil, errors.New("filecopy: symbolic link without a target")
+			return nil, E.New("filecopy: symbolic link ", strconv.Quote(item.name), " has no target")
 		}
-		// SSFileCopySenderFW 776.27 (arm64e UUID F446D013-CEF6-3119-ABFE-75392B969C92),
-		// SendNewItemMessage: 0x100003448..0x100003450 stores the full target size;
-		// 0x100003854..0x100003868 stores size minus one in the link-length field.
+		// SSFileCopySenderFW stores the full target size in the data-size field and the size
+		// minus one in the link-length field (SSFileCopySenderFW 776.27, macOS 27.0.1 26A434,
+		// UUID F446D013-CEF6-3119-ABFE-75392B969C92, sub_1000032bc 0x100003448..0x100003450,
+		// 0x100003854..0x100003868).
 		linkLength = uint16(len(item.linkTarget) - 1)
 	}
 	bodySize := newItemBodySize + len(item.name) + 1 + len(item.linkTarget) + len(attributes)
 	if headerSize-6+bodySize > maximumClientMessageSize {
-		return nil, fmt.Errorf("filecopy: item record for %q is too large", item.name)
+		return nil, E.New("filecopy: item record for ", strconv.Quote(item.name), " is ", headerSize-6+bodySize, " bytes, over the ", maximumClientMessageSize, "-byte limit")
 	}
 	message := appendHeader(make([]byte, 0, headerSize+bodySize), commandNewItem, session, bodySize)
 	message = append(message, item.itemType, item.userAccess)
@@ -203,7 +207,7 @@ func newItemMessage(session uint32, item *wireItem) ([]byte, error) {
 
 func parseNewItem(body []byte) (*wireItem, error) {
 	if len(body) < newItemBodySize {
-		return nil, fmt.Errorf("%w: item record of %d bytes", errMalformed, len(body))
+		return nil, E.New("filecopy: item record of ", len(body), " bytes is shorter than ", newItemBodySize)
 	}
 	item := &wireItem{
 		itemType:         body[0],
@@ -224,13 +228,13 @@ func parseNewItem(body []byte) (*wireItem, error) {
 	nameLength := int(binary.BigEndian.Uint16(body[100:]))
 	rest := body[newItemBodySize:]
 	if nameLength == 0 || nameLength >= len(rest) || rest[nameLength] != 0 {
-		return nil, fmt.Errorf("%w: item name of %d bytes", errMalformed, nameLength)
+		return nil, E.New("filecopy: invalid item name of ", nameLength, " bytes in ", len(rest), " remaining bytes")
 	}
 	item.name = string(rest[:nameLength])
 	rest = rest[nameLength+1:]
 	if item.itemType == itemTypeLink {
 		if item.dataSize == 0 || item.dataSize > uint64(len(rest)) {
-			return nil, fmt.Errorf("%w: link target of %d bytes", errMalformed, item.dataSize)
+			return nil, E.New("filecopy: link ", strconv.Quote(item.name), " has an invalid target of ", item.dataSize, " bytes in ", len(rest), " remaining bytes")
 		}
 		item.linkTarget = string(rest[:item.dataSize])
 		rest = rest[item.dataSize:]
@@ -254,11 +258,11 @@ func dataMessage(session uint32, data []byte) []byte {
 
 func parseData(body []byte) ([]byte, error) {
 	if len(body) < 4 {
-		return nil, fmt.Errorf("%w: data record of %d bytes", errMalformed, len(body))
+		return nil, E.New("filecopy: data record of ", len(body), " bytes is shorter than 4")
 	}
 	length := binary.BigEndian.Uint32(body)
 	if uint64(length) > uint64(len(body)-4) {
-		return nil, fmt.Errorf("%w: data length %d in %d bytes", errMalformed, length, len(body)-4)
+		return nil, E.New("filecopy: data length ", length, " exceeds the ", len(body)-4, " bytes in its record")
 	}
 	return body[4 : 4+length], nil
 }
@@ -272,22 +276,23 @@ type compressedData struct {
 
 func parseCompressedData(body []byte) (compressedData, error) {
 	if len(body) < 10 {
-		return compressedData{}, fmt.Errorf("%w: compressed record of %d bytes", errMalformed, len(body))
+		return compressedData{}, E.New("filecopy: compressed data record of ", len(body), " bytes is shorter than 10")
 	}
 	compression := binary.BigEndian.Uint16(body)
 	if compression != compressionZlib {
-		return compressedData{}, fmt.Errorf("filecopy: unknown compression %d", compression)
+		return compressedData{}, E.New("filecopy: unknown compression ", compression)
 	}
 	length := binary.BigEndian.Uint32(body[6:])
 	if uint64(length) > uint64(len(body)-10) {
-		return compressedData{}, fmt.Errorf("%w: compressed length %d in %d bytes", errMalformed, length, len(body)-10)
+		return compressedData{}, E.New("filecopy: compressed data length ", length, " exceeds the ", len(body)-10, " bytes in its record")
 	}
 	return compressedData{uncompressedSize: binary.BigEndian.Uint32(body[2:]), data: body[10 : 10+length]}, nil
 }
 
-// SSFileCopySenderFW 776.27 (arm64e UUID F446D013-CEF6-3119-ABFE-75392B969C92),
-// SendDoneMessage at 0x10000197c..0x100001988 swaps the message size but stores
-// the command-104 status without swapping, in little-endian order.
+// SSFileCopySenderFW swaps the message size but stores the command-104 status without
+// swapping, in little-endian order (SSFileCopySenderFW 776.27, macOS 27.0.1 26A434,
+// UUID F446D013-CEF6-3119-ABFE-75392B969C92, sub_100001140 0x100001788..0x100001794,
+// 0x10000197c..0x100001988).
 func endMessage(session uint32, status uint32) []byte {
 	message := appendHeader(make([]byte, 0, headerSize+4), commandEnd, session, 4)
 	return binary.LittleEndian.AppendUint32(message, status)
@@ -302,19 +307,19 @@ func parseEnd(body []byte) int32 {
 
 func parseReceiverStatus(body []byte) (float64, error) {
 	if len(body) < 8 {
-		return 0, fmt.Errorf("%w: receiver status of %d bytes", errMalformed, len(body))
+		return 0, E.New("filecopy: receiver status of ", len(body), " bytes is shorter than 8")
 	}
 	return math.Float64frombits(binary.BigEndian.Uint64(body)), nil
 }
 
 func parseReceiverDone(body []byte) (int16, string, error) {
 	if len(body) < 4 {
-		return 0, "", fmt.Errorf("%w: receiver result of %d bytes", errMalformed, len(body))
+		return 0, "", E.New("filecopy: receiver result of ", len(body), " bytes is shorter than 4")
 	}
 	status := int16(binary.BigEndian.Uint16(body))
 	nameLength := int(binary.BigEndian.Uint16(body[2:]))
 	if nameLength > len(body)-4 {
-		return 0, "", fmt.Errorf("%w: receiver result name of %d bytes", errMalformed, nameLength)
+		return 0, "", E.New("filecopy: receiver result name of ", nameLength, " bytes exceeds the ", len(body)-4, " bytes in its record")
 	}
 	return status, string(body[4 : 4+nameLength]), nil
 }
@@ -380,12 +385,12 @@ func decodeExtendedAttributes(block []byte) ([]extendedAttribute, error) {
 	}
 	blockLength := int(binary.BigEndian.Uint16(block[8:]))
 	if blockLength < 18 || blockLength > len(block) {
-		return nil, fmt.Errorf("%w: attribute block of %d bytes", errMalformed, blockLength)
+		return nil, E.New("filecopy: extended attribute block length ", blockLength, " is not between 18 and ", len(block))
 	}
 	table := block[10:blockLength]
 	count := int(binary.BigEndian.Uint32(table[4:]))
 	if count > (len(table)-8)/8 {
-		return nil, fmt.Errorf("%w: %d attributes", errMalformed, count)
+		return nil, E.New("filecopy: ", count, " extended attributes do not fit in a table of ", len(table), " bytes")
 	}
 	data := table[8+8*count:]
 	attributes := make([]extendedAttribute, 0, count)
@@ -393,7 +398,7 @@ func decodeExtendedAttributes(block []byte) ([]extendedAttribute, error) {
 		nameLength := int(binary.BigEndian.Uint32(table[8+8*i:]))
 		valueLength := int(binary.BigEndian.Uint32(table[12+8*i:]))
 		if nameLength < 1 || valueLength < 0 || nameLength > len(data) || valueLength > len(data)-nameLength {
-			return nil, fmt.Errorf("%w: attribute %d", errMalformed, i)
+			return nil, E.New("filecopy: extended attribute ", i, " with a ", nameLength, "-byte name and a ", valueLength, "-byte value does not fit in ", len(data), " bytes")
 		}
 		name, _, _ := strings.Cut(string(data[:nameLength]), "\x00")
 		attributes = append(attributes, extendedAttribute{name: name, value: data[nameLength : nameLength+valueLength]})

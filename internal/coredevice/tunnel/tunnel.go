@@ -10,19 +10,22 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"strconv"
 	"sync"
 	"time"
 
 	tun "github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common/buf"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 // idevice sends CDTunnel JSON after this magic and a big-endian uint16
-// length (idevice/src/tunnel.rs).
+// length (idevice 3854a5d, idevice/src/tunnel.rs:14, 47-71).
 const magic = "CDTunnel"
 
 // idevice requests MTU 16000; go-ios requests 1280
-// (idevice/src/tunnel.rs; ios/tunnel/tunnel.go).
+// (idevice 3854a5d, idevice/src/tunnel.rs:16;
+// go-ios ca2c56d, ios/tunnel/tunnel.go:266-270).
 const requestedMTU = 16000
 
 const ipv6HeaderLength = 40
@@ -52,33 +55,33 @@ func handshake(conn net.Conn, reader *bufio.Reader) (*Parameters, error) {
 	binary.BigEndian.PutUint16(frame[len(magic):], uint16(len(request)))
 	_, err = conn.Write(append(frame, request...))
 	if err != nil {
-		return nil, fmt.Errorf("send CDTunnel request: %w", err)
+		return nil, E.Cause(err, "send CDTunnel request")
 	}
 	header := make([]byte, len(magic)+2)
 	_, err = io.ReadFull(reader, header)
 	if err != nil {
-		return nil, fmt.Errorf("read CDTunnel response: %w", err)
+		return nil, E.Cause(err, "read CDTunnel response")
 	}
 	if string(header[:len(magic)]) != magic {
-		return nil, fmt.Errorf("bad CDTunnel magic %q", header[:len(magic)])
+		return nil, E.New("CDTunnel: bad magic ", strconv.Quote(string(header[:len(magic)])))
 	}
 	body := make([]byte, binary.BigEndian.Uint16(header[len(magic):]))
 	_, err = io.ReadFull(reader, body)
 	if err != nil {
-		return nil, fmt.Errorf("read CDTunnel response: %w", err)
+		return nil, E.Cause(err, "read CDTunnel response")
 	}
 	var response handshakeResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return nil, fmt.Errorf("parse CDTunnel response %s: %w", body, err)
+		return nil, E.Cause(err, "parse CDTunnel response ", string(body))
 	}
 	clientAddress, err := netip.ParseAddr(response.ClientParameters.Address)
 	if err != nil {
-		return nil, fmt.Errorf("CDTunnel client address: %w", err)
+		return nil, E.Cause(err, "parse CDTunnel client address")
 	}
 	serverAddress, err := netip.ParseAddr(response.ServerAddress)
 	if err != nil {
-		return nil, fmt.Errorf("CDTunnel server address: %w", err)
+		return nil, E.Cause(err, "parse CDTunnel server address")
 	}
 	parameters := &Parameters{
 		ClientAddress: clientAddress,
@@ -95,7 +98,8 @@ func handshake(conn net.Conn, reader *bufio.Reader) (*Parameters, error) {
 const batchSize = 64
 
 // sing-tun MemoryTun.WritePackets skips packets larger than 65535 bytes
-// without incrementing its accepted count (tun_memory.go).
+// without incrementing its accepted count
+// (sing-tun v0.9.7-0.20261002083955-3f8acd9da65b, tun_memory.go:13, 115-118).
 const maxPacket = 65535
 
 const maxWrite = 256 << 10
@@ -112,8 +116,9 @@ type Tunnel struct {
 	stack         *tun.Go
 	udpAccess     sync.RWMutex
 	udpConns      map[uint16]*UDPConn
-	// Only writePackets uses it; sing-tun calls that outbound callback serially
-	// from one goroutine (tun_memory_queue.go, OutboundQueue.loopHandle).
+	// sing-tun calls the Outbound callback serially from one goroutine
+	// (sing-tun v0.9.7-0.20261002083955-3f8acd9da65b, tun_memory.go:59-63;
+	// tun_memory_queue.go:27-39, 80-95).
 	writeBuffer []byte
 	done        chan struct{}
 	closeOnce   sync.Once
@@ -170,7 +175,7 @@ func start(conn net.Conn, reader *bufio.Reader, parameters *Parameters, logger *
 	if err != nil {
 		t.device.Close()
 		conn.Close()
-		return nil, fmt.Errorf("start network stack: %w", err)
+		return nil, E.Cause(err, "start network stack")
 	}
 	go t.readLoop()
 	return t, nil
@@ -181,7 +186,8 @@ func (t *Tunnel) Parameters() *Parameters {
 }
 
 // sing-tun waits for its outbound callback; a full data queue returns
-// errGoTransmitBlocked (tun_memory_queue.go).
+// errGoTransmitBlocked (sing-tun v0.9.7-0.20261002083955-3f8acd9da65b,
+// tun_memory_queue.go:80-95, 155-156).
 func (t *Tunnel) writePackets(packets []*buf.Buffer) {
 	defer buf.ReleaseMulti(packets)
 	data := t.writeBuffer[:0]
@@ -205,7 +211,7 @@ func (t *Tunnel) writePackets(packets []*buf.Buffer) {
 func (t *Tunnel) write(data []byte) bool {
 	_, err := t.conn.Write(data)
 	if err != nil {
-		t.fail(fmt.Errorf("write to tunnel: %w", err))
+		t.fail(E.Cause(err, "write to tunnel"))
 		return false
 	}
 	return true
@@ -266,11 +272,11 @@ func (t *Tunnel) peekPacket(offset int, wait bool) (int, error) {
 	}
 	data, err := t.reader.Peek(offset + ipv6HeaderLength)
 	if err != nil {
-		return 0, fmt.Errorf("read from tunnel: %w", err)
+		return 0, E.Cause(err, "read from tunnel")
 	}
 	header := data[offset:]
 	if header[0]>>4 != 6 {
-		return 0, fmt.Errorf("read from tunnel: not an IPv6 packet (version %d)", header[0]>>4)
+		return 0, E.New("read from tunnel: not an IPv6 packet (version ", header[0]>>4, ")")
 	}
 	length := ipv6HeaderLength + int(binary.BigEndian.Uint16(header[4:6]))
 	if !wait && t.reader.Buffered() < offset+length {
@@ -278,13 +284,14 @@ func (t *Tunnel) peekPacket(offset int, wait bool) (int, error) {
 	}
 	_, err = t.reader.Peek(offset + length)
 	if err != nil {
-		return 0, fmt.Errorf("read from tunnel: %w", err)
+		return 0, E.Cause(err, "read from tunnel")
 	}
 	return length, nil
 }
 
 // sing-tun MemoryTun.WritePackets copies accepted packets and reports
-// their count; a full queue accepts none (tun_memory.go).
+// their count; a full queue accepts none
+// (sing-tun v0.9.7-0.20261002083955-3f8acd9da65b, tun_memory.go:101-133).
 func (t *Tunnel) deliver(packets [][]byte, retry *time.Timer) error {
 	for len(packets) > 0 {
 		accepted, err := t.device.WritePackets(packets)

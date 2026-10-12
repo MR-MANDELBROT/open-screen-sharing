@@ -4,13 +4,14 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"crypto/subtle"
-	"errors"
 	"math/big"
 	"strings"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 // idevice pair-setup uses SRP with G_3072, SHA-512 and user "Pair-Setup"
-// (idevice/src/remote_pairing/responder.rs).
+// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:125-126, 262-263).
 
 const srpUsername = "Pair-Setup"
 
@@ -89,7 +90,7 @@ func newSRPServer(pin string) *srpServer {
 	server := &srpServer{salt: salt, verifier: srpVerifier(salt, pin)}
 	kv := new(big.Int).Mul(srpK, server.verifier)
 	// idevice retries b until its public key occupies all 384 bytes
-	// (idevice/src/remote_pairing/responder.rs, pair_setup).
+	// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:275-282).
 	privateBytes := make([]byte, 32)
 	for {
 		rand.Read(privateBytes)
@@ -106,12 +107,10 @@ func (s *srpServer) PublicKey() []byte {
 	return s.public.Bytes()
 }
 
-var errSRPProof = errors.New("SRP proof mismatch, the setup code is probably wrong")
-
 func (s *srpServer) Verify(clientPublicBytes, clientProof []byte) (key []byte, serverProof []byte, err error) {
 	clientPublic := new(big.Int).SetBytes(clientPublicBytes)
 	if clientPublic.Sign() == 0 || clientPublic.Cmp(srpPrime) >= 0 {
-		return nil, nil, errors.New("invalid SRP public key")
+		return nil, nil, E.New("pairing: invalid SRP public key of ", len(clientPublicBytes), " bytes")
 	}
 	u := srpScrambler(clientPublic, s.public)
 	premaster := new(big.Int).Exp(s.verifier, u, srpPrime)
@@ -124,5 +123,5 @@ func (s *srpServer) Verify(clientPublicBytes, clientProof []byte) (key []byte, s
 			return key, srpServerProof(clientPublicBytes, clientProof, key), nil
 		}
 	}
-	return nil, nil, errSRPProof
+	return nil, nil, E.New("pairing: SRP proof mismatch, the setup code is probably wrong")
 }

@@ -39,7 +39,7 @@ final class NearbyBrowser: ObservableObject {
     private var hasResults = false
     private var isFixed = false
 
-    /// NWBrowser can reach .ready before any results callback (observed on macOS 26A434).
+    /// NWBrowser can reach .ready before any results callback (observed on macOS 27.0.1 26A434).
     private static let searchTime: TimeInterval = 2
 
     #if DEBUG || DEMO
@@ -255,7 +255,8 @@ final class ServiceResolver {
         lookUpModel()
     }
 
-    /// macOS 26A434 answered a named _device-info._tcp TXT query with its model while a service browse found nothing.
+    /// A Mac answered a named _device-info._tcp TXT query with its model while a service browse found nothing
+    /// (observed on macOS 27.0.1 26A434).
     private func lookUpModel() {
         guard modelChanged != nil else { return }
         var fullName = [CChar](repeating: 0, count: Int(kDNSServiceMaxDomainName))

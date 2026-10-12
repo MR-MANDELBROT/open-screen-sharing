@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"errors"
-	"fmt"
+	"reflect"
+
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -17,16 +19,47 @@ const (
 	answerEndpointModel        = "Mac14,3"
 	answerEndpointAVConference = "2235.63.5.2"
 	answerEndpointOSBuild      = "26A428"
-	answerAudioPayloads        = 0x1600 // AVConference payloads 13, 20 and 101.
-	answerAudioSecondary       = 0x600  // AVConference payloads 13 and 20.
-	answerVideoRuleFormats     = 128    // AVConference's native screen answer narrows 0xc3c3 to 128.
+	answerAudioPayloads        = 0x1600
+	answerAudioSecondary       = 0x600
+	answerVideoRuleFormats     = 128 // AVConference's native screen answer narrows 0xc3c3 to 128.
 	answerFeatureString        = "FLS;POS:5;EOD:1;SW:1"
 	defaultServerPixelFormat   = PixelFormat420FullRange
 	serverErrorBodySize        = 16
 	offerHeaderSize            = 0x80
-	// AVConference's native mode-7 and mode-9 offers give field-9 tier 262144
-	// a 60 Mbit/s cap (macOS 26A434 and 26B5101f).
-	screenBandwidthTier = 262144
+	// AVConference caps negotiator mode 7 by the smaller of 60 Mbit/s and the
+	// field-9 entry with bit 262144, and mode 9 by the smaller of 40 Mbit/s and
+	// the entry with bit 4096: RemoteDesktop settings use operatingMode 9
+	// (arbiter mode 5) on connection type 7, Nearby settings use operatingMode 8
+	// (arbiter mode 4) on connection type 4, and the blob decoder reads bit 18 as
+	// arbiter 5 on connection 7 and bit 12 as arbiter 4 on connection 4
+	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+	// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// -[AVCMediaStreamNegotiatorSettingsRemoteDesktopScreenSharing operatingMode] 0x1c133c4e8,
+	// -[AVCMediaStreamNegotiatorSettingsRemoteDesktopScreenSharing maxBandwidth] 0x1c133c4fc,
+	// -[AVCMediaStreamNegotiatorSettingsRemoteDesktopScreenSharing connectionType] 0x1c133c520,
+	// -[AVCMediaStreamNegotiatorSettingsNearbyScreenSharing operatingMode] 0x1c0fb73b0,
+	// -[AVCMediaStreamNegotiatorSettingsNearbyScreenSharing maxBandwidth] 0x1c0fb73b8,
+	// -[AVCMediaStreamNegotiatorSettings connectionType] 0x1c11af800,
+	// _VCBitrateArbiter_ModeFromOperatingMode 0x1c13b4ed0..0x1c13b4ee8, table 0x1c15ea260,
+	// -[VCMediaNegotiationBlobBandwidthSettings(BandwidthSettings) newBandwidthConfigurations]
+	// 0x1c1315f10..0x1c1315f2c, 0x1c1316110..0x1c131612c,
+	// -[AVCMediaStreamNegotiator setupVideoStreamConfiguration:errorReason:]
+	// 0x1c12e0f00..0x1c12e0f70, 0x1c12e12e0..0x1c12e1310; AVConference 2260.14.1,
+	// macOS 27.2 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// -[AVCMediaStreamNegotiatorSettingsRemoteDesktopScreenSharing operatingMode] 0x1c09ad094,
+	// -[AVCMediaStreamNegotiatorSettingsRemoteDesktopScreenSharing maxBandwidth] 0x1c09ad0a8,
+	// -[AVCMediaStreamNegotiatorSettingsRemoteDesktopScreenSharing connectionType] 0x1c09ad0cc,
+	// -[AVCMediaStreamNegotiatorSettingsNearbyScreenSharing operatingMode] 0x1c0632cd8,
+	// -[AVCMediaStreamNegotiatorSettingsNearbyScreenSharing maxBandwidth] 0x1c0632ce0,
+	// -[AVCMediaStreamNegotiatorSettings connectionType] 0x1c082bf4c,
+	// _VCBitrateArbiter_ModeFromOperatingMode 0x1c0a262cc..0x1c0a262e4, table 0x1c0c675c0,
+	// -[VCMediaNegotiationBlobBandwidthSettings(BandwidthSettings) newBandwidthConfigurations]
+	// 0x1c0986788..0x1c09867a4, 0x1c0986988..0x1c09869a4,
+	// -[AVCMediaStreamNegotiator setupVideoStreamConfiguration:errorReason:]
+	// 0x1c0954cf0..0x1c0954d60, 0x1c09550d0..0x1c0955100).
+	remoteDesktopBandwidthBit = 262144
+	nearbyBandwidthBit        = 4096
+	nearbyMaximumBitrate      = 40_000_000
 )
 
 const (
@@ -36,7 +69,7 @@ const (
 )
 
 // These field-9 bandwidth entries also occur in AVConference's native
-// screen answers (macOS 26A434 and 26B5101f).
+// screen answers.
 var (
 	answerAudioBandwidth = [][3]uint64{
 		{16, 4100, 0},
@@ -97,7 +130,7 @@ type serverAnswer struct {
 
 func answerMessage(answer serverAnswer) ([]byte, error) {
 	if answer.Video.SSRC == 0 || answer.Video.Width <= 0 || answer.Video.Height <= 0 {
-		return nil, errors.New("media: the answer needs the video SSRC and size")
+		return nil, E.New("media: the answer needs the video SSRC and size, got SSRC ", answer.Video.SSRC, " and ", answer.Video.Width, "x", answer.Video.Height)
 	}
 	var audio []byte
 	if answer.Audio != nil {
@@ -188,12 +221,25 @@ func answerVideoBlob(info ServerVideoInfo, pixelFormat PixelFormats) []byte {
 		payload.addMessage(2, rule)
 	}
 	// VideoProcessing requires an FLS EOD entry before CheckIfLastSubFrame
-	// reads the end bit; EOD:1 selects bit 1. POS:5 selects band coordinates.
+	// reads the end bit; EOD:1 selects bit 1. POS:5 makes control-byte bit 5
+	// announce the position field (VideoProcessing 1395.65.1, macOS 27.0.1
+	// 26A434, UUID D87079FD-5315-32B1-8022-E6144A69A8EE,
+	// _VCPDecompressionSessionCheckIfLastSubFrame 0x1b5004328..0x1b500435c,
+	// sub_1b50c7dec 0x1b50c7dec..0x1b50c8038, sub_1b50c95c4 0x1b50c95c4..0x1b50c9958;
+	// VideoProcessing 1415.6.1, macOS 27.2 26B5101f, UUID
+	// A6FC3A01-8834-335F-A877-FDACE2E1AECC,
+	// _VCPDecompressionSessionCheckIfLastSubFrame 0x1cb62d0ac..0x1cb62d0e0,
+	// sub_1cb6f0970 0x1cb6f0970..0x1cb6f0bbc, sub_1cb6f2148 0x1cb6f2148..0x1cb6f24dc).
 	payload.addBytes(3, []byte(answerFeatureString))
 	payload.addUint(4, parameterSetsHEVC)
 	var stream protoMessage
 	stream.addUint(1, uint64(info.SSRC))
-	// AVConference has a legacy FIR path using RTCP packet type 192.
+	// With RTCP-FB off, AVConference RTPSendRTCP takes a legacy FIR path that
+	// uses RTCP packet type 192 (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
+	// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B, _RTPSetRTCPFB 0x1c0eeda74,
+	// _RTPSendRTCP 0x1c0eba7cc..0x1c0eba84c; AVConference 2260.14.1, macOS 27.2
+	// 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// _RTPSetRTCPFB 0x1c05680d0, _RTPSendRTCP 0x1c0534eac..0x1c0534f2c).
 	stream.addUint(2, 0)
 	stream.addMessage(3, payload)
 	stream.addUint(4, uint64(info.Width))
@@ -228,7 +274,14 @@ type serverOffer struct {
 type serverOfferStream struct {
 	Present bool
 	// AVConference modes 5/7/9 select CoreDevice/RemoteDesktop/Nearby screen
-	// settings; mode 8 selects system audio and mode 4 selects remote mic.
+	// settings; mode 8 selects RemoteDesktop system audio and mode 4 selects
+	// remote mic (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+	// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// +[AVCMediaStreamNegotiatorSettings negotiatorSettingsForMode:deviceRole:options:errorString:] 0x1c11af820..0x1c11af8e0,
+	// class table 0x1e1c9b9f0; AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+	// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// +[AVCMediaStreamNegotiatorSettings negotiatorSettingsForMode:deviceRole:options:errorString:] 0x1c082bf6c..0x1c082c02c,
+	// class table 0x1e18e2f80).
 	Mode           int
 	SSRC           uint32
 	Width          int
@@ -243,7 +296,7 @@ type serverOfferStream struct {
 
 func parseOffer(message []byte) (*serverOffer, error) {
 	if len(message) < offerHeaderSize {
-		return nil, fmt.Errorf("media: offer of %d bytes", len(message))
+		return nil, E.New("media: offer of ", len(message), " bytes, shorter than its ", offerHeaderSize, "-byte header")
 	}
 	offer := &serverOffer{FrameRate60: binary.BigEndian.Uint32(message[6:])&messageFlagFrameRate60 != 0}
 	audioLength := int(binary.BigEndian.Uint16(message[0x0a:]))
@@ -252,7 +305,7 @@ func parseOffer(message []byte) (*serverOffer, error) {
 	videoKeys := audioEnd
 	videoStart := videoKeys + 2*masterKeyLength
 	if len(message) < videoStart+videoLength {
-		return nil, fmt.Errorf("media: offer of %d bytes", len(message))
+		return nil, E.New("media: offer of ", len(message), " bytes, shorter than the ", videoStart+videoLength, " bytes its streams need")
 	}
 	copy(offer.Audio.clientKey[:], message[0x24:])
 	copy(offer.Audio.serverKey[:], message[0x52:])
@@ -262,18 +315,18 @@ func parseOffer(message []byte) (*serverOffer, error) {
 	if audioLength > 0 {
 		err = parseOfferStream(&offer.Audio, message[offerHeaderSize:audioEnd], 3)
 		if err != nil {
-			return nil, fmt.Errorf("%w in the audio offer", err)
+			return nil, E.Cause(err, "parse audio offer")
 		}
 	}
 	if videoLength == 0 {
-		return nil, errors.New("media: the offer has no video")
+		return nil, E.New("media: the offer has no video")
 	}
 	err = parseOfferStream(&offer.Video, message[videoStart:videoStart+videoLength], 5)
 	if err != nil {
-		return nil, fmt.Errorf("%w in the video offer", err)
+		return nil, E.Cause(err, "parse video offer")
 	}
 	if !offer.Video.Present {
-		return nil, errors.New("media: the video offer names no stream")
+		return nil, E.New("media: the video offer names no stream")
 	}
 	return offer, nil
 }
@@ -285,13 +338,13 @@ func parseOfferStream(stream *serverOfferStream, data []byte, streamField uint64
 	}
 	dictionary, isDictionary := value.(map[string]any)
 	if !isDictionary {
-		return errors.New("media: a property list that is not a dictionary")
+		return E.New("media: property list is ", reflect.TypeOf(value), ", not a dictionary")
 	}
 	mode, _ := dictionary["avcMediaStreamNegotiatorMode"].(int64)
 	stream.Mode = int(mode)
 	compressed, isData := dictionary["avcMediaStreamNegotiatorMediaBlob"].([]byte)
 	if !isData {
-		return errors.New("media: no avcMediaStreamNegotiatorMediaBlob")
+		return E.New("media: no avcMediaStreamNegotiatorMediaBlob")
 	}
 	blob, err := parseNegotiatorBlob(compressed)
 	if err != nil {
@@ -316,11 +369,15 @@ func parseOfferStream(stream *serverOfferStream, data []byte, streamField uint64
 	stream.Height = int(min(height, 1<<16))
 	stream.TilesPerFrame = int(max(min(tiles, 16), 1))
 	stream.PixelFormats = PixelFormats(pixelFormats)
+	bandwidthBit := uint64(remoteDesktopBandwidthBit)
+	if stream.Mode == negotiatorModeNearbyScreenSharing {
+		bandwidthBit = nearbyBandwidthBit
+	}
 	for _, tier := range blob.messages(9) {
 		kind, _ := tier.uint(1)
 		bitrate, _ := tier.uint(2)
 		bufferCap, _ := tier.uint(3)
-		if kind == 0 && bufferCap == screenBandwidthTier {
+		if kind == 0 && bufferCap&bandwidthBit != 0 {
 			stream.MaximumBitrate = int64(min(bitrate, 1<<40))
 		}
 	}
@@ -334,10 +391,11 @@ func answerPixelFormat(offered PixelFormats, preferred PixelFormats) PixelFormat
 	if offered == 0 || offered&preferred != 0 {
 		return preferred
 	}
-	for _, format := range []PixelFormats{PixelFormat420FullRange, PixelFormat420VideoRange} {
-		if offered&format != 0 {
-			return format
-		}
+	format := common.Find([]PixelFormats{PixelFormat420FullRange, PixelFormat420VideoRange}, func(format PixelFormats) bool {
+		return offered&format != 0
+	})
+	if format == 0 {
+		return preferred
 	}
-	return preferred
+	return format
 }

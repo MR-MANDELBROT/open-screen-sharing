@@ -3,7 +3,6 @@ package libsharing
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -14,6 +13,8 @@ import (
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type SessionHandler interface {
@@ -78,16 +79,16 @@ type Session struct {
 
 func NewSession(options *SessionOptions, handler SessionHandler) (*Session, error) {
 	if options == nil || handler == nil {
-		return nil, errors.New("options and handler are required")
+		return nil, E.New("options and handler are required")
 	}
 	if options.Host == "" {
-		return nil, errors.New("host is required")
+		return nil, E.New("host is required")
 	}
 	if options.Port <= 0 || options.Port > 65535 {
-		return nil, fmt.Errorf("port %d", options.Port)
+		return nil, E.New("invalid port ", options.Port, "; it must be 1 to 65535")
 	}
 	if options.UpdateRate < 0 {
-		return nil, fmt.Errorf("update rate %d", options.UpdateRate)
+		return nil, E.New("invalid update rate ", options.UpdateRate, "; it must not be negative")
 	}
 	return &Session{options: *options, handler: handler, prompts: make(map[int64]chan int32), updateRate: options.UpdateRate}, nil
 }
@@ -102,7 +103,7 @@ func (s *Session) Connect() error {
 	if s.started {
 		s.access.Unlock()
 		cancel()
-		return errors.New("session already started")
+		return E.New("session already started")
 	}
 	s.started = true
 	s.cancel = cancel
@@ -142,18 +143,18 @@ func rfbOptions(o *SessionOptions) (rfb.Options, error) {
 	case LoginNone:
 		options.SecurityTypes = []rfb.SecurityType{rfb.SecurityNone}
 	default:
-		return options, fmt.Errorf("login type %d", o.LoginType)
+		return options, E.New("unknown login type ", o.LoginType)
 	}
 	if options.Quality < rfb.QualityAdaptive || options.Quality > rfb.QualityLow {
-		return options, fmt.Errorf("quality %d", o.Quality)
+		return options, E.New("unknown quality ", o.Quality, "; it must be ", QualityAdaptive, " to ", QualityLow)
 	}
 	if options.Mode < rfb.ModeObserve || options.Mode > rfb.ModeExclusiveControl {
-		return options, fmt.Errorf("mode %d", o.Mode)
+		return options, E.New("unknown mode ", o.Mode, "; it must be ", ModeObserve, " to ", ModeExclusiveControl)
 	}
 	switch options.MaximumFrameRate {
 	case 0, 30, 60:
 	default:
-		return options, fmt.Errorf("maximum frame rate %d", o.MaximumFrameRate)
+		return options, E.New("unsupported maximum frame rate ", o.MaximumFrameRate, "; it must be 0, 30 or 60")
 	}
 	return options, nil
 }
@@ -274,7 +275,7 @@ func classifyError(err error) (int32, string) {
 	switch {
 	case err == nil:
 		return ErrorNone, ""
-	case errors.Is(err, context.Canceled), errors.Is(err, rfb.ErrSessionCancelled):
+	case E.IsMulti(err, context.Canceled, rfb.ErrSessionCancelled):
 		return ErrorCancelled, err.Error()
 	case errors.Is(err, rfb.ErrAuthenticationFailed):
 		return ErrorAuthentication, err.Error()
@@ -286,7 +287,7 @@ func classifyError(err error) (int32, string) {
 		return ErrorUnverifiedServer, err.Error()
 	case errors.As(err, &ownScreen):
 		return ErrorOwnScreen, err.Error()
-	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+	case E.IsMulti(err, io.EOF, io.ErrUnexpectedEOF):
 		return ErrorNetwork, err.Error()
 	}
 	var dnsError *net.DNSError
@@ -302,10 +303,10 @@ func classifyError(err error) (int32, string) {
 }
 
 func (s *Session) cancelPromptsLocked() {
-	for id, answer := range s.prompts {
+	for _, answer := range s.prompts {
 		close(answer)
-		delete(s.prompts, id)
 	}
+	clear(s.prompts)
 }
 
 func (s *Session) Disconnect() {
@@ -322,8 +323,11 @@ func (s *Session) Disconnect() {
 }
 
 func (s *Session) AttachFramebuffer(address int64, width int32, height int32, bytesPerRow int32) error {
-	if address == 0 || width <= 0 || height <= 0 || bytesPerRow < width*4 {
-		return fmt.Errorf("framebuffer %dx%d with %d bytes per row", width, height, bytesPerRow)
+	if address == 0 {
+		return E.New("the framebuffer address is null")
+	}
+	if width <= 0 || height <= 0 || bytesPerRow < width*4 {
+		return E.New("invalid framebuffer of ", width, "x", height, " with ", bytesPerRow, " bytes per row")
 	}
 	length := int(bytesPerRow) * int(height)
 
@@ -338,7 +342,7 @@ func (s *Session) AttachFramebuffer(address int64, width int32, height int32, by
 	if s.resizing {
 		if framebuffer.Width != s.resizeWidth || framebuffer.Height != s.resizeHeight {
 			s.access.Unlock()
-			return fmt.Errorf("framebuffer is %dx%d, the screen is being resized to %dx%d", width, height, s.resizeWidth, s.resizeHeight)
+			return E.New("framebuffer is ", width, "x", height, ", the screen is being resized to ", s.resizeWidth, "x", s.resizeHeight)
 		}
 		s.attached = framebuffer
 		s.access.Unlock()
@@ -347,7 +351,7 @@ func (s *Session) AttachFramebuffer(address int64, width int32, height int32, by
 	client := s.client
 	s.access.Unlock()
 	if client == nil {
-		return errors.New("not connected")
+		return E.New("not connected")
 	}
 	return client.SetFramebuffer(framebuffer)
 }
@@ -356,7 +360,7 @@ func (s *Session) connected() (*rfb.Client, error) {
 	s.access.Lock()
 	defer s.access.Unlock()
 	if s.client == nil {
-		return nil, errors.New("not connected")
+		return nil, E.New("not connected")
 	}
 	return s.client, nil
 }
@@ -438,7 +442,7 @@ func (s *Session) RequestClipboard() error {
 
 func (s *Session) SetMode(mode int32) error {
 	if rfb.Mode(mode) < rfb.ModeObserve || rfb.Mode(mode) > rfb.ModeExclusiveControl {
-		return fmt.Errorf("mode %d", mode)
+		return E.New("unknown mode ", mode, "; it must be ", ModeObserve, " to ", ModeExclusiveControl)
 	}
 	client, err := s.connected()
 	if err != nil {
@@ -457,7 +461,7 @@ func (s *Session) SelectDisplay(displayID int64) error {
 
 func (s *Session) SetQuality(quality int32) error {
 	if rfb.Quality(quality) < rfb.QualityAdaptive || rfb.Quality(quality) > rfb.QualityLow {
-		return fmt.Errorf("quality %d", quality)
+		return E.New("unknown quality ", quality, "; it must be ", QualityAdaptive, " to ", QualityLow)
 	}
 	client, err := s.connected()
 	if err != nil {
@@ -468,7 +472,7 @@ func (s *Session) SetQuality(quality int32) error {
 
 func (s *Session) SetUpdateRate(rate int32) error {
 	if rate < 0 {
-		return fmt.Errorf("update rate %d", rate)
+		return E.New("invalid update rate ", rate, "; it must not be negative")
 	}
 	s.access.Lock()
 	s.updateRate = rate
@@ -507,7 +511,7 @@ func (s *Session) SetVirtualDisplay(width int32, height int32, density float64, 
 		return nil
 	}
 	if client == nil {
-		return errors.New("not connected")
+		return E.New("not connected")
 	}
 	return client.SetVirtualDisplay(int(width), int(height), density, int(maximumWidth), int(maximumHeight))
 }
@@ -534,7 +538,7 @@ func (s *Session) AnswerPrompt(promptID int64, answer int32) error {
 	delete(s.prompts, promptID)
 	s.access.Unlock()
 	if !found {
-		return fmt.Errorf("no prompt %d", promptID)
+		return E.New("no prompt ", promptID, " is waiting for an answer")
 	}
 	channel <- answer
 	return nil
@@ -572,22 +576,17 @@ func (e *sessionEvents) ResizeFramebuffer(width, height int) (*rfb.Framebuffer, 
 	s.access.Unlock()
 
 	if framebuffer == nil {
-		return nil, fmt.Errorf("no %dx%d framebuffer was attached during OnFramebufferResize", width, height)
+		return nil, E.New("no ", width, "x", height, " framebuffer was attached during OnFramebufferResize")
 	}
 	return framebuffer, nil
 }
 
 func (e *sessionEvents) FramebufferUpdated(update rfb.Update) {
-	var encoding rfb.Encoding
-	var largest int
-	for _, rectangle := range update.Rectangles {
-		area := rectangle.Width * rectangle.Height
-		if area > largest {
-			encoding, largest = rectangle.Encoding, area
-		}
-	}
-	if largest > 0 {
-		e.session.pictureEncoding.Store(int64(encoding) + 1)
+	largest := common.MaxBy(update.Rectangles, func(rectangle rfb.Rectangle) int {
+		return rectangle.Width * rectangle.Height
+	})
+	if largest.Width*largest.Height > 0 {
+		e.session.pictureEncoding.Store(int64(largest.Encoding) + 1)
 	}
 	dirty := update.Dirty
 	e.session.handler.OnFramebufferUpdate(int32(dirty.X), int32(dirty.Y), int32(dirty.Width), int32(dirty.Height))

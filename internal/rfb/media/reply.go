@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
+	"reflect"
+
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -17,8 +20,6 @@ const (
 	payloadTypeRED     = 20
 	maxNegotiatorBlob  = 1 << 20
 )
-
-var errShortReply = errors.New("media: truncated media stream reply")
 
 type Leg struct {
 	Port    uint16
@@ -79,25 +80,28 @@ func ParsePorts(payload []byte) (*Ports, error) {
 	}
 	ports, isPorts := reply.(*Ports)
 	if !isPorts {
-		return nil, fmt.Errorf("media: not a ports message")
+		return nil, E.New("media: expected a ports message, got ", reflect.TypeOf(reply))
 	}
 	return ports, nil
 }
 
 func parseReply(payload []byte) (any, error) {
 	if len(payload) < 2 {
-		return nil, errShortReply
+		return nil, E.New("media: truncated media stream reply: ", len(payload), " of 2 length bytes")
 	}
 	size := int(binary.BigEndian.Uint16(payload))
-	if len(payload) < 2+size || size < 8 {
-		return nil, errShortReply
+	if size < 8 {
+		return nil, E.New("media: media stream reply declares ", size, " bytes, less than its 8-byte header")
+	}
+	if len(payload) < 2+size {
+		return nil, E.New("media: truncated media stream reply: ", len(payload)-2, " of ", size, " bytes")
 	}
 	body := payload[2 : 2+size]
 	kind := binary.BigEndian.Uint16(body)
 	switch kind {
 	case 1:
 		if len(body) < 26 {
-			return nil, errShortReply
+			return nil, E.New("media: truncated ports reply: ", len(body), " of 26 bytes")
 		}
 		leg := func(offset int) Leg {
 			flags := binary.BigEndian.Uint32(body[offset+2:])
@@ -110,13 +114,13 @@ func parseReply(payload []byte) (any, error) {
 		return &Ports{Audio: leg(8), Video: leg(14), Video2: leg(20)}, nil
 	case 2:
 		if len(body) < 18 {
-			return nil, errShortReply
+			return nil, E.New("media: truncated answer reply: ", len(body), " of 18 header bytes")
 		}
 		audioLength := int(binary.BigEndian.Uint16(body[8:]))
 		videoLength := int(binary.BigEndian.Uint16(body[10:]))
 		video2Length := int(binary.BigEndian.Uint16(body[12:]))
 		if len(body) < 18+audioLength+videoLength+video2Length {
-			return nil, errShortReply
+			return nil, E.New("media: truncated answer reply: ", len(body), " of ", 18+audioLength+videoLength+video2Length, " bytes")
 		}
 		answer := &Answer{Version: int(binary.BigEndian.Uint16(body[2:]))}
 		answer.FrameRate60 = answer.Version <= 1 || binary.BigEndian.Uint32(body[4:])&1 != 0
@@ -125,29 +129,38 @@ func parseReply(payload []byte) (any, error) {
 		var err error
 		answer.Audio, err = parseStreamAnswer(audioBlob, 3)
 		if err != nil {
-			return nil, fmt.Errorf("%w in the audio answer", err)
+			return nil, E.Cause(err, "parse audio answer")
 		}
 		answer.Video, err = parseStreamAnswer(videoBlob, 5)
 		if err != nil {
-			return nil, fmt.Errorf("%w in the video answer", err)
+			return nil, E.Cause(err, "parse video answer")
 		}
 		return answer, nil
 	case 3:
 		if len(body) < 16 {
-			return nil, errShortReply
+			return nil, E.New("media: truncated error reply: ", len(body), " of 16 bytes")
 		}
 		return &ServerError{
 			Type:    binary.BigEndian.Uint32(body[8:]),
 			SubCode: binary.BigEndian.Uint32(body[12:]),
 		}, nil
 	default:
-		return nil, fmt.Errorf("media: unknown media stream reply type %d", kind)
+		return nil, E.New("media: unknown media stream reply type ", kind)
 	}
 }
 
-// AVConference createAnswer returns a plist containing compressed
-// avcMediaStreamNegotiatorMediaBlob data in native mode-7 negotiation
-// (macOS 27.0.1 26A434 and 27.2 26B5101f).
+// AVConference createAnswer puts the compressed response blob under
+// avcMediaStreamNegotiatorMediaBlob in a binary plist when the offer carries
+// avcMediaStreamOptionRemoteEndpointInfo, and returns the bare compressed blob
+// otherwise (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// -[AVCMediaStreamNegotiator processOfferWithError:errorReason:] 0x1c12dfa14..0x1c12dfa20,
+// -[AVCMediaStreamNegotiator createAnswer] 0x1c12e0294..0x1c12e03a0,
+// -[VCMediaNegotiator newResponseBlob] 0x1c122d9d0; AVConference 2260.14.1,
+// macOS 27.2 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+// -[AVCMediaStreamNegotiator processOfferWithError:errorReason:] 0x1c0953804..0x1c0953810,
+// -[AVCMediaStreamNegotiator createAnswer] 0x1c0954084..0x1c0954190,
+// -[VCMediaNegotiator newResponseBlob] 0x1c08a0708).
 func parseStreamAnswer(blob []byte, streamField uint64) (StreamAnswer, error) {
 	var answer StreamAnswer
 	if len(blob) == 0 {
@@ -158,12 +171,12 @@ func parseStreamAnswer(blob []byte, streamField uint64) (StreamAnswer, error) {
 	if err == nil {
 		dictionary, isDictionary := value.(map[string]any)
 		if !isDictionary {
-			return answer, errors.New("media: a property list that is not a dictionary")
+			return answer, E.New("media: property list is ", reflect.TypeOf(value), ", not a dictionary")
 		}
 		var isData bool
 		compressed, isData = dictionary["avcMediaStreamNegotiatorMediaBlob"].([]byte)
 		if !isData {
-			return answer, errors.New("media: no avcMediaStreamNegotiatorMediaBlob")
+			return answer, E.New("media: no avcMediaStreamNegotiatorMediaBlob")
 		}
 	}
 	message, err := parseNegotiatorBlob(compressed)
@@ -192,11 +205,11 @@ func parseStreamAnswer(blob []byte, streamField uint64) (StreamAnswer, error) {
 func parseNegotiatorBlob(compressed []byte) (protoMessage, error) {
 	reader, err := zlib.NewReader(bytes.NewReader(compressed))
 	if err != nil {
-		return nil, fmt.Errorf("media: negotiator blob: %w", err)
+		return nil, E.Cause(err, "media: decompress negotiator blob")
 	}
 	inflated, err := io.ReadAll(io.LimitReader(reader, maxNegotiatorBlob))
 	if err != nil {
-		return nil, fmt.Errorf("media: negotiator blob: %w", err)
+		return nil, E.Cause(err, "media: decompress negotiator blob")
 	}
 	return parseProto(inflated)
 }
@@ -248,22 +261,36 @@ func readScreenAnswer(answer *StreamAnswer, stream protoMessage) {
 
 // AVConference pickBestPixelFormatFromSet:forPayload: prefers 444f/420f for
 // mode-7 SDR and xf44/444f/420f for HDR mode 3, with 420f fallback
-// (macOS 27.0.1 26A434 and 27.2 26B5101f).
+// (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// -[AVCMediaStreamNegotiator pickBestPixelFormatFromSet:forPayload:] 0x1c12e2324..0x1c12e2494,
+// -[AVCMediaStreamNegotiator pickBestPixelFormatFromSet:preferenceList:count:acceptDefault:] 0x1c12e2544..0x1c12e256c,
+// lists 0x1e577943c and 0x1e5779444; AVConference 2260.14.1, macOS 27.2
+// 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+// -[AVCMediaStreamNegotiator pickBestPixelFormatFromSet:forPayload:] 0x1c0956114..0x1c0956284,
+// -[AVCMediaStreamNegotiator pickBestPixelFormatFromSet:preferenceList:count:acceptDefault:] 0x1c0956334..0x1c095635c,
+// lists 0x1ec938d74 and 0x1ec938d7c).
 func pickPixelFormat(formats PixelFormats, hdrMode int) PixelFormats {
 	preference := []PixelFormats{PixelFormat444FullRange, PixelFormat420FullRange}
 	if hdrMode == hdrModeReference {
 		preference = []PixelFormats{PixelFormat444TenBitFullRange, PixelFormat444FullRange, PixelFormat420FullRange}
 	}
-	for _, format := range preference {
-		if formats&format != 0 {
-			return format
-		}
+	format := common.Find(preference, func(format PixelFormats) bool {
+		return formats&format != 0
+	})
+	if format == 0 {
+		return PixelFormat420FullRange
 	}
-	return PixelFormat420FullRange
+	return format
 }
 
 // AVConference payloadFromNegotiationPayload: maps these audio bits; bit 13
-// returns its unknown-payload value 128 (macOS 27.0.1 26A434 and 27.2 26B5101f).
+// returns its unknown-payload value 128 (AVConference 2235.63.5.2, macOS 27.0.1
+// 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// +[VCMediaNegotiationBlobAudioSettings(AudioRules) payloadFromNegotiationPayload:] 0x1c131483c..0x1c13149d0;
+// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+// +[VCMediaNegotiationBlobAudioSettings(AudioRules) payloadFromNegotiationPayload:] 0x1c09850b4..0x1c0985248).
 var audioPayloadTypes = [...]int{9, 106, 105, 104, 122, 121, 119, 97, 98, 13, payloadTypeRED, 108, payloadTypeAudio, -1, 113}
 
 func readAudioAnswer(answer *StreamAnswer, stream protoMessage) {

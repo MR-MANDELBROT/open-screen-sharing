@@ -22,7 +22,10 @@ import (
 	"io"
 	"net"
 	"slices"
+	"strconv"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -43,7 +46,8 @@ type cipherSuite struct {
 }
 
 // go-ios offers AES-256-GCM-SHA384; idevice offers AES-256-CBC-SHA384
-// and AES-128-CBC-SHA (their tunnel/tlspsk and remote_pairing/tls_psk).
+// and AES-128-CBC-SHA (go-ios ca2c56d, ios/tunnel/tlspsk/tlspsk.go:187;
+// idevice 3854a5d, idevice/src/remote_pairing/tls_psk.rs:34-35).
 var cipherSuites = []cipherSuite{
 	{id: TLS_PSK_WITH_AES_256_GCM_SHA384, keyLen: 32, prfHash: sha512.New384},
 	{id: TLS_PSK_WITH_AES_128_GCM_SHA256, keyLen: 16, prfHash: sha256.New},
@@ -144,12 +148,12 @@ func Client(ctx context.Context, conn net.Conn, key []byte) (*Conn, error) {
 		if err == nil {
 			err = context.Cause(ctx)
 		} else {
-			err = fmt.Errorf("%w (%w)", err, context.Cause(ctx))
+			err = E.Cause1(err, context.Cause(ctx))
 		}
 	}
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("tlspsk: %w", err)
+		return nil, E.Cause(err, "tlspsk")
 	}
 	conn.SetDeadline(time.Time{})
 	c.handshake = bytes.Buffer{}
@@ -171,23 +175,23 @@ func (c *Conn) runHandshake(key []byte) error {
 	hello = append(hello, 1, 0)
 	err := c.writeHandshake(handshakeClientHello, hello)
 	if err != nil {
-		return fmt.Errorf("write ClientHello: %w", err)
+		return E.Cause(err, "write ClientHello")
 	}
 
 	var serverRandom []byte
 serverFlight:
 	for count := 0; ; count++ {
 		if count == maxServerFlight {
-			return errors.New("too many handshake messages from the server")
+			return E.New("server sent ", maxServerFlight, " handshake messages without a ServerHelloDone")
 		}
 		messageType, body, err := c.readHandshake()
 		if err != nil {
-			return fmt.Errorf("read server hello: %w", err)
+			return E.Cause(err, "read server hello")
 		}
 		switch messageType {
 		case handshakeServerHello:
 			if serverRandom != nil {
-				return errors.New("second ServerHello")
+				return E.New("second ServerHello")
 			}
 			serverRandom, err = c.parseServerHello(body)
 			if err != nil {
@@ -195,21 +199,23 @@ serverFlight:
 			}
 		case handshakeServerKeyExchange:
 		case handshakeCertificate:
-			return errors.New("server sent a certificate, which plain PSK suites don't use")
+			return E.New("server sent a certificate, which plain PSK suites don't use")
 		case handshakeServerHelloDone:
 			break serverFlight
 		default:
-			return fmt.Errorf("unexpected handshake message %d", messageType)
+			return E.New("unexpected handshake message ", messageType)
 		}
 	}
 	if serverRandom == nil {
-		return errors.New("missing ServerHello")
+		return E.New("server sent ServerHelloDone without a ServerHello")
 	}
 
-	// go-ios and idevice send an empty PSK identity.
+	// go-ios and idevice send an empty PSK identity
+	// (go-ios ca2c56d, ios/tunnel/tlspsk/tlspsk.go:134-136;
+	// idevice 3854a5d, idevice/src/remote_pairing/tls_psk.rs:444-445).
 	err = c.writeHandshake(handshakeClientKeyExchange, []byte{0, 0})
 	if err != nil {
-		return fmt.Errorf("write ClientKeyExchange: %w", err)
+		return E.Cause(err, "write ClientKeyExchange")
 	}
 
 	keyLen := len(key)
@@ -226,56 +232,56 @@ serverFlight:
 
 	err = c.writeRecord(recordChangeCipherSpec, []byte{1})
 	if err != nil {
-		return fmt.Errorf("write ChangeCipherSpec: %w", err)
+		return E.Cause(err, "write ChangeCipherSpec")
 	}
 	c.writeState.enabled = true
 	err = c.writeHandshake(handshakeFinished, c.verifyData(master, "client finished"))
 	if err != nil {
-		return fmt.Errorf("write Finished: %w", err)
+		return E.Cause(err, "write Finished")
 	}
 
 	contentType, _, err := c.readRecord()
 	if err != nil {
-		return fmt.Errorf("read ChangeCipherSpec: %w", err)
+		return E.Cause(err, "read ChangeCipherSpec")
 	}
 	if contentType != recordChangeCipherSpec {
-		return fmt.Errorf("expected ChangeCipherSpec, got record type %d", contentType)
+		return E.New("expected ChangeCipherSpec, got record type ", contentType)
 	}
 	c.readState.enabled = true
 	expected := c.verifyData(master, "server finished")
 	messageType, body, err := c.readHandshake()
 	if err != nil {
-		return fmt.Errorf("read Finished: %w", err)
+		return E.Cause(err, "read Finished")
 	}
 	if messageType != handshakeFinished {
-		return fmt.Errorf("expected Finished, got handshake message %d", messageType)
+		return E.New("expected Finished, got handshake message ", messageType)
 	}
 	if !hmac.Equal(body, expected) {
-		return errors.New("server Finished doesn't match, the key is probably wrong")
+		return E.New("server Finished doesn't match, the key is probably wrong")
 	}
 	return nil
 }
 
 func (c *Conn) parseServerHello(body []byte) ([]byte, error) {
 	if len(body) < 35 {
-		return nil, errors.New("short ServerHello")
+		return nil, E.New("short ServerHello of ", len(body), " bytes, expected at least 35")
 	}
 	version := binary.BigEndian.Uint16(body)
 	if version != versionTLS12 {
-		return nil, fmt.Errorf("server chose version 0x%04x instead of TLS 1.2", version)
+		return nil, E.New("server chose version 0x", strconv.FormatUint(uint64(version), 16), " instead of TLS 1.2")
 	}
 	serverRandom := bytes.Clone(body[2:34])
 	offset := 35 + int(body[34])
 	if len(body) < offset+3 {
-		return nil, errors.New("truncated ServerHello")
+		return nil, E.New("truncated ServerHello of ", len(body), " bytes, expected at least ", offset+3)
 	}
 	id := binary.BigEndian.Uint16(body[offset:])
 	c.suite = lookupCipherSuite(id)
 	if c.suite == nil {
-		return nil, fmt.Errorf("server chose cipher suite 0x%04x, which wasn't offered", id)
+		return nil, E.New("server chose cipher suite 0x", strconv.FormatUint(uint64(id), 16), ", which wasn't offered")
 	}
 	if body[offset+2] != 0 {
-		return nil, fmt.Errorf("server chose compression method %d", body[offset+2])
+		return nil, E.New("server chose compression method ", body[offset+2])
 	}
 	return serverRandom, nil
 }
@@ -360,7 +366,7 @@ func (c *Conn) readHandshake() (byte, []byte, error) {
 		if len(data) >= 4 {
 			length := int(data[1])<<16 | int(data[2])<<8 | int(data[3])
 			if length > maxHandshakeMessage {
-				return 0, nil, fmt.Errorf("handshake message of %d bytes is too large", length)
+				return 0, nil, E.New("handshake message of ", length, " bytes is too large, at most ", maxHandshakeMessage)
 			}
 			if len(data) >= 4+length {
 				message := bytes.Clone(data[:4+length])
@@ -374,7 +380,7 @@ func (c *Conn) readHandshake() (byte, []byte, error) {
 			return 0, nil, err
 		}
 		if contentType != recordHandshake {
-			return 0, nil, fmt.Errorf("expected handshake record, got type %d", contentType)
+			return 0, nil, E.New("expected handshake record, got type ", contentType)
 		}
 		c.handshake.Write(payload)
 	}
@@ -438,7 +444,7 @@ func (c *Conn) readRecord() (byte, []byte, error) {
 func (c *Conn) readRecordInto(dst []byte) (byte, []byte, error) {
 	header, err := c.reader.Peek(recordHeaderLen)
 	if err != nil {
-		if err == io.EOF && len(header) > 0 {
+		if errors.Is(err, io.EOF) && len(header) > 0 {
 			err = io.ErrUnexpectedEOF
 		}
 		return 0, nil, err
@@ -446,11 +452,11 @@ func (c *Conn) readRecordInto(dst []byte) (byte, []byte, error) {
 	contentType := header[0]
 	length := int(binary.BigEndian.Uint16(header[3:]))
 	if length > maxCiphertext {
-		return 0, nil, fmt.Errorf("record of %d bytes is too large", length)
+		return 0, nil, E.New("record of ", length, " bytes is too large, at most ", maxCiphertext)
 	}
 	record, err := c.reader.Peek(recordHeaderLen + length)
 	if err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			err = io.ErrUnexpectedEOF
 		}
 		return 0, nil, err
@@ -462,7 +468,7 @@ func (c *Conn) readRecordInto(dst []byte) (byte, []byte, error) {
 	}
 	if contentType == recordAlert {
 		if len(payload) < 2 {
-			return 0, nil, errors.New("malformed alert")
+			return 0, nil, E.New("malformed alert of ", len(payload), " bytes")
 		}
 		if payload[1] == 0 {
 			return 0, nil, io.EOF
@@ -479,7 +485,7 @@ func (c *Conn) openRecord(dst []byte, contentType byte, fragment []byte) ([]byte
 	}
 	if state.aead != nil {
 		if len(fragment) < gcmExplicitNonceLen+gcmTagLen {
-			return nil, errors.New("short encrypted record")
+			return nil, E.New("short encrypted record of ", len(fragment), " bytes, expected at least ", gcmExplicitNonceLen+gcmTagLen)
 		}
 		var nonce [gcmFixedIVLen + gcmExplicitNonceLen]byte
 		copy(nonce[:], state.fixedIV[:])
@@ -488,24 +494,24 @@ func (c *Conn) openRecord(dst []byte, contentType byte, fragment []byte) ([]byte
 		additional := additionalData(state.sequence, contentType, len(ciphertext)-gcmTagLen)
 		payload, err := state.aead.Open(dst[:0], nonce[:], ciphertext, additional[:])
 		if err != nil {
-			return nil, errors.New("record authentication failed")
+			return nil, E.New("record authentication failed")
 		}
 		state.sequence++
 		return payload, nil
 	}
 	macLen := c.suite.macLen
 	if len(fragment) < cbcBlockLen+cbcBlockLen || len(fragment)%cbcBlockLen != 0 {
-		return nil, errors.New("malformed encrypted record")
+		return nil, E.New("malformed encrypted record of ", len(fragment), " bytes, expected at least ", 2*cbcBlockLen, " in ", cbcBlockLen, "-byte blocks")
 	}
 	body := dst[:len(fragment)-cbcBlockLen]
 	cipher.NewCBCDecrypter(state.block, fragment[:cbcBlockLen]).CryptBlocks(body, fragment[cbcBlockLen:])
 	paddingLen := int(body[len(body)-1])
 	if paddingLen+1+macLen > len(body) {
-		return nil, errors.New("record authentication failed")
+		return nil, E.New("record authentication failed")
 	}
 	for _, value := range body[len(body)-1-paddingLen:] {
 		if int(value) != paddingLen {
-			return nil, errors.New("record authentication failed")
+			return nil, E.New("record authentication failed")
 		}
 	}
 	payloadLen := len(body) - 1 - paddingLen - macLen
@@ -515,7 +521,7 @@ func (c *Conn) openRecord(dst []byte, contentType byte, fragment []byte) ([]byte
 	state.mac.Write(header[:])
 	state.mac.Write(payload)
 	if subtle.ConstantTimeCompare(state.mac.Sum(nil), received) != 1 {
-		return nil, errors.New("record authentication failed")
+		return nil, E.New("record authentication failed")
 	}
 	state.sequence++
 	return payload, nil
@@ -547,7 +553,7 @@ func (c *Conn) Read(p []byte) (int, error) {
 			c.pending = payload
 		case recordHandshake:
 		default:
-			c.readErr = fmt.Errorf("tlspsk: unexpected record type %d", contentType)
+			c.readErr = E.New("tlspsk: unexpected record type ", contentType)
 			return 0, c.readErr
 		}
 	}

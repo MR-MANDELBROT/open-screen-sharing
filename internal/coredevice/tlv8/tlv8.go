@@ -1,8 +1,10 @@
 package tlv8
 
 import (
-	"errors"
 	"fmt"
+	"strconv"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -62,12 +64,12 @@ func Decode(data []byte) (Values, error) {
 	values := make(Values)
 	for len(data) > 0 {
 		if len(data) < 2 {
-			return nil, errors.New("truncated item header")
+			return nil, E.New("tlv8: item 0x", strconv.FormatUint(uint64(data[0]), 16), ": truncated header")
 		}
 		itemType, length := data[0], int(data[1])
 		data = data[2:]
 		if len(data) < length {
-			return nil, fmt.Errorf("item 0x%02x: length %d exceeds %d remaining bytes", itemType, length, len(data))
+			return nil, E.New("tlv8: item 0x", strconv.FormatUint(uint64(itemType), 16), ": length ", length, " exceeds ", len(data), " remaining bytes")
 		}
 		value := data[:length]
 		data = data[length:]

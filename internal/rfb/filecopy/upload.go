@@ -2,15 +2,16 @@ package filecopy
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Source struct {
@@ -49,7 +50,7 @@ type upload struct {
 
 func (m *Manager) Upload(ctx context.Context, source Source, destination string, onProgress func(Progress)) (*Transfer, error) {
 	if destination == "" || !(strings.HasPrefix(destination, "/") || strings.HasPrefix(destination, "~")) {
-		return nil, fmt.Errorf("filecopy: destination %q is not an absolute path", destination)
+		return nil, E.New("filecopy: destination ", strconv.Quote(destination), " is not an absolute path")
 	}
 	job := &upload{source: source, destination: destination, remote: make(chan remoteResult, 1)}
 	err := job.plan()
@@ -71,7 +72,7 @@ func (m *Manager) Upload(ctx context.Context, source Source, destination string,
 
 func (u *upload) plan() error {
 	if u.source.fsys == nil || !fs.ValidPath(u.source.name) || u.source.name == "." {
-		return fmt.Errorf("filecopy: invalid source %q", u.source.name)
+		return E.New("filecopy: invalid source ", strconv.Quote(u.source.name))
 	}
 	linkFS, readsLinks := u.source.fsys.(fs.ReadLinkFS)
 	root := u.source.name
@@ -134,7 +135,7 @@ func (u *upload) plan() error {
 		return err
 	}
 	if len(u.items) == 0 {
-		return fmt.Errorf("filecopy: %q is not a file, folder or link", root)
+		return E.New("filecopy: ", strconv.Quote(root), " is not a file, folder or link")
 	}
 	u.info.singleFile = u.items[0].wire.itemType != itemTypeFolder
 	return nil
@@ -251,8 +252,8 @@ func (u *upload) sendContents(item *plannedItem) error {
 		}
 		chunk := u.buffer[:min(remaining, chunkSize)]
 		_, err = io.ReadFull(reader, chunk)
-		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-			err = fmt.Errorf("filecopy: %s is shorter than %d bytes", item.displayPath, item.wire.dataSize)
+		if E.IsMulti(err, io.EOF, io.ErrUnexpectedEOF) {
+			err = E.New("filecopy: ", item.displayPath, " is shorter than ", item.wire.dataSize, " bytes")
 		}
 		if err != nil {
 			return u.fail(err)
@@ -278,7 +279,7 @@ func (u *upload) checkpoint() error {
 	case remote := <-u.remote:
 		_, err = remote.result()
 		if err == nil {
-			err = errors.New("filecopy: the Mac finished before the upload did")
+			err = E.New("filecopy: the Mac finished before the upload did")
 		}
 		return err
 	default:

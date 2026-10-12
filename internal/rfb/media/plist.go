@@ -3,12 +3,13 @@ package media
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"math"
+	"reflect"
+	"strconv"
 	"unicode/utf16"
-)
 
-var errPlist = errors.New("media: malformed binary property list")
+	E "github.com/sagernet/sing/common/exceptions"
+)
 
 const (
 	plistVisitLimit = 1024
@@ -108,8 +109,11 @@ type plistDecoder struct {
 }
 
 func decodeBinaryPlist(data []byte) (any, error) {
-	if len(data) < 8+32 || !bytes.HasPrefix(data, []byte("bplist00")) {
-		return nil, errPlist
+	if len(data) < 8+32 {
+		return nil, E.New("media: binary property list of ", len(data), " bytes, shorter than 40")
+	}
+	if !bytes.HasPrefix(data, []byte("bplist00")) {
+		return nil, E.New("media: binary property list header ", strconv.Quote(string(data[:8])), ", expected \"bplist00\"")
 	}
 	trailer := data[len(data)-32:]
 	offsetSize := int(trailer[6])
@@ -120,7 +124,8 @@ func decodeBinaryPlist(data []byte) (any, error) {
 	if offsetSize < 1 || offsetSize > 8 || objectSize < 1 || objectSize > 8 ||
 		objectCount == 0 || objectCount > 1<<16 || topObject >= objectCount ||
 		tableOffset+objectCount*uint64(offsetSize) > uint64(len(data)-32) {
-		return nil, errPlist
+		return nil, E.New("media: invalid binary property list trailer: offset size ", offsetSize, ", reference size ", objectSize,
+			", ", objectCount, " objects, top object ", topObject, ", offset table at ", tableOffset, " of ", len(data)-32, " bytes")
 	}
 	decoder := &plistDecoder{data: data[:len(data)-32], objectSize: objectSize}
 	decoder.offsets = make([]int, objectCount)
@@ -128,7 +133,7 @@ func decodeBinaryPlist(data []byte) (any, error) {
 		start := int(tableOffset) + i*offsetSize
 		offset := readSizedUint(data[start : start+offsetSize])
 		if offset >= tableOffset {
-			return nil, errPlist
+			return nil, E.New("media: binary property list object ", i, " at offset ", offset, ", past the offset table at ", tableOffset)
 		}
 		decoder.offsets[i] = int(offset)
 	}
@@ -145,8 +150,11 @@ func readSizedUint(data []byte) uint64 {
 
 func (d *plistDecoder) object(index int) (any, error) {
 	d.visits++
-	if index < 0 || index >= len(d.offsets) || d.depth > 16 || d.visits > plistVisitLimit {
-		return nil, errPlist
+	if index < 0 || index >= len(d.offsets) {
+		return nil, E.New("media: binary property list references object ", index, " of ", len(d.offsets))
+	}
+	if d.depth > 16 || d.visits > plistVisitLimit {
+		return nil, E.New("media: binary property list nests deeper than 16 levels or visits more than ", plistVisitLimit, " objects")
 	}
 	d.depth++
 	defer func() { d.depth-- }()
@@ -168,7 +176,7 @@ func (d *plistDecoder) object(index int) (any, error) {
 	case 0x1:
 		size := 1 << info
 		if size > 16 || position+size > len(d.data) {
-			return nil, errPlist
+			return nil, E.New("media: invalid binary property list integer of ", size, " bytes at offset ", position, " of ", len(d.data))
 		}
 		if size == 16 {
 			position += 8
@@ -181,7 +189,7 @@ func (d *plistDecoder) object(index int) (any, error) {
 			size = 1 << info
 		}
 		if position+size > len(d.data) {
-			return nil, errPlist
+			return nil, E.New("media: truncated binary property list real of ", size, " bytes at offset ", position, " of ", len(d.data))
 		}
 		switch size {
 		case 4:
@@ -189,7 +197,7 @@ func (d *plistDecoder) object(index int) (any, error) {
 		case 8:
 			return math.Float64frombits(binary.BigEndian.Uint64(d.data[position:])), nil
 		}
-		return nil, errPlist
+		return nil, E.New("media: unsupported binary property list real of ", size, " bytes")
 	case 0x4, 0x5, 0x6:
 		count, start, err := d.count(info, position)
 		if err != nil {
@@ -200,7 +208,7 @@ func (d *plistDecoder) object(index int) (any, error) {
 			unitSize = 2
 		}
 		if start+unitSize*count > len(d.data) {
-			return nil, errPlist
+			return nil, E.New("media: truncated binary property list value at offset ", start, ": need ", unitSize*count, " bytes, have ", len(d.data)-start)
 		}
 		content := d.data[start : start+unitSize*count]
 		if kind == 0x4 {
@@ -208,7 +216,7 @@ func (d *plistDecoder) object(index int) (any, error) {
 		}
 		d.text += len(content)
 		if d.text > plistTextLimit {
-			return nil, errPlist
+			return nil, E.New("media: binary property list text exceeds ", plistTextLimit, " bytes")
 		}
 		if kind == 0x5 {
 			return string(content), nil
@@ -255,7 +263,7 @@ func (d *plistDecoder) object(index int) (any, error) {
 			}
 			keyString, isString := key.(string)
 			if !isString {
-				return nil, errPlist
+				return nil, E.New("media: binary property list dictionary key is ", reflect.TypeOf(key), ", not a string")
 			}
 			value, err = d.object(references[count+i])
 			if err != nil {
@@ -265,7 +273,7 @@ func (d *plistDecoder) object(index int) (any, error) {
 		}
 		return dictionary, nil
 	}
-	return nil, errPlist
+	return nil, E.New("media: unsupported binary property list object marker 0x", strconv.FormatUint(uint64(marker), 16), " at offset ", d.offsets[index])
 }
 
 func (d *plistDecoder) count(info int, position int) (int, int, error) {
@@ -273,23 +281,23 @@ func (d *plistDecoder) count(info int, position int) (int, int, error) {
 		return info, position, nil
 	}
 	if position >= len(d.data) || d.data[position]>>4 != 0x1 {
-		return 0, 0, errPlist
+		return 0, 0, E.New("media: binary property list has no integer object count at offset ", position, " of ", len(d.data))
 	}
 	size := 1 << (d.data[position] & 0x0f)
 	position++
 	if position+size > len(d.data) || size > 8 {
-		return 0, 0, errPlist
+		return 0, 0, E.New("media: invalid binary property list object count of ", size, " bytes at offset ", position, " of ", len(d.data))
 	}
 	count := readSizedUint(d.data[position : position+size])
 	if count > uint64(len(d.data)) {
-		return 0, 0, errPlist
+		return 0, 0, E.New("media: binary property list object count ", count, " exceeds its ", len(d.data), " bytes")
 	}
 	return int(count), position + size, nil
 }
 
 func (d *plistDecoder) references(position int, count int) ([]int, error) {
 	if position+count*d.objectSize > len(d.data) {
-		return nil, errPlist
+		return nil, E.New("media: truncated binary property list references at offset ", position, ": need ", count*d.objectSize, " bytes, have ", len(d.data)-position)
 	}
 	references := make([]int, count)
 	for i := range references {

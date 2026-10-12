@@ -2,20 +2,21 @@ package rfb
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-var ErrAuthenticationFailed = errors.New("authentication failed")
+var ErrAuthenticationFailed = E.New("rfb: authentication failed")
 
-var ErrPermissionDenied = errors.New("the request to share the screen was declined")
+var ErrPermissionDenied = E.New("rfb: the request to share the screen was declined")
 
 type ProtocolVersion struct {
 	Major int
@@ -82,12 +83,12 @@ func (h *handshake) offersSecurity(securityType SecurityType) bool {
 func (h *handshake) negotiateVersion() error {
 	banner, err := h.stream.bytes(12)
 	if err != nil {
-		return fmt.Errorf("read protocol version: %w", err)
+		return E.Cause(err, "read protocol version")
 	}
 	var server ProtocolVersion
 	_, err = fmt.Sscanf(string(banner), "RFB %03d.%03d\n", &server.Major, &server.Minor)
 	if err != nil {
-		return fmt.Errorf("server greeting %q is not RFB", banner)
+		return E.New("rfb: server greeting ", strconv.Quote(string(banner)), " is not RFB")
 	}
 	dialect := h.options.Dialect
 	if dialect == DialectAutomatic {
@@ -105,7 +106,7 @@ func (h *handshake) negotiateVersion() error {
 	switch {
 	case dialect == DialectApple:
 		if !server.apple() {
-			return fmt.Errorf("%w: it speaks RFB %s, not Apple's 003.889", ErrUnsupportedServer, server)
+			return E.Extend(ErrUnsupportedServer, "it speaks RFB ", server, ", not Apple's 003.889")
 		}
 		client = ProtocolVersion{3, 889}
 	case (server.Major > 3 || server.Minor >= 8) && maximum >= 8:
@@ -134,31 +135,31 @@ func (h *handshake) readReason() error {
 	if err != nil {
 		return err
 	}
-	return errors.New(string(reason))
+	return E.New(string(reason))
 }
 
 func (h *handshake) readSecurityTypes() error {
 	if h.info.Version.Minor == 3 {
 		securityType, err := h.stream.u32()
 		if err != nil {
-			return fmt.Errorf("read security type: %w", err)
+			return E.Cause(err, "read security type")
 		}
 		if securityType == 0 {
-			return fmt.Errorf("server refused the connection: %w", h.readReason())
+			return E.Cause(h.readReason(), "server refused the connection")
 		}
 		h.info.SecurityTypes = []SecurityType{SecurityType(securityType)}
 		return nil
 	}
 	count, err := h.stream.u8()
 	if err != nil {
-		return fmt.Errorf("read security types: %w", err)
+		return E.Cause(err, "read security types")
 	}
 	if count == 0 {
-		return fmt.Errorf("server refused the connection: %w", h.readReason())
+		return E.Cause(h.readReason(), "server refused the connection")
 	}
 	offered, err := h.stream.bytes(int(count))
 	if err != nil {
-		return fmt.Errorf("read security types: %w", err)
+		return E.Cause(err, "read security types")
 	}
 	h.info.SecurityTypes = common.Map(offered, func(value byte) SecurityType {
 		return SecurityType(value)
@@ -192,14 +193,14 @@ func (h *handshake) authenticate() error {
 	}
 	h.wrapKey, err = authenticators[h.securityType](h)
 	if err != nil {
-		return fmt.Errorf("%v: %w", h.securityType, err)
+		return E.Cause(err, "authenticate with ", h.securityType)
 	}
 	if h.securityType == SecurityNone && h.info.Version.Minor < 8 {
 		return nil
 	}
 	result, err := h.stream.u32()
 	if err != nil {
-		return fmt.Errorf("read security result: %w", err)
+		return E.Cause(err, "read security result")
 	}
 	return h.securityResult(result)
 }
@@ -213,18 +214,17 @@ func (h *handshake) securityResult(result uint32) error {
 		cause = ErrPermissionDenied
 	}
 	if h.info.Version.Minor == 8 {
-		return fmt.Errorf("%w: %w", cause, h.readReason())
+		return E.Cause1(cause, h.readReason())
 	}
-	return fmt.Errorf("%w (result %d)", cause, result)
+	return E.Extend(cause, "result ", result)
 }
 
 func (h *handshake) initialize() error {
 	clientInit := byte(1)
 	if h.info.Dialect == DialectApple {
-		// ScreenSharing adds 0x80 for its extension and 0x40 for session selection.
-		// Verified in macOS 27.0.1 (26A434), ScreenSharing UUID
-		// EC0B2C20-F816-3FCE-822D-F9403C09EB50, _RFBAuthenticateCore,
-		// 0x1cc1407fc, 0x1cc1408b0 and the write at 0x1cc140998.
+		// ScreenSharing adds 0x80 for its extension and 0x40 for session selection
+		// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+		// _RFBAuthenticateCore 0x1cc1407fc, 0x1cc1408b0, 0x1cc140998..0x1cc1409a4).
 		clientInit = 0xc1
 	}
 	_, err := h.conn.Write([]byte{clientInit})
@@ -233,14 +233,14 @@ func (h *handshake) initialize() error {
 	}
 	header, err := h.stream.bytes(24)
 	if err != nil {
-		return fmt.Errorf("read ServerInit: %w", err)
+		return E.Cause(err, "read ServerInit")
 	}
 	h.info.Width = int(binary.BigEndian.Uint16(header[0:]))
 	h.info.Height = int(binary.BigEndian.Uint16(header[2:]))
 	h.info.PixelFormat = parsePixelFormat(header[4:20])
 	nameLength := binary.BigEndian.Uint32(header[20:])
 	if nameLength > 1<<20 {
-		return fmt.Errorf("ServerInit name of %d bytes", nameLength)
+		return E.New("rfb: ServerInit name of ", nameLength, " bytes is over the 1 MiB limit")
 	}
 	name, err := h.stream.bytes(int(nameLength))
 	if err != nil {
@@ -262,9 +262,5 @@ func decodeName(name []byte) string {
 	if utf8.Valid(name) {
 		return strings.TrimRight(string(name), "\x00")
 	}
-	runes := make([]rune, len(name))
-	for i, value := range name {
-		runes[i] = rune(value)
-	}
-	return string(runes)
+	return decodeLatin1(name)
 }

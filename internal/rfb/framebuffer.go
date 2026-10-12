@@ -2,8 +2,9 @@ package rfb
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Framebuffer struct {
@@ -24,13 +25,13 @@ func NewFramebuffer(width, height int) *Framebuffer {
 
 func (f *Framebuffer) validate() error {
 	if f.Width <= 0 || f.Height <= 0 {
-		return fmt.Errorf("framebuffer size %dx%d", f.Width, f.Height)
+		return E.New("rfb: framebuffer size ", f.Width, "x", f.Height)
 	}
 	if f.Stride < f.Width*4 {
-		return fmt.Errorf("framebuffer stride %d is below %d", f.Stride, f.Width*4)
+		return E.New("rfb: framebuffer stride ", f.Stride, " is below ", f.Width*4)
 	}
 	if len(f.Pix) < f.Stride*(f.Height-1)+f.Width*4 {
-		return errors.New("framebuffer memory is smaller than its geometry")
+		return E.New("rfb: framebuffer memory of ", len(f.Pix), " bytes, want ", f.Stride*(f.Height-1)+f.Width*4, " for ", f.Width, "x", f.Height, " with stride ", f.Stride)
 	}
 	return nil
 }

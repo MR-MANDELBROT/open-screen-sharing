@@ -7,7 +7,9 @@ nonisolated enum ComputerAvailability: Hashable, Sendable {
     case unavailable
 }
 
-/// With its blacklist enabled, TigerVNC counts banner-only connections until authentication succeeds.
+/// With its blacklist enabled, TigerVNC counts banner-only connections until authentication succeeds
+/// (tigervnc 086c692, common/rfb/Blacklist.cxx:52-89, common/rfb/VNCServerST.cxx:141-161,
+/// common/rfb/VNCServerST.cxx:741-745).
 final class AvailabilityMonitor: ObservableObject {
     @Published private(set) var availability: [ComputerAddress: ComputerAvailability] = [:]
 
@@ -114,7 +116,8 @@ extension ComputerAddress {
 
 nonisolated enum AvailabilityProbe {
     enum Answer: Sendable {
-        /// Apple's Screen Sharing, which announces RFB 3.889.
+        /// Apple's Screen Sharing, which announces RFB 3.889 (screensharingd 756.36.5.2, macOS 27.0.1 26A434,
+        /// UUID 44908B06-F788-3822-ABC4-2285001F6A8D, sub_10002fcb4 0x10003061c..0x10003062c).
         case mac
         case otherServer
         case nothing

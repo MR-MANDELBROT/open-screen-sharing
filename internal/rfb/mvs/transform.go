@@ -45,9 +45,11 @@ func clampSample(value int32) uint8 {
 	return uint8(min(max(value, 0), 255))
 }
 
-// ScreenSharing installs jpeg_idct_islow as its MVS IDCT and calls it for Y, Cb and Cr.
-// Verified through _InitializeIDCT and _PerformInverseDCT8By8
-// on macOS 26A434 and 26B5101f, arm64e.
+// ScreenSharing installs jpeg_idct_islow as its MVS IDCT and calls it for Y, Cb and Cr
+// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _InitializeIDCT 0x1cc06b16c..0x1cc06b178, _PerformInverseDCT8By8 0x1cc06c150..0x1cc06c194;
+// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+// _InitializeIDCT 0x22e4ae1f0..0x22e4ae1fc, _PerformInverseDCT8By8 0x22e4af1d4..0x22e4af218).
 func inverseDCT(coefficients *block, quantization *quantizationTable, output *samples) {
 	var workspace [64]int32
 	uniform := true

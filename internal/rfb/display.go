@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const AllDisplays uint32 = 0xffffffff
@@ -41,11 +43,11 @@ const (
 
 func parseDisplayLayout(payload []byte) (*DisplayLayout, error) {
 	if len(payload) < layoutHeaderSize {
-		return nil, fmt.Errorf("display layout of %d bytes", len(payload))
+		return nil, E.New("rfb: display layout of ", len(payload), " bytes, want at least ", layoutHeaderSize)
 	}
 	count := int(binary.BigEndian.Uint16(payload[0x12:]))
 	if count > maximumLayoutDisplays || len(payload) < layoutHeaderSize+count*layoutRecordSize {
-		return nil, fmt.Errorf("display layout lists %d displays in %d bytes", count, len(payload))
+		return nil, E.New("rfb: display layout lists ", count, " displays in ", len(payload), " bytes; they need ", layoutHeaderSize+count*layoutRecordSize, " bytes, and the limit is ", maximumLayoutDisplays, " displays")
 	}
 	layout := &DisplayLayout{
 		Version:           int(binary.BigEndian.Uint16(payload[0:])),

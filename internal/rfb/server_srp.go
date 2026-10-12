@@ -6,9 +6,9 @@ import (
 	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"math/big"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -37,11 +37,6 @@ var (
 	srpModulus, _ = new(big.Int).SetString(srpGroupPrime, 16)
 	srpGenerator  = big.NewInt(5)
 	srpMultiplier = new(big.Int).SetBytes(srpHash(srpPad(srpModulus), srpPad(srpGenerator)))
-)
-
-var (
-	errSRPProof    = errors.New("the viewer's SRP proof does not match")
-	errSRPUserName = errors.New("the viewer's user name does not match")
 )
 
 type srpVerifier struct {
@@ -111,19 +106,19 @@ func (e *srpExchange) verify(fields []byte) (serverProof []byte, wrapKey [16]byt
 	clientPublicBytes := reader.take(reader.u16())
 	clientProof := reader.take(reader.u8())
 	if reader.err != nil {
-		return nil, wrapKey, fmt.Errorf("parse the SRP proof: %w", reader.err)
+		return nil, wrapKey, E.Cause(reader.err, "parse the SRP proof")
 	}
 	if len(clientPublicBytes) == 0 || len(clientPublicBytes) > srpWidth {
-		return nil, wrapKey, fmt.Errorf("SRP client value of %d bytes", len(clientPublicBytes))
+		return nil, wrapKey, E.New("SRP client value of ", len(clientPublicBytes), " bytes, want 1 to ", srpWidth)
 	}
 	clientPublic := new(big.Int).SetBytes(clientPublicBytes)
 	if new(big.Int).Mod(clientPublic, srpModulus).Sign() == 0 {
-		return nil, wrapKey, errors.New("invalid SRP client value")
+		return nil, wrapKey, E.New("invalid SRP client value")
 	}
 	clientPadded := srpPad(clientPublic)
 	scrambler := new(big.Int).SetBytes(srpHash(clientPadded, e.serverPublic))
 	if scrambler.Sign() == 0 {
-		return nil, wrapKey, errors.New("invalid SRP scrambler")
+		return nil, wrapKey, E.New("invalid SRP scrambler")
 	}
 	base := new(big.Int).Exp(e.verifier.verifier, scrambler, srpModulus)
 	base.Mul(base, clientPublic)
@@ -135,18 +130,20 @@ func (e *srpExchange) verify(fields []byte) (serverProof []byte, wrapKey [16]byt
 	subtle.XORBytes(modulusHash, modulusHash, generatorHash)
 	expected := srpHash(modulusHash, srpHash(nil), e.verifier.salt, clientPadded, e.serverPublic, sessionKey)
 	if subtle.ConstantTimeCompare(expected, clientProof) != 1 {
-		return nil, wrapKey, errSRPProof
+		return nil, wrapKey, E.New("the viewer's SRP proof does not match")
 	}
 	key := sha256.Sum256(sessionKey)
 	copy(wrapKey[:], key[:16])
 	return srpHash(clientPadded, clientProof, sessionKey), wrapKey, nil
 }
 
-// ScreenSharing 776.27 (macOS 27.0.1, 26A434) parses the server proof,
-// server IV, session ID and lifetime before accepting SRP step 3
-// (_srp_client_mech_step, 0x1cc13a4e8..0x1cc13a528; arm64e UUID
-// EC0B2C20-F816-3FCE-822D-F9403C09EB50). Apple passwordserver_sasl-215
-// sends a 16-byte IV, an empty session ID and a zero lifetime.
+// ScreenSharing parses the server proof, server IV, session ID and lifetime
+// before accepting SRP step 3 (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _srp_client_mech_step 0x1cc13a4e8..0x1cc13a528). Apple
+// passwordserver_sasl-215 sends a 16-byte IV, an empty session ID and a
+// zero lifetime (passwordserver_sasl 1e1483f, cyrus_sasl/plugins/srp.c:110,
+// cyrus_sasl/plugins/srp.c:1986, cyrus_sasl/plugins/srp.c:2076-2091).
 func srpVerification(serverProof []byte) []byte {
 	fields := append([]byte{byte(len(serverProof))}, serverProof...)
 	fields = append(fields, 16)

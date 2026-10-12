@@ -14,8 +14,10 @@ const (
 	pointerFillAlpha = 0.5
 	pointerEdgeGray  = 0xff
 	pointerEdgeAlpha = 0.9
-	// ScreenSharing 776.27 (macOS 27.0.1, 26A434) treats cursor IDs above
-	// 999 as custom images (_HandleCursorImageWithAlphaUpdate, 0x1cc06c804).
+	// ScreenSharing treats cursor IDs above 999 as custom images
+	// (ScreenSharing 776.27, macOS 27.0.1 26A434,
+	// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _HandleCursorImageWithAlphaUpdate 0x1cc06c7f8..0x1cc06c808).
 	pointerCursorID = 1000
 )
 
@@ -81,10 +83,14 @@ func cursorColor(cursor *Cursor, format PixelFormat, straight bool) []byte {
 	return color
 }
 
-// ScreenSharing 776.27 (macOS 27.0.1, 26A434) reads encoding 1104 as a
-// cursor ID and compressed image; the inflated color plane is followed by
-// one alpha byte per pixel (_HandleCursorImageWithAlphaUpdate,
-// 0x1cc06c754..0x1cc06c804, 0x1cc06cda8..0x1cc06cf64).
+// ScreenSharing reads encoding 1104 as a cursor ID, a compressed length and
+// the compressed image; the inflated color plane is followed by one alpha
+// byte per pixel (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _HandleFramebufferUpdate 0x1cc150738..0x1cc150760, 0x1cc150bdc..0x1cc150bfc,
+// _HandleCursorImageWithAlphaUpdate 0x1cc06c748..0x1cc06c808,
+// 0x1cc06c948..0x1cc06c968, 0x1cc06cda8, 0x1cc06ce70..0x1cc06ce90,
+// 0x1cc06cf28..0x1cc06cf84).
 func cursorImageRectangle(cursor *Cursor, format PixelFormat) serverRectangle {
 	raw := cursorColor(cursor, format, false)
 	for i := range cursor.Width * cursor.Height {
@@ -93,10 +99,11 @@ func cursorImageRectangle(cursor *Cursor, format PixelFormat) serverRectangle {
 	var compressed bytes.Buffer
 	writer := zlib.NewWriter(&compressed)
 	_, _ = writer.Write(raw)
-	// ScreenSharing 776.27 (macOS 27.0.1, 26A434) calls inflate with
-	// Z_SYNC_FLUSH and accepts only Z_OK, including rejecting Z_STREAM_END
-	// (InflateCursorImage, 0x1cc163500..0x1cc163508; arm64e UUID
-	// EC0B2C20-F816-3FCE-822D-F9403C09EB50).
+	// ScreenSharing calls inflate with Z_SYNC_FLUSH and accepts only Z_OK,
+	// so it rejects Z_STREAM_END (ScreenSharing 776.27, macOS 27.0.1 26A434,
+	// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _InflateCursorImage 0x1cc163500..0x1cc163508,
+	// _HandleCursorImageWithAlphaUpdate 0x1cc06ce90..0x1cc06ce94).
 	_ = writer.Flush()
 	payload := binary.BigEndian.AppendUint32(nil, cursor.CacheID)
 	payload = binary.BigEndian.AppendUint32(payload, uint32(compressed.Len()))

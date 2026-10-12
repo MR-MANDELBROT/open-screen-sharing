@@ -11,7 +11,8 @@ type Button struct {
 	Hold      time.Duration
 }
 
-// Button usages and hold times match idevice d32c818, tools/src/hid.rs:19-28.
+// Button usages and hold times match idevice (idevice d32c818,
+// tools/src/hid.rs:19-28).
 var (
 	ButtonHome       = Button{UsagePage: 0x0c, Usage: 0x40, Hold: 80 * time.Millisecond}
 	ButtonLock       = Button{UsagePage: 0x0c, Usage: 0x30, Hold: 200 * time.Millisecond}
@@ -20,8 +21,8 @@ var (
 	ButtonMute       = Button{UsagePage: 0x0c, Usage: 0xe2, Hold: 80 * time.Millisecond}
 )
 
-// idevice d32c818 maps IndigoButtonEvent Down/Up to 1/2
-// (idevice/src/services/core_device/hid.rs:23-35).
+// idevice maps IndigoButtonEvent Down/Up to 1/2 (idevice d32c818,
+// idevice/src/services/core_device/hid.rs:23-35, 556).
 const (
 	buttonDown = 1
 	buttonUp   = 2

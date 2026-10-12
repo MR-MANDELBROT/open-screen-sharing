@@ -1,9 +1,8 @@
 package libsharing
 
 import (
-	"fmt"
-
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -46,7 +45,7 @@ func gesturePhase(phase int32) (rfb.GesturePhase, error) {
 	case GesturePhaseBegan, GesturePhaseChanged, GesturePhaseEnded, GesturePhaseCancelled, GesturePhaseMayBegin:
 		return rfb.GesturePhase(phase), nil
 	default:
-		return 0, fmt.Errorf("gesture phase %d", phase)
+		return 0, E.New("unknown gesture phase ", phase)
 	}
 }
 
@@ -96,7 +95,7 @@ func (s *Session) SendSwipe(x int32, y int32, direction int32) error {
 		return err
 	}
 	if direction < SwipeBack || direction > SwipeDown {
-		return fmt.Errorf("swipe direction %d", direction)
+		return E.New("unknown swipe direction ", direction, "; it must be ", SwipeBack, " to ", SwipeDown)
 	}
 	return client.SendSwipe(int(x), int(y), rfb.SwipeDirection(direction))
 }
@@ -135,7 +134,7 @@ func (s *Session) SendSystemCommand(command int32) error {
 	}
 	systemCommand, found := systemCommands[command]
 	if !found {
-		return fmt.Errorf("system command %d", command)
+		return E.New("unknown system command ", command)
 	}
 	return client.SendSystemCommand(systemCommand)
 }

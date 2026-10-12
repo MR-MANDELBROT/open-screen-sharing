@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/filecopy"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -33,7 +34,7 @@ func classifyFileError(err error) int32 {
 	switch {
 	case err == nil:
 		return FileErrorNone
-	case errors.Is(err, filecopy.ErrCanceled), errors.Is(err, context.Canceled):
+	case E.IsMulti(err, filecopy.ErrCanceled, context.Canceled):
 		return FileErrorCancelled
 	case errors.Is(err, filecopy.ErrObserveOnly):
 		return FileErrorObserveOnly

@@ -5,13 +5,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"net"
 	"strconv"
 	"strings"
 
+	E "github.com/sagernet/sing/common/exceptions"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -59,7 +59,7 @@ func DialSSH(ctx context.Context, options SSHOptions) (*SSHSource, error) {
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "tcp", options.Address)
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	clientConn, channels, requests, err := ssh.NewClientConn(conn, options.Address, config)
@@ -73,9 +73,9 @@ func DialSSH(ctx context.Context, options SSHOptions) (*SSHSource, error) {
 	if err != nil {
 		conn.Close()
 		if strings.Contains(err.Error(), "unable to authenticate") {
-			return nil, fmt.Errorf("imagemounter: %s refused the user name, password or key: %w", options.Address, err)
+			return nil, E.Cause(err, "imagemounter: ", options.Address, " refused the user name, password or key")
 		}
-		return nil, fmt.Errorf("imagemounter: ssh %s: %w", options.Address, err)
+		return nil, E.Cause(err, "imagemounter: connect to ", options.Address)
 	}
 	directory := options.Directory
 	if directory == "" {
@@ -94,12 +94,12 @@ func ParsePrivateKey(key []byte, passphrase string) (ssh.Signer, error) {
 		signer, err = ssh.ParsePrivateKeyWithPassphrase(key, []byte(passphrase))
 	}
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: private key: %w", err)
+		return nil, E.Cause(err, "imagemounter: parse private key")
 	}
 	return signer, nil
 }
 
-var ErrPassphraseNeeded = errors.New("imagemounter: the private key needs its passphrase")
+var ErrPassphraseNeeded = E.New("imagemounter: the private key needs its passphrase")
 
 func (s *SSHSource) String() string {
 	return s.address + ":" + s.directory
@@ -113,7 +113,7 @@ func (s *SSHSource) path(name string) (string, error) {
 	file := s.directory + "/" + name
 	for _, character := range file {
 		if !(character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || strings.ContainsRune("/._-,", character)) {
-			return "", fmt.Errorf("imagemounter: unexpected file name %q", name)
+			return "", E.New("imagemounter: unexpected file name ", strconv.Quote(name))
 		}
 	}
 	return file, nil
@@ -127,7 +127,7 @@ func statError(file, errorOutput string, err error) error {
 	if message == "" && err != nil {
 		message = err.Error()
 	}
-	return fmt.Errorf("imagemounter: read %s on the Mac: %s", file, message)
+	return E.New("imagemounter: read ", file, " on the Mac: ", message)
 }
 
 func (s *SSHSource) Size(ctx context.Context, name string) (int64, error) {
@@ -137,7 +137,7 @@ func (s *SSHSource) Size(ctx context.Context, name string) (int64, error) {
 	}
 	session, err := s.client.NewSession()
 	if err != nil {
-		return 0, fmt.Errorf("imagemounter: ssh session: %w", err)
+		return 0, E.Cause(err, "imagemounter: open ssh session")
 	}
 	defer session.Close()
 	stop := context.AfterFunc(ctx, func() { session.Close() })
@@ -163,21 +163,21 @@ func (s *SSHSource) Open(ctx context.Context, name string) (io.ReadCloser, error
 	}
 	session, err := s.client.NewSession()
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: ssh session: %w", err)
+		return nil, E.Cause(err, "imagemounter: open ssh session")
 	}
 	stop := context.AfterFunc(ctx, func() { session.Close() })
 	output, err := session.StdoutPipe()
 	if err != nil {
 		stop()
 		session.Close()
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	var errorOutput bytes.Buffer
 	session.Stderr = &errorOutput
 	if err = session.Start("stat -f %z " + file + " && exec cat " + file); err != nil {
 		stop()
 		session.Close()
-		return nil, fmt.Errorf("imagemounter: ssh: %w", err)
+		return nil, E.Cause(err, "imagemounter: start ssh command")
 	}
 	reader := bufio.NewReader(output)
 	line, readErr := reader.ReadString('\n')
@@ -206,8 +206,8 @@ type sshFile struct {
 func (f *sshFile) Read(data []byte) (int, error) {
 	count, err := f.reader.Read(data)
 	f.read += int64(count)
-	if err == io.EOF && f.read < f.size {
-		err = fmt.Errorf("imagemounter: %s ended after %d of %d bytes", f.name, f.read, f.size)
+	if errors.Is(err, io.EOF) && f.read < f.size {
+		err = E.New("imagemounter: ", f.name, " ended after ", f.read, " of ", f.size, " bytes")
 	}
 	return count, err
 }

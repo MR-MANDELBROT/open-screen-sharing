@@ -537,9 +537,8 @@ final class SessionController: ObservableObject {
         pipeline.holdPicture()
         phase = .connecting
         session.start(delegate: sink)
-        // ScreenSharing 776.27 configures virtual displays before SetEncodings in stConfigureSession:
-        // macOS 27.0.1 (26A434), arm64e UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
-        // calls at 0x1cc060514 and 0x1cc060590.
+        // ScreenSharing configures virtual displays before SetEncodings (ScreenSharing 776.27, macOS 27.0.1 26A434,
+        // UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50, -[SSSession stConfigureSession] 0x1cc060514..0x1cc060590).
         if hdrEnabled {
             session.setHDR(true)
         }
@@ -1237,8 +1236,9 @@ final class SessionController: ObservableObject {
         return offer
     }
 
-    // ScreensharingAgent cancels the Mac's drag by activating Finder and then posting Escape; a
-    // button released before that drops the items where the pointer is.
+    // ScreensharingAgent cancels the Mac's drag by activating Finder and then posting Escape
+    // (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+    // sub_100022890 0x100022924..0x100022b94); a button released before that drops the items where the pointer is.
     func cancelRemoteDrag() {
         session?.cancelRemoteDrag()
         holdsPointer = true
@@ -2086,9 +2086,10 @@ final class SessionController: ObservableObject {
             }
             return true
         }
-        // ScreensharingAgent recognizes Unicode keysyms only with high word 0x0100 and posts one UTF-16 unit.
-        // macOS 27.0.1 (26A434), arm64e UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3:
-        // KeyMapDictionary_ConvertKeysym at 0x100035c7c; PostKeyEvent at 0x100027894.
+        // ScreensharingAgent's KeyMapDictionary_ConvertKeysym recognizes Unicode keysyms only with high word 0x0100,
+        // and its PostKeyEvent posts one UTF-16 unit (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434,
+        // UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3, sub_100035ba0 0x100035c7c..0x100035c8c,
+        // sub_100027410 0x100027890..0x100027898).
         let inBasicPlane = text.unicodeScalars.allSatisfy { $0.value <= 0xffff }
         guard info.isMac else {
             let typed = String(String.UnicodeScalarView(text.unicodeScalars.filter { $0.value <= 0xffff }))

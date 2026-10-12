@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 
 	_ "github.com/sagernet/gomobile"
+	"github.com/sagernet/sing/common"
 )
 
 const (
@@ -63,13 +64,13 @@ func pinnedGomobileVersion() string {
 	if !loaded {
 		log.Fatal("missing build info")
 	}
-	for _, module := range info.Deps {
-		if module.Path == gomobileModule {
-			return module.Version
-		}
+	module := common.Find(info.Deps, func(module *debug.Module) bool {
+		return module.Path == gomobileModule
+	})
+	if module == nil {
+		log.Fatal("missing ", gomobileModule, " in build info")
 	}
-	log.Fatal("missing ", gomobileModule, " in build info")
-	return ""
+	return module.Version
 }
 
 func toolInstalled(path string, packagePath string, version string) bool {

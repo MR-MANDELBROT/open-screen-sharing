@@ -8,8 +8,9 @@ func isRTCP(packet []byte) bool {
 	return len(packet) >= 2 && packet[1] >= 192 && packet[1] <= 223
 }
 
-// On iPad17,1 build 24B5089g, the probe sent PLI+FIR without a leading
-// RR at 4.000583709 s; VPS/SPS/PPS and an IDR began arriving at 4.0128 s.
+// A probe sent PLI+FIR without a leading RR at 4.000583709 s; VPS/SPS/PPS
+// and an IDR began arriving at 4.0128 s (observed on iPad17,1, build
+// 24B5089g).
 func keyFrameRequest(senderSSRC, mediaSSRC uint32, sequence uint8) []byte {
 	packet := []byte{0x81, rtcpPayloadSpecificFeedback, 0, 2}
 	packet = binary.BigEndian.AppendUint32(packet, senderSSRC)

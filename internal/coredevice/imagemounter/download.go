@@ -10,7 +10,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Variant int
@@ -49,7 +52,8 @@ func (v Variant) repositoryDirectory() string {
 }
 
 // DeveloperDiskImage update_ddi.py publishes the variants under
-// PersonalizedImages/Xcode_iOS_DDI_{Personalized,Cryptex}.
+// PersonalizedImages/Xcode_iOS_DDI_{Personalized,Cryptex}
+// (DeveloperDiskImage 6eae353, update_ddi.py:42,60-75,260).
 const repository = "https://raw.githubusercontent.com/doronz88/DeveloperDiskImage/main/PersonalizedImages"
 
 func RepositoryURL(variant Variant) string {
@@ -80,10 +84,10 @@ func Verify(dir string, variant Variant) error {
 func HTTPSource(rawURL string) (Source, error) {
 	base, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	if base.Scheme != "https" && base.Scheme != "http" || base.Host == "" {
-		return nil, fmt.Errorf("imagemounter: %q is not an HTTP or HTTPS URL", rawURL)
+		return nil, E.New("imagemounter: ", strconv.Quote(rawURL), " is not an HTTP or HTTPS URL")
 	}
 	base.Path = strings.TrimSuffix(strings.TrimSuffix(base.Path, "/"+manifestName), "/") + "/"
 	base.RawPath = ""
@@ -121,11 +125,11 @@ func (s *httpSource) request(ctx context.Context, method, name string) (*http.Re
 	location := s.base.JoinPath(strings.Split(name, "/")...)
 	request, err := http.NewRequestWithContext(ctx, method, location.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: download: %w", err)
+		return nil, E.Cause(err, "imagemounter: download")
 	}
 	switch response.StatusCode {
 	case http.StatusOK:
@@ -150,21 +154,21 @@ func (e *httpStatusError) Error() string {
 func writeFile(path string, write func(file *os.File) error) error {
 	file, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	defer os.Remove(file.Name())
 	err = write(file)
-	if closeErr := file.Close(); err == nil && closeErr != nil {
-		err = fmt.Errorf("imagemounter: %w", closeErr)
-	}
+	err = E.Append(err, file.Close(), func(err error) error {
+		return E.Cause(err, "imagemounter")
+	})
 	if err != nil {
 		return err
 	}
 	if err = os.Chmod(file.Name(), 0o644); err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	if err = os.Rename(file.Name(), path); err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	return nil
 }

@@ -6,15 +6,16 @@ package xpc
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"maps"
 	"math"
 	"reflect"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -136,7 +137,7 @@ func appendObject(out []byte, value any) ([]byte, error) {
 			var err error
 			out, err = appendObject(out, value[key])
 			if err != nil {
-				return nil, fmt.Errorf("%s: %w", key, err)
+				return nil, E.Cause(err, key)
 			}
 		}
 		return endContainer(out, start), nil
@@ -146,7 +147,7 @@ func appendObject(out []byte, value any) ([]byte, error) {
 			var err error
 			out, err = appendObject(out, element)
 			if err != nil {
-				return nil, fmt.Errorf("[%d]: %w", i, err)
+				return nil, E.Cause(err, "[", i, "]")
 			}
 		}
 		return endContainer(out, start), nil
@@ -169,7 +170,7 @@ func appendObject(out []byte, value any) ([]byte, error) {
 			return appendObject(out, entries)
 		}
 	}
-	return nil, fmt.Errorf("xpc: cannot encode %T", value)
+	return nil, E.New("xpc: cannot encode ", reflect.TypeOf(value))
 }
 
 func appendInt64(out []byte, value int64) []byte {
@@ -188,7 +189,10 @@ func appendDouble(out []byte, value float64) []byte {
 }
 
 // idevice and pymobiledevice3 include the count word in array/container
-// lengths; go-ios 273d3e06 omits it from its encoded array length.
+// lengths; go-ios omits it from its encoded array length (idevice 3854a5d,
+// idevice/src/xpc/format.rs:198-221; pymobiledevice3 9c33842,
+// pymobiledevice3/remote/xpc_message.py:87-96; go-ios 273d3e0,
+// ios/xpc/encoding.go:597-617).
 func beginContainer(out []byte, kind uint32, count int) ([]byte, int) {
 	out = binary.LittleEndian.AppendUint32(out, kind)
 	out = binary.LittleEndian.AppendUint32(out, 0)
@@ -209,14 +213,14 @@ func pad(out []byte, length int) []byte {
 	return out
 }
 
-var errShort = errors.New("xpc: message is truncated")
+var errShort = E.New("xpc: message is truncated")
 
 func Unmarshal(data []byte) (Message, int, error) {
 	if len(data) < wrapperLength {
 		return Message{}, 0, errShort
 	}
 	if magic := binary.LittleEndian.Uint32(data); magic != wrapperMagic {
-		return Message{}, 0, fmt.Errorf("xpc: bad message magic 0x%08x", magic)
+		return Message{}, 0, E.New("xpc: bad message magic 0x", strconv.FormatUint(uint64(magic), 16))
 	}
 	message := Message{
 		Flags: binary.LittleEndian.Uint32(data[4:]),
@@ -224,7 +228,7 @@ func Unmarshal(data []byte) (Message, int, error) {
 	}
 	bodyLength := binary.LittleEndian.Uint64(data[8:])
 	if bodyLength > math.MaxInt32 {
-		return Message{}, 0, fmt.Errorf("xpc: body length %d is too large", bodyLength)
+		return Message{}, 0, E.New("xpc: body length ", bodyLength, " is too large, at most ", math.MaxInt32)
 	}
 	total := wrapperLength + int(bodyLength)
 	if len(data) < total {
@@ -235,13 +239,13 @@ func Unmarshal(data []byte) (Message, int, error) {
 	}
 	body := data[wrapperLength:total]
 	if len(body) < 8 {
-		return Message{}, 0, fmt.Errorf("xpc: body length %d is too small", len(body))
+		return Message{}, 0, E.New("xpc: body length ", len(body), " is too small, at least 8")
 	}
 	if magic := binary.LittleEndian.Uint32(body); magic != bodyMagic {
-		return Message{}, 0, fmt.Errorf("xpc: bad body magic 0x%08x", magic)
+		return Message{}, 0, E.New("xpc: bad body magic 0x", strconv.FormatUint(uint64(magic), 16))
 	}
 	if version := binary.LittleEndian.Uint32(body[4:]); version != bodyVersion {
-		return Message{}, 0, fmt.Errorf("xpc: unsupported body version %d", version)
+		return Message{}, 0, E.New("xpc: unsupported body version ", version)
 	}
 	decoder := &decoder{data: body[8:]}
 	value, err := decoder.object(0)
@@ -250,7 +254,7 @@ func Unmarshal(data []byte) (Message, int, error) {
 	}
 	dictionary, isDictionary := value.(map[string]any)
 	if !isDictionary {
-		return Message{}, 0, fmt.Errorf("xpc: message body is %T, not a dictionary", value)
+		return Message{}, 0, E.New("xpc: message body is ", reflect.TypeOf(value), ", not a dictionary")
 	}
 	message.Body = dictionary
 	return message, total, nil
@@ -264,7 +268,7 @@ const maxDepth = 64
 
 func (d *decoder) take(n int) ([]byte, error) {
 	if n < 0 || n > len(d.data) {
-		return nil, fmt.Errorf("xpc: object needs %d bytes, %d left", n, len(d.data))
+		return nil, E.New("xpc: object needs ", n, " bytes, ", len(d.data), " left")
 	}
 	value := d.data[:n]
 	d.data = d.data[n:]
@@ -300,7 +304,7 @@ func (d *decoder) padded(length int) ([]byte, error) {
 
 func (d *decoder) object(depth int) (any, error) {
 	if depth > maxDepth {
-		return nil, errors.New("xpc: objects nested too deeply")
+		return nil, E.New("xpc: objects nested more than ", maxDepth, " levels deep")
 	}
 	kind, err := d.uint32()
 	if err != nil {
@@ -367,14 +371,14 @@ func (d *decoder) object(depth int) (any, error) {
 			return nil, err
 		}
 		if int(count) > len(inner.data)/4 {
-			return nil, fmt.Errorf("xpc: %d entries do not fit in %d bytes", count, len(inner.data))
+			return nil, E.New("xpc: ", count, " entries do not fit in ", len(inner.data), " bytes")
 		}
 		if kind == typeArray {
 			values := make([]any, count)
 			for i := range values {
 				values[i], err = inner.object(depth + 1)
 				if err != nil {
-					return nil, fmt.Errorf("[%d]: %w", i, err)
+					return nil, E.Cause(err, "[", i, "]")
 				}
 			}
 			return values, nil
@@ -387,7 +391,7 @@ func (d *decoder) object(depth int) (any, error) {
 			}
 			values[key], err = inner.object(depth + 1)
 			if err != nil {
-				return nil, fmt.Errorf("%s: %w", key, err)
+				return nil, E.Cause(err, key)
 			}
 		}
 		return values, nil
@@ -403,17 +407,17 @@ func (d *decoder) object(depth int) (any, error) {
 		dictionary, _ := value.(map[string]any)
 		size, isSize := dictionary["s"].(uint64)
 		if !isSize {
-			return nil, fmt.Errorf("xpc: file transfer without size: %v", value)
+			return nil, E.New("xpc: file transfer without size: ", fmt.Sprint(value))
 		}
 		return FileTransfer{ID: id, Size: size}, nil
 	}
-	return nil, fmt.Errorf("xpc: unknown object type 0x%08x", kind)
+	return nil, E.New("xpc: unknown object type 0x", strconv.FormatUint(uint64(kind), 16))
 }
 
 func (d *decoder) key() (string, error) {
 	end := bytes.IndexByte(d.data, 0)
 	if end < 0 {
-		return "", errors.New("xpc: dictionary key is not terminated")
+		return "", E.New("xpc: dictionary key is not terminated in ", len(d.data), " remaining bytes")
 	}
 	key := string(d.data[:end])
 	_, err := d.padded(end + 1)

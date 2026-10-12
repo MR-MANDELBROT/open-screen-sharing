@@ -29,9 +29,9 @@ nonisolated struct VirtualDisplayMode: Hashable, Sendable {
 
     init?(matching area: CGSize, screenScale: CGFloat, resolutionScale: CGFloat = 1, minimumShortSide: CGFloat = VirtualDisplayMode.minimumShortSide) {
         guard area.width >= 1, area.height >= 1 else { return nil }
-        // ScreenSharing's -[SSSessionView setDynamicSize:] requests two pixels per point.
-        // macOS 27.0.1 (26A434), ScreenSharing arm64e UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50:
-        // pixel dimensions doubled at 0x1cc0a3788/0x1cc0a37ac; points unscaled at 0x1cc0a37d0/0x1cc0a37f0.
+        // ScreenSharing's -[SSSessionView setDynamicSize:] requests two pixels per point (ScreenSharing 776.27,
+        // macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50, -[SSSessionView setDynamicSize:]
+        // 0x1cc0a3788..0x1cc0a37f0).
         let density = screenScale >= 2 ? 2 : 1
         let points = CGSize(width: area.width * resolutionScale, height: area.height * resolutionScale)
         let grow = max(

@@ -9,10 +9,12 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const usage = `usage: sharectl [flags] [action ...]
@@ -203,7 +205,7 @@ func parseOptions(options *rfb.Options, security, dialect, quality, mode string)
 	case "standard":
 		options.Dialect = rfb.DialectStandard
 	default:
-		return fmt.Errorf("unknown dialect %q", dialect)
+		return E.New("unknown dialect ", strconv.Quote(dialect))
 	}
 	var err error
 	options.Quality, err = rfb.ParseQuality(quality)
@@ -223,7 +225,7 @@ func parseSession(value string) (rfb.SessionChoice, error) {
 	case "cancel":
 		return rfb.SessionCancel, nil
 	default:
-		return 0, fmt.Errorf("unknown session answer %q", value)
+		return 0, E.New("unknown session answer ", strconv.Quote(value))
 	}
 }
 
@@ -233,13 +235,13 @@ func parseMode(value string) (rfb.Mode, error) {
 			return mode, nil
 		}
 	}
-	return 0, fmt.Errorf("unknown mode %q", value)
+	return 0, E.New("unknown mode ", strconv.Quote(value))
 }
 
 func parseNumbers[T any](value string, count int, parse func(string) (T, error)) ([]T, error) {
 	parts := strings.Split(value, ",")
 	if len(parts) < count {
-		return nil, fmt.Errorf("%q needs %d numbers", value, count)
+		return nil, E.New(strconv.Quote(value), " needs ", count, " numbers")
 	}
 	numbers := make([]T, len(parts))
 	for i, part := range parts {

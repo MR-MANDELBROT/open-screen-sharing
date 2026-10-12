@@ -3,6 +3,7 @@ package deviceserver
 import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/display"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/hid"
+	"github.com/sagernet/sing/common"
 )
 
 type displayGeometry struct {
@@ -33,21 +34,19 @@ func (g screenGeometry) viewerPoints(distance float64) float64 {
 }
 
 func primaryDisplay(displays []display.DisplayInfo) (display.DisplayInfo, bool) {
-	for _, info := range displays {
-		if info.Primary && info.Width > 0 && info.Height > 0 {
-			return info, true
-		}
+	info := common.Find(displays, func(info display.DisplayInfo) bool {
+		return info.Primary && info.Width > 0 && info.Height > 0
+	})
+	if info.Width == 0 {
+		info = common.Find(displays, func(info display.DisplayInfo) bool {
+			return info.ID == display.DefaultDisplayID && info.Width > 0 && info.Height > 0
+		})
 	}
-	for _, info := range displays {
-		if info.ID == display.DefaultDisplayID && info.Width > 0 && info.Height > 0 {
-			return info, true
-		}
-	}
-	return display.DisplayInfo{}, false
+	return info, info.Width > 0
 }
 
-// iPad17,1 on iPadOS 27.2 (24B5099f) produced 2420×1668 visible video in mode 7,
-// with a 2432×1680 coded frame; mode 5 exposed the full 2432×1680 frame.
+// In mode 7 the device produced 2420×1668 visible video in a 2432×1680 coded frame;
+// mode 5 exposed the full 2432×1680 frame (observed on iPad17,1, iPadOS 27.2 24B5099f).
 func framebufferSize(info display.DisplayInfo) [2]int {
 	return [2]int{info.Width, info.Height}
 }
@@ -82,7 +81,6 @@ func touchTurns(geometry displayGeometry, width, height int) int {
 	return turns & 3
 }
 
-// pymobiledevice3 normalizes VNC coordinates by framebuffer width-1 and height-1.
 func touchPoint(geometry screenGeometry, at point) hid.Touch {
 	u := normalize(at.X, geometry.Width)
 	v := normalize(at.Y, geometry.Height)

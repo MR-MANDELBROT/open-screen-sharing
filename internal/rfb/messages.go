@@ -2,8 +2,9 @@ package rfb
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 func setPixelFormatMessage(format PixelFormat) []byte {
@@ -47,10 +48,9 @@ func clientCutTextMessage(text []byte) []byte {
 	return append(message, text...)
 }
 
-// Apple's RFBAutoFrameUpdate sends a 16-byte message 9 with the rectangle at byte 8.
-// Rechecked in macOS 27.0.1 (26A434), ScreenSharing.framework arm64e UUID
-// EC0B2C20-F816-3FCE-822D-F9403C09EB50, _RFBAutoFrameUpdate,
-// construction at 0x1cc068668..0x1cc06871c; 16-byte write at 0x1cc0687a4..0x1cc0687b0.
+// Apple's RFBAutoFrameUpdate sends a 16-byte message 9 with the rectangle at byte 8
+// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _RFBAutoFrameUpdate 0x1cc068668..0x1cc06871c, 0x1cc0687a4..0x1cc0687b0).
 func autoFramebufferUpdateMessage(intervalMicroseconds uint32, x, y, width, height int) []byte {
 	message := []byte{0x09, 0}
 	message = binary.BigEndian.AppendUint16(message, 1)
@@ -91,40 +91,48 @@ func autoPasteboardMessage(enabled bool) []byte {
 }
 
 // Apple's RFBSetDisplay sends message 0x0d with the selector at byte 1 and a
-// big-endian display ID at byte 4. Rechecked in macOS 27.0.1 (26A434),
-// ScreenSharing.framework arm64e UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
-// _RFBSetDisplay, 0x1cc066c1c-0x1cc066c3c.
+// big-endian display ID at byte 4 (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50, _RFBSetDisplay 0x1cc066c1c..0x1cc066c3c).
 func setDisplayMessage(id uint32) []byte {
 	message := []byte{0x0d, boolByte(id == 0), 0, 0}
 	return binary.BigEndian.AppendUint32(message, id)
 }
 
-// SkyLight 1.600.0 reports MaximumSizeInPixels 16384×16384 via
-// +[SLVirtualDisplay capabilities] on macOS 27.0.1 (26A434).
+// SkyLight refuses an SLVirtualDisplayConfiguration whose maximumSizeInPixels is above
+// IOSurfaceGetPropertyMaximum for kIOSurfaceWidth or kIOSurfaceHeight (SkyLight 953.5.5,
+// macOS 27.0.1 26A434, UUID 8A3B348E-4637-3685-92D0-6CBC2F36A234,
+// supports_size_in_pixels(SLVirtualDisplaySize) 0x187367650..0x1873676b8,
+// -[SLVirtualDisplayConfiguration initWithName:vendorID:productID:serialNumber:sizeInMillimeters:maximumSizeInPixels:chromaticities:error:]
+// 0x187367280..0x187367284; SkyLight 957.7.4, macOS 27.2 26B5101f,
+// UUID 357EAA23-454A-3633-8728-1DFBC79D9E92,
+// supports_size_in_pixels(SLVirtualDisplaySize) 0x182969858..0x1829698c0,
+// -[SLVirtualDisplayConfiguration initWithName:vendorID:productID:serialNumber:sizeInMillimeters:maximumSizeInPixels:chromaticities:error:]
+// 0x182969488..0x18296948c). That maximum was 16384×16384 (observed on Mac14,3, macOS 27.0.1
+// 26A434, and on Mac16,8, macOS 27.2 26B5101f).
 const VirtualDisplayLargestSide = 16384
 
 func CheckVirtualDisplay(width, height int, density float64) error {
 	if density != 1 && density != 2 {
-		return fmt.Errorf("virtual display density %v; the Mac takes 1 or 2", density)
+		return E.New("rfb: virtual display density ", density, "; the Mac takes 1 or 2")
 	}
 	if width <= 0 || height <= 0 {
-		return fmt.Errorf("virtual display of %dx%d points", width, height)
+		return E.New("rfb: virtual display of ", width, "x", height, " points")
 	}
 	return nil
 }
 
 // Apple's message 0x1d uses a 0x9c-byte display header and 0x1c-byte modes.
 // The viewer sets descriptor flag bit 0 for dynamic resolution and mode flag bit 0
-// for HDR. The wire builder takes the per-axis maximum pixel dimensions across modes.
-// Rechecked in macOS 27.0.1 (26A434), ScreenSharing.framework arm64e UUID
-// EC0B2C20-F816-3FCE-822D-F9403C09EB50: _RFBSetDisplayConfiguration at
-// 0x1cc148bd8..0x1cc148bf0, 0x1cc148d48..0x1cc148f24 and 0x1cc149000..0x1cc1490d4;
-// -[SSSession stConfigureVirtualDisplaysWithDimensions:] at
-// 0x1cc0d9410..0x1cc0d9420 and 0x1cc0d9664..0x1cc0d998c.
-// ScreensharingAgent arm64e UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3 forwards the
-// received maximum to SLVirtualDisplayConfiguration as maximumSizeInPixels:
+// for HDR. The wire builder takes the per-axis maximum pixel dimensions across modes
+// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _RFBSetDisplayConfiguration 0x1cc148bd8..0x1cc148bf0, 0x1cc148d48..0x1cc148f24,
+// 0x1cc149000..0x1cc1490d4, -[SSSession stConfigureVirtualDisplaysWithDimensions:]
+// 0x1cc0d9410..0x1cc0d9420, 0x1cc0d9664..0x1cc0d998c).
+// ScreensharingAgent forwards the received maximum to SLVirtualDisplayConfiguration as
+// maximumSizeInPixels (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434,
+// UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
 // -[SSAgentVirtualDisplay initVirtualDisplay:displayInfo:blankScreen:dynamicResolution:]
-// loads at 0x1000025b0..0x1000025b4, initializer call at 0x10000274c.
+// 0x1000025b0..0x1000025b4, 0x1000026f8..0x10000274c).
 func virtualDisplayMessage(width, height int, density float64, maximumWidth, maximumHeight int, refreshRate float64, hdr bool) ([]byte, error) {
 	err := CheckVirtualDisplay(width, height, density)
 	if err != nil {

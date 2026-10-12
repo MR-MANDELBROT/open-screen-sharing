@@ -6,24 +6,25 @@ package lockdown
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/rsd"
+	E "github.com/sagernet/sing/common/exceptions"
 	"howett.net/plist"
 )
 
 const Port = 62078
 
 // go-ios opens CoreDeviceProxy through lockdownd, then exchanges CDTunnel
-// parameters over that connection.
+// parameters over that connection (go-ios ca2c56d,
+// ios/tunnel/tunnel_lockdown.go:15-28; ios/tunnel/tunnel.go:266-305).
 const CoreDeviceProxy = "com.apple.internal.devicecompute.CoreDeviceProxy"
 
 const progName = "open-screen-sharing"
 
-var ErrNotPairRecord = errors.New("not a lockdown pair record")
+var ErrNotPairRecord = E.New("lockdown: not a pair record")
 
 type PairRecord struct {
 	HostID      string
@@ -33,7 +34,8 @@ type PairRecord struct {
 }
 
 // jitterbugpair writes the usbmuxd pair record with the device's UDID added
-// (JitterbugPair/main.c).
+// (Jitterbug b0449f1, JitterbugPair/main.c:162-184; libimobiledevice c6f89de,
+// common/userpref.c:322-341).
 type pairRecordFile struct {
 	HostID          string `plist:"HostID"`
 	SystemBUID      string `plist:"SystemBUID"`
@@ -50,7 +52,7 @@ func ParsePairRecord(data []byte) (*PairRecord, error) {
 	}
 	certificate, err := tls.X509KeyPair(file.HostCertificate, file.HostPrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("pair record certificate: %w", err)
+		return nil, E.Cause(err, "load pair record certificate")
 	}
 	return &PairRecord{
 		HostID:      file.HostID,
@@ -69,7 +71,7 @@ func DialService(ctx context.Context, record *PairRecord, dial Dialer, service s
 	}
 	conn, err := dial(ctx, Port)
 	if err != nil {
-		return nil, fmt.Errorf("connect to lockdown: %w", err)
+		return nil, E.Cause(err, "connect to lockdown")
 	}
 	defer conn.Close()
 	lockdown := rsd.NewPlistConn(conn)
@@ -81,16 +83,16 @@ func DialService(ctx context.Context, record *PairRecord, dial Dialer, service s
 		"SystemBUID":      record.SystemBUID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("lockdown StartSession: %w", err)
+		return nil, E.Cause(err, "lockdown StartSession")
 	}
 	if message, failed := reply["Error"]; failed {
-		return nil, fmt.Errorf("lockdown StartSession: %v", message)
+		return nil, E.New("lockdown StartSession: ", fmt.Sprint(message))
 	}
 	if reply["EnableSessionSSL"] == true {
 		tlsConn := tls.Client(conn, tlsConfig)
 		err = tlsConn.HandshakeContext(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("lockdown TLS: %w", err)
+			return nil, E.Cause(err, "lockdown TLS")
 		}
 		lockdown = rsd.NewPlistConn(tlsConn)
 	}
@@ -101,26 +103,26 @@ func DialService(ctx context.Context, record *PairRecord, dial Dialer, service s
 		"Service":         service,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("lockdown StartService %s: %w", service, err)
+		return nil, E.Cause(err, "lockdown StartService ", service)
 	}
 	if message, failed := reply["Error"]; failed {
-		return nil, fmt.Errorf("lockdown StartService %s: %v", service, message)
+		return nil, E.New("lockdown StartService ", service, ": ", fmt.Sprint(message))
 	}
 	port, _ := reply["Port"].(uint64)
 	if port == 0 || port > 65535 {
-		return nil, fmt.Errorf("lockdown StartService %s: no port in %v", service, reply)
+		return nil, E.New("lockdown StartService ", service, ": no port in ", fmt.Sprint(reply))
 	}
 	logger.Debug("started lockdown service", slog.String("service", service), slog.Uint64("port", port))
 	serviceConn, err := dial(ctx, uint16(port))
 	if err != nil {
-		return nil, fmt.Errorf("connect to %s: %w", service, err)
+		return nil, E.Cause(err, "connect to ", service)
 	}
 	if reply["EnableServiceSSL"] == true {
 		tlsConn := tls.Client(serviceConn, tlsConfig)
 		err = tlsConn.HandshakeContext(ctx)
 		if err != nil {
 			serviceConn.Close()
-			return nil, fmt.Errorf("%s TLS: %w", service, err)
+			return nil, E.Cause(err, service, " TLS")
 		}
 		return tlsConn, nil
 	}

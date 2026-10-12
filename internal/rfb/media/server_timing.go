@@ -107,8 +107,14 @@ func (l *serverLeg) endFrameLocked() {
 	}
 }
 
-// AVConference packs the RCTL delay in units of 1/8192 s
-// (macOS 26A434 and 26B5101f).
+// AVConference packs the RCTL delay (its OWRD in seconds) in units of
+// 1/8192 s (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// -[VCVideoStreamRateAdaptationFeedbackOnly sendRateControlFeedback] 0x1c1189f70..0x1c1189f74,
+// _RTPPackDouble 0x1c0ef9a00..0x1c0ef9a14; AVConference 2260.14.1,
+// macOS 27.2 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+// -[VCVideoStreamRateAdaptationFeedbackOnly sendRateControlFeedback] 0x1c0806718..0x1c080671c,
+// _RTPPackDouble 0x1c0574110..0x1c0574124).
 func (l *serverLeg) timeClientReportLocked(report []byte) {
 	delay := time.Duration(binary.BigEndian.Uint16(report[26:])) * time.Second / 8192
 	l.timing.interval.clientDelay = max(l.timing.interval.clientDelay, delay)

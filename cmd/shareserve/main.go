@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -21,6 +20,7 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/lockdown"
 	"github.com/nekohasekai/open-screen-sharing/internal/deviceserver"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const usage = `usage: shareserve (-password PASSWORD | -no-authentication) [-udid UDID] [flags]
@@ -69,12 +69,12 @@ func main() {
 		os.Exit(2)
 	}
 	if *password == "" && !*noAuthentication {
-		fatal(errors.New("-password, SHARESERVE_PASSWORD or -no-authentication is required"))
+		fatal(E.New("-password, SHARESERVE_PASSWORD or -no-authentication is required"))
 	}
 	if *udid == "" {
 		found, err := firstDevice()
 		if err != nil {
-			fatal(fmt.Errorf("-udid not given: %w", err))
+			fatal(E.Cause(err, "find the default device for -udid"))
 		}
 		*udid = found
 	}
@@ -87,11 +87,11 @@ func main() {
 
 	_, portText, err := net.SplitHostPort(*listen)
 	if err != nil {
-		fatal(fmt.Errorf("-listen: %w", err))
+		fatal(E.Cause(err, "parse -listen"))
 	}
 	listenPort, err := strconv.ParseUint(portText, 10, 16)
 	if err != nil {
-		fatal(fmt.Errorf("-listen: %w", err))
+		fatal(E.Cause(err, "parse -listen"))
 	}
 	if *videoPort == 0 {
 		*videoPort = uint(listenPort) + 1
@@ -100,7 +100,7 @@ func main() {
 		*audioPort = uint(listenPort) + 2
 	}
 	if *videoPort > 65535 || *audioPort > 65535 {
-		fatal(errors.New("media ports must be below 65536"))
+		fatal(E.New("media ports ", *videoPort, " and ", *audioPort, " must be below 65536"))
 	}
 	rfbOptions := rfb.ServerOptions{
 		Name:                      *name,
@@ -117,18 +117,18 @@ func main() {
 	rfbOptions.Media.StripSliceTrailer = *stripTrailer
 	rfbOptions.Media.AllowLoopbackTarget = *allowLoopback
 	if rfbOptions.Flags, err = parseWord(*serverFlags); err != nil {
-		fatal(fmt.Errorf("-flags: %w", err))
+		fatal(E.Cause(err, "parse -flags"))
 	}
 	if rfbOptions.DisplayFlags, err = parseWord(*displayFlags); err != nil {
-		fatal(fmt.Errorf("-display-flags: %w", err))
+		fatal(E.Cause(err, "parse -display-flags"))
 	}
 	if rfbOptions.Commands, err = parseCommands(*commands); err != nil {
-		fatal(fmt.Errorf("-commands: %w", err))
+		fatal(E.Cause(err, "parse -commands"))
 	}
 	if *commandBitmap != "" {
 		bitmap, decodeErr := hex.DecodeString(*commandBitmap)
 		if decodeErr != nil || len(bitmap) != 16 {
-			fatal(errors.New("-command-bitmap needs 32 hex digits"))
+			fatal(E.New("-command-bitmap needs 32 hex digits, got ", strconv.Quote(*commandBitmap)))
 		}
 		rfbOptions.CommandBitmap = (*[16]byte)(bitmap)
 	}
@@ -195,7 +195,7 @@ func firstDevice() (string, error) {
 		}
 	}
 	if found == "" {
-		return "", errors.New("usbmuxd lists no device")
+		return "", E.New("usbmuxd lists no device")
 	}
 	return found, nil
 }

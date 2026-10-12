@@ -2,7 +2,6 @@ package libsharing
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/netip"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/deviceserver"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -82,7 +82,7 @@ type DeviceServer struct {
 
 func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) (*DeviceServer, error) {
 	if options == nil || handler == nil {
-		return nil, errors.New("options and handler are required")
+		return nil, E.New("options and handler are required")
 	}
 	file, err := parsePairingFile(options.PairingRecord)
 	if err != nil {

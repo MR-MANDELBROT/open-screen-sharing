@@ -1,31 +1,38 @@
 // DDI build 27A9266e ships dtremotedisplayd, dtuhidd and dtpasteboardd in
 // usr/libexec in both image variants. Its PersonalizedDMG identities name
 // ApBoardID and ApChipID; its Cryptex identity has neither. The three daemon
-// binaries are identical between these two images.
+// binaries are identical between these two images (usr/libexec in
+// Personalized/Image.dmg and Cryptex/Image.dmg, DDI 27A9266e;
+// BuildManifest.plist, DDI 27A9266e).
 package imagemounter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
-	// pymobiledevice3 uses this RSD shim for mobile_image_mounter.
+	// pymobiledevice3 uses this RSD shim for mobile_image_mounter
+	// (pymobiledevice3 9c33842, pymobiledevice3/services/mobile_image_mounter.py:54).
 	mounterService = "com.apple.mobile.mobile_image_mounter.shim.remote"
-	// pymobiledevice3 uses this RemoteXPC service for cryptexd.
+	// pymobiledevice3 uses this RemoteXPC service for cryptexd
+	// (pymobiledevice3 9c33842, pymobiledevice3/services/cryptexd.py:384).
 	cryptexService = "com.apple.security.cryptexd.remote"
 
-	// pymobiledevice3 identifies the DDI cryptex as com.apple.MobileAsset.DDI.
+	// pymobiledevice3 identifies the DDI cryptex as com.apple.MobileAsset.DDI
+	// (pymobiledevice3 9c33842, pymobiledevice3/services/cryptexd.py:113).
 	ddiCryptexIdentifier = "com.apple.MobileAsset.DDI"
 
 	// pymobiledevice3 uses ImageType Personalized and queries the nonce and
-	// stored ticket with PersonalizedImageType DeveloperDiskImage.
+	// stored ticket with PersonalizedImageType DeveloperDiskImage
+	// (pymobiledevice3 9c33842,
+	// pymobiledevice3/services/mobile_image_mounter.py:374,401-403,432).
 	personalizedImageType = "Personalized"
 	personalizedDDIType   = "DeveloperDiskImage"
 
@@ -34,9 +41,8 @@ const (
 )
 
 var (
-	ErrAlreadyMounted   = errors.New("imagemounter: a Developer Disk Image is already mounted")
-	ErrDeveloperModeOff = errors.New("imagemounter: Developer Mode is off")
-	ErrNoBuildIdentity  = errors.New("imagemounter: the Developer Disk Image does not list this device")
+	ErrAlreadyMounted   = E.New("imagemounter: a Developer Disk Image is already mounted")
+	ErrDeveloperModeOff = E.New("imagemounter: Developer Mode is off")
 )
 
 type Client struct {
@@ -105,15 +111,15 @@ func (c *Client) ecid(ctx context.Context) (uint64, error) {
 		return ecid, nil
 	}
 	if !c.device.HasService(cryptexService) {
-		return 0, errors.New("imagemounter: the device's ECID is unknown")
+		return 0, E.New("imagemounter: the device's ECID is unknown")
 	}
 	chip, err := c.readPersonalizationID(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("imagemounter: read the ECID: %w", err)
+		return 0, E.Cause(err, "imagemounter: read the ECID")
 	}
 	ecid, ok := numberValue(chip["img4_chip_ecid"])
 	if !ok {
-		return 0, errors.New("imagemounter: cryptexd's chip instance has no ECID")
+		return 0, E.New("imagemounter: cryptexd's chip instance has no ECID")
 	}
 	return ecid, nil
 }

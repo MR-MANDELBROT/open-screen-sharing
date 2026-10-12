@@ -3,10 +3,11 @@ package rfb
 import (
 	"crypto/aes"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"math"
 	"slices"
+	"strconv"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type ViewerEvent interface {
@@ -19,9 +20,23 @@ type ViewerPointer struct {
 }
 
 // ScreenSharing’s keycode table maps Option to Meta (0xffe7/0xffe8) and
-// Command to Alt (0xffe9/0xffea). The legacy key-event path also reads
-// preference overrides (macOS 27.0.1 26A434 and 27.2 26B5101f,
-// _RFBPostKeyEventCore and _ConvertKeycodeToX11Keysym).
+// Command to Alt (0xffe9/0xffea). Plain key events instead send the
+// commandKeyKeysym and optionKeyKeysym app preferences for both Command keys
+// and both Option keys, which default to 0xffe9 and 0xffe7
+// (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _MacVirtualKeycodeToKeysym 0x1e5a411e0,
+// _RFBPostKeyEventCore 0x1cc144cf4..0x1cc144d58,
+// ___RFBPostKeyEventCore_block_invoke 0x1cc14bf00..0x1cc14c104,
+// RFBPostKeyEventCore.cmdKeyMapping 0x1e5a411d8,
+// RFBPostKeyEventCore.optionKeyMapping 0x1e5a411dc;
+// ScreenSharing 786.3, macOS 27.2 26B5101f,
+// UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+// _MacVirtualKeycodeToKeysym 0x272252840,
+// _RFBPostKeyEventCore 0x22e5882f0..0x22e588354,
+// ___RFBPostKeyEventCore_block_invoke 0x22e58f4fc..0x22e58f700,
+// RFBPostKeyEventCore.cmdKeyMapping 0x272252838,
+// RFBPostKeyEventCore.optionKeyMapping 0x27225283c).
 type ViewerKey struct {
 	Down         bool
 	Keysym       uint32
@@ -130,7 +145,7 @@ func readClientMessage(source *stream) ([]byte, error) {
 		}
 		size := length(header)
 		if size < 0 || size > limit {
-			return nil, fmt.Errorf("client message %#02x of %d bytes", messageType, size)
+			return nil, E.New("rfb: client message 0x", strconv.FormatUint(uint64(messageType), 16), " of ", size, " bytes, want 0 to ", limit)
 		}
 		message := header
 		for remaining := size; remaining > 0; {
@@ -182,7 +197,7 @@ func readClientMessage(source *stream) ([]byte, error) {
 	case clientPasteboard:
 		return counted(pasteboardHeaderSize, func(header []byte) int { return int(binary.BigEndian.Uint32(header[12:])) }, maximumPasteboard)
 	default:
-		return nil, fmt.Errorf("unknown client message type %#02x", messageType)
+		return nil, E.New("rfb: unknown client message type 0x", strconv.FormatUint(uint64(messageType), 16))
 	}
 }
 
@@ -190,10 +205,17 @@ func position(data []byte) (int, int) {
 	return int(binary.BigEndian.Uint16(data)), int(binary.BigEndian.Uint16(data[2:]))
 }
 
-// ScreensharingAgent on macOS 27.0.1 (26A434) passes each wire-mask bit
-// index to CGEventCreateMouseEvent: bit 1 is right and bit 2 is middle
-// (arm64e UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
-// 0x100023280..0x1000232f8, 0x1000233d0..0x1000233dc).
+// For viewers that report RFB 003.888 or 003.889, screensharingd forwards
+// the pointer button mask unchanged (for other viewers it swaps bits 1 and
+// 2), and ScreensharingAgent passes each bit index to
+// CGEventCreateMouseEvent, so bit 1 is right and bit 2 is middle
+// (screensharingd 756.36.5.2, macOS 27.0.1 26A434,
+// UUID 44908B06-F788-3822-ABC4-2285001F6A8D,
+// sub_10003468c 0x100034af8..0x100034bdc,
+// sub_100036680 0x100038d4c..0x100038d78, 0x10003e5fc..0x10003e61c;
+// ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434,
+// UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+// sub_1000231dc 0x10002328c..0x1000233dc).
 func unswapButtons(wire uint8) uint8 {
 	buttons := wire & ButtonLeft
 	if wire&0x02 != 0 {
@@ -229,12 +251,13 @@ func parsePointerEvent(message []byte) ViewerEvent {
 	return scroll
 }
 
-// ScreenSharing 776.27 (macOS 27.0.1, 26A434) also sends pointer events
-// in message 0x10: plaintext byte 0 is zero, byte 10 is 0xff, byte 11
-// is the button mask, and bytes 12..15 hold big-endian x/y coordinates
-// (_RFBPostX11KeyAndMouseCore, 0x1cc0717a8..0x1cc0718d8,
-// 0x1cc071a1c..0x1cc071a20, 0x1cc07245c..0x1cc0724d0; arm64e UUID
-// EC0B2C20-F816-3FCE-822D-F9403C09EB50).
+// ScreenSharing also sends pointer events in message 0x10: plaintext
+// byte 0 is zero, byte 10 is 0xff, byte 11 is the button mask, and
+// bytes 12..15 hold big-endian x/y coordinates
+// (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _RFBPostX11KeyAndMouseCore 0x1cc0717a8..0x1cc0717b4,
+// 0x1cc071a1c..0x1cc071a20, 0x1cc07245c..0x1cc0724d0).
 func parseEncryptedEvent(key [16]byte, message []byte) (ViewerEvent, error) {
 	flags := message[1]
 	block := message[2:18]
@@ -243,7 +266,7 @@ func parseEncryptedEvent(key [16]byte, message []byte) (ViewerEvent, error) {
 		return nil, err
 	}
 	if block[0] != 0xff && block[0] != 0 {
-		return nil, errors.New("the event does not decrypt with the session key")
+		return nil, E.New("rfb: the event does not decrypt with the session key")
 	}
 	if block[0] == 0 && block[10] == 0xff {
 		return parsePointerEvent(append([]byte{clientPointerEvent}, block[11:16]...)), nil
@@ -263,13 +286,13 @@ func parseEncryptedEvent(key [16]byte, message []byte) (ViewerEvent, error) {
 
 func parseEventMessage(message []byte) (ViewerEvent, error) {
 	if len(message) < 8 {
-		return nil, errors.New("short event message")
+		return nil, E.New("event message of ", len(message), " bytes, want at least 8")
 	}
 	subtype := binary.BigEndian.Uint16(message[6:])
 	body := message[8:]
 	need := func(size int) error {
 		if len(body) < size {
-			return fmt.Errorf("event %d of %d bytes", subtype, len(body))
+			return E.New("event ", subtype, " of ", len(body), " bytes, want ", size)
 		}
 		return nil
 	}
@@ -353,11 +376,11 @@ func parseClientPasteboard(message []byte) (*Clipboard, error) {
 	promise := message[2]&1 != 0
 	uncompressed := binary.BigEndian.Uint32(message[8:])
 	if uncompressed > maximumPasteboard {
-		return nil, fmt.Errorf("pasteboard of %d bytes", uncompressed)
+		return nil, E.New("pasteboard of ", uncompressed, " bytes is over the 100 MiB limit")
 	}
 	archive, err := inflatePasteboard(message[pasteboardHeaderSize:], uncompressed)
 	if err != nil {
-		return nil, fmt.Errorf("pasteboard: %w", err)
+		return nil, E.Cause(err, "inflate pasteboard")
 	}
 	clipboard, err := parsePasteboardArchive(archive)
 	if err != nil {

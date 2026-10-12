@@ -2,16 +2,20 @@ package vpnpeer
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
+	F "github.com/sagernet/sing/common/format"
 )
 
 // LocalDevVPN defaults its peer address to 10.7.0.1/32; StosVPN defaults
-// tunnelFakeIp to 10.7.0.1 (Constants.swift; PacketTunnelProvider.swift).
+// tunnelFakeIp to 10.7.0.1 (LocalDevVPN af3fd69,
+// LocalDevVPN/Constants.swift:16; StosVPN 010bc14,
+// TunnelProv/PacketTunnelProvider.swift:12).
 var fixedAddress = netip.AddrFrom4([4]byte{10, 7, 0, 1})
 
 type tunnel struct {
@@ -21,9 +25,10 @@ type tunnel struct {
 	peers        []netip.Addr
 }
 
-// SideStore minimuxer selects IPv4-only utun interfaces by name, then
-// tries route gateways, route destinations and point-to-point peers
-// (Sources/Services/DeviceConnectionManager.swift).
+// SideStore minimuxer takes utun interfaces that have IPv4 but no IPv6
+// addresses, sorted by name, then tries route gateways, route destinations
+// and point-to-point peers, in that order (minimuxer 12be70d,
+// Sources/Services/DeviceConnectionManager.swift:206-214, 260-283).
 func Candidates() []netip.Addr {
 	tunnels, local := scan()
 	return candidates(tunnels, local)
@@ -52,7 +57,7 @@ func candidates(tunnels []tunnel, local []netip.Addr) []netip.Addr {
 
 func Find(ctx context.Context, candidates []netip.Addr, port uint16, timeout time.Duration) (netip.Addr, error) {
 	if len(candidates) == 0 {
-		return netip.Addr{}, errors.New("no VPN address to try")
+		return netip.Addr{}, E.New("vpnpeer: no VPN address to try")
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -79,5 +84,5 @@ func Find(ctx context.Context, candidates []netip.Addr, port uint16, timeout tim
 		}
 		errs[answer.index] = answer.err
 	}
-	return netip.Addr{}, fmt.Errorf("none of the VPN addresses %v answers on port %d: %w", candidates, port, errs[0])
+	return netip.Addr{}, E.Cause(E.Errors(errs...), "none of the VPN addresses ", strings.Join(F.MapToString(candidates), ", "), " answers on port ", port)
 }

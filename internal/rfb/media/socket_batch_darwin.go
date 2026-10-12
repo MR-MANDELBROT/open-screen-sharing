@@ -10,7 +10,7 @@ import (
 )
 
 // XNU’s private msghdr_x appends size_t msg_datalen after the msghdr fields
-// (bsd/sys/socket_private.h, ac9718f).
+// (xnu ac9718f, bsd/sys/socket_private.h:405-414, bsd/sys/socket.h:603-611).
 type msghdrX struct {
 	msghdr  unix.Msghdr
 	datalen uint64

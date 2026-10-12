@@ -3,7 +3,6 @@ package deviceserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"syscall"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/display"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/imagemounter"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/pairing"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Problem int
@@ -68,8 +68,8 @@ func (e *Error) Unwrap() error {
 	return e.Err
 }
 
-func newError(problem Problem, format string, args ...any) *Error {
-	return &Error{Problem: problem, Err: fmt.Errorf(format, args...)}
+func newError(problem Problem, message ...any) *Error {
+	return &Error{Problem: problem, Err: E.New(message...)}
 }
 
 func ProblemOf(err error) Problem {
@@ -101,15 +101,11 @@ func unreachable(err error) bool {
 	if errors.Is(err, context.Canceled) {
 		return false
 	}
-	for _, errno := range []syscall.Errno{
+	if E.IsMulti(err,
 		syscall.ECONNREFUSED, syscall.ETIMEDOUT, syscall.EHOSTUNREACH,
 		syscall.ENETUNREACH, syscall.ENETDOWN, syscall.EHOSTDOWN, syscall.EADDRNOTAVAIL,
-	} {
-		if errors.Is(err, errno) {
-			return true
-		}
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
+		context.DeadlineExceeded,
+	) {
 		return true
 	}
 	operationError, ok := errors.AsType[*net.OpError](err)

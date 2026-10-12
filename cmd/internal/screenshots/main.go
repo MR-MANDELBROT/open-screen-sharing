@@ -6,9 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"flag"
-	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
@@ -23,6 +21,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -297,12 +296,14 @@ func findSimulator(device device, runtime string) (simulator, bool) {
 		Devices map[string][]simulator `json:"devices"`
 	}
 	decode(output(exec.Command("xcrun", "simctl", "list", "devices", "--json")), &list)
-	for _, existing := range list.Devices[runtime] {
-		if existing.Name == "Screenshots "+device.simulator && existing.DeviceTypeIdentifier == device.deviceType {
-			return existing, true
-		}
+	simulators := list.Devices[runtime]
+	index := slices.IndexFunc(simulators, func(existing simulator) bool {
+		return existing.Name == "Screenshots "+device.simulator && existing.DeviceTypeIdentifier == device.deviceType
+	})
+	if index < 0 {
+		return simulator{}, false
 	}
-	return simulator{}, false
+	return simulators[index], true
 }
 
 func startSimulator(device device, runtime string, appearance string) string {
@@ -488,10 +489,15 @@ func takeMacScreenshots(device device, variant variant, languages []string, appe
 			"-AppleLanguages", "("+language+")",
 			"-AppleLocale", language+"_"+regions[language],
 			"-AppleInterfaceStyle", style,
-			// Blue; otherwise the sidebar takes this Mac's accent color.
+			// 4 is blue (AppKit 2775.10.103.1, macOS 27.0.1 26A434, UUID 2688AFBC-5C39-3132-BCF5-8D00D32D7615,
+			// _NSColorGetUserAccentColor 0x184ed5b3c..0x184ed5b70, __NSAppearanceTintColorNameFromUserAccentColor
+			// 0x184ed5f5c..0x184ed5fbc).
 			"-AppleAccentColor", "4",
 			"-DemoScreenshot", macPage,
-			// AppKit reads the arguments as -key value pairs and opens any left over as documents, and then no window opens.
+			// AppKit reads the arguments as -key value pairs and opens any left over as documents, and then no window opens
+			// (AppKit 2775.10.103.1, macOS 27.0.1 26A434, UUID 2688AFBC-5C39-3132-BCF5-8D00D32D7615,
+			// -[NSApplication finishLaunching] 0x184ef7d90..0x184ef8134,
+			// ___58-[NSApplication(NSAppleEventHandling) _handleAEOpenEvent:]_block_invoke 0x1850244ac..0x1850244b4).
 			"-Demo", "YES",
 		)
 		var stdout, stderr bytes.Buffer
@@ -565,14 +571,14 @@ func padScreenshot(data []byte, sizes []size) []byte {
 func checkScreenshot(data []byte, sizes []size) error {
 	signature := []byte("\x89PNG\r\n\x1a\n")
 	if !bytes.HasPrefix(data, signature) {
-		return errors.New("not a PNG")
+		return E.New("not a PNG")
 	}
 	var width, height int
 	var colorType byte
 	for rest := data[len(signature):]; len(rest) >= 12; {
 		length := int(binary.BigEndian.Uint32(rest))
 		if len(rest) < 12+length {
-			return errors.New("truncated PNG")
+			return E.New("truncated PNG chunk ", strconv.Quote(string(rest[4:8])), ": ", length, " bytes declared, ", len(rest)-12, " present")
 		}
 		chunk, content := string(rest[4:8]), rest[8:8+length]
 		switch chunk {
@@ -581,19 +587,19 @@ func checkScreenshot(data []byte, sizes []size) error {
 			height = int(binary.BigEndian.Uint32(content[4:]))
 			colorType = content[9]
 		case "tRNS":
-			return errors.New("transparent")
+			return E.New("transparent")
 		}
 		rest = rest[12+length:]
 	}
 	if colorType == 4 || colorType == 6 {
-		return errors.New("has an alpha channel")
+		return E.New("has an alpha channel (PNG color type ", colorType, ")")
 	}
-	for _, accepted := range sizes {
-		if width == accepted.width && height == accepted.height || width == accepted.height && height == accepted.width {
-			return nil
-		}
+	if !slices.ContainsFunc(sizes, func(accepted size) bool {
+		return width == accepted.width && height == accepted.height || width == accepted.height && height == accepted.width
+	}) {
+		return E.New(width, "×", height, " isn't a size the App Store takes for the device")
 	}
-	return fmt.Errorf("%d×%d isn't a size the App Store takes for the device", width, height)
+	return nil
 }
 
 func decode(data []byte, value any) {

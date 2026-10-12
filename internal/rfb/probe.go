@@ -2,11 +2,12 @@ package rfb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 func dial(ctx context.Context, options Options) (net.Conn, error) {
@@ -71,7 +72,7 @@ func exchange(ctx context.Context, options Options, steps func(h *handshake) err
 	h := &handshake{conn: conn, stream: newStream(conn), options: &options, logger: logger}
 	err = steps(h)
 	if !stop() {
-		err = errors.Join(ctx.Err(), err)
+		err = E.Errors(ctx.Err(), err)
 	}
 	if err != nil {
 		return ServerInfo{}, err

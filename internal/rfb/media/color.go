@@ -1,6 +1,6 @@
 package media
 
-import "errors"
+import E "github.com/sagernet/sing/common/exceptions"
 
 const (
 	ColorPrimariesBT709  = 1
@@ -29,8 +29,6 @@ func (c Color) HDR() bool {
 	return c.Transfer == TransferPQ || c.Transfer == TransferHLG
 }
 
-var errParameterSet = errors.New("media: truncated or unsupported sequence parameter set")
-
 func parseColor(codec Codec, sets [][]byte) (Color, error) {
 	for _, set := range sets {
 		if len(set) == 0 {
@@ -43,7 +41,7 @@ func parseColor(codec Codec, sets [][]byte) (Color, error) {
 			return parseH264Color(newBitReader(unescapeRBSP(set[1:])))
 		}
 	}
-	return Color{}, errParameterSet
+	return Color{}, E.New("media: no ", codec, " sequence parameter set among ", len(sets), " parameter sets")
 }
 
 func unescapeRBSP(data []byte) []byte {
@@ -177,13 +175,13 @@ func parseHEVCColor(r *bitReader) (Color, error) {
 	}
 	shortTermSets := int(r.unsignedGolomb())
 	if shortTermSets > 64 {
-		return color, errParameterSet
+		return color, E.New("media: HEVC sequence parameter set has ", shortTermSets, " short-term reference picture sets, more than 64")
 	}
 	deltaPictureCounts := make([]int, shortTermSets)
 	for index := 0; index < shortTermSets; index++ {
 		deltaPictureCounts[index] = skipHEVCShortTermReferenceSet(r, index, deltaPictureCounts)
 		if r.overrun {
-			return color, errParameterSet
+			return color, E.New("media: truncated or malformed HEVC short-term reference picture set ", index, " in a sequence parameter set with ", len(r.data), " payload bytes")
 		}
 	}
 	if r.flag() {
@@ -198,7 +196,7 @@ func parseHEVCColor(r *bitReader) (Color, error) {
 		readVUIColor(r, &color)
 	}
 	if r.overrun {
-		return color, errParameterSet
+		return color, E.New("media: truncated or malformed HEVC sequence parameter set with ", len(r.data), " payload bytes")
 	}
 	return color, nil
 }
@@ -327,7 +325,7 @@ func parseH264Color(r *bitReader) (Color, error) {
 		r.signedGolomb()
 		cycle := int(r.unsignedGolomb())
 		if cycle > 255 {
-			return color, errParameterSet
+			return color, E.New("media: H.264 sequence parameter set has ", cycle, " reference frames in the picture order count cycle, more than 255")
 		}
 		for i := 0; i < cycle; i++ {
 			r.signedGolomb()
@@ -350,7 +348,7 @@ func parseH264Color(r *bitReader) (Color, error) {
 		readVUIColor(r, &color)
 	}
 	if r.overrun {
-		return color, errParameterSet
+		return color, E.New("media: truncated or malformed H.264 sequence parameter set with ", len(r.data), " payload bytes")
 	}
 	return color, nil
 }

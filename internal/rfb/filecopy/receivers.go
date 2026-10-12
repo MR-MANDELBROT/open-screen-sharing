@@ -8,11 +8,12 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
-)
 
-var ErrNotFile = errors.New("filecopy: the item is not a file")
+	E "github.com/sagernet/sing/common/exceptions"
+)
 
 func DirectoryReceiver(directory string) Receiver {
 	return &directoryReceiver{directory: directory}
@@ -81,7 +82,7 @@ func (r *directoryReceiver) localPath(item Item) (string, error) {
 	first, rest, nested := strings.Cut(item.Path, "/")
 	if !nested {
 		if r.localName != "" {
-			return "", fmt.Errorf("filecopy: a second top-level item %q", item.Path)
+			return "", E.New("filecopy: a second top-level item ", strconv.Quote(item.Path))
 		}
 		name, err := r.freeName(first, item.Kind)
 		if err != nil {
@@ -91,7 +92,7 @@ func (r *directoryReceiver) localPath(item Item) (string, error) {
 		return name, nil
 	}
 	if first != r.originalName {
-		return "", fmt.Errorf("filecopy: item %q outside the transfer", item.Path)
+		return "", E.New("filecopy: item ", strconv.Quote(item.Path), " outside the transfer")
 	}
 	return r.localName + "/" + rest, nil
 }
@@ -131,8 +132,8 @@ func (r *directoryReceiver) Finish(err error) error {
 	}
 	var result error
 	for _, folder := range slices.Backward(r.folders) {
-		result = errors.Join(result, r.root.Chmod(folder.path, folder.mode))
-		result = errors.Join(result, chtimes(r.root, folder.path, folder.accessed, folder.modified))
+		result = E.Errors(result, r.root.Chmod(folder.path, folder.mode))
+		result = E.Errors(result, chtimes(r.root, folder.path, folder.accessed, folder.modified))
 	}
 	return result
 }

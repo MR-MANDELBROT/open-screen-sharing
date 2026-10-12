@@ -13,7 +13,7 @@ import (
 
 func ConnectUSBMux(ctx context.Context, udid string, logger *slog.Logger) (*Device, error) {
 	// pymobiledevice3 uses its stable host ID for RSD on a tunnel of its own
-	// (remote/remotexpc.py, default_handshake_uuid).
+	// (pymobiledevice3 9c33842, pymobiledevice3/remote/remotexpc.py:100-110).
 	hostName, _ := os.Hostname()
 	identity := uuid.NewSHA1(uuid.NameSpaceOID, []byte("open-screen-sharing:usbmux:"+hostName))
 	return retry(ctx, logger, func() (*Device, error) {

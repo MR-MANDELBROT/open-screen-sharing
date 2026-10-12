@@ -3,18 +3,16 @@ package pairing
 import (
 	"encoding/binary"
 	"math/bits"
+	"slices"
 )
 
 // idevice computes the Bonjour authTag with SipHash using the 16-byte IRK
-// and emits bytes 5 through 0 of the little-endian result
-// (idevice/src/remote_pairing/peer_device.rs, compute_auth_tag).
+// and emits bytes 5 through 0 of the little-endian result (idevice 3854a5d,
+// idevice/src/remote_pairing/peer_device.rs, compute_auth_tag).
 func AuthTag(irk []byte, identifier string) []byte {
 	sum := sipHash24(binary.LittleEndian.Uint64(irk[0:8]), binary.LittleEndian.Uint64(irk[8:16]), []byte(identifier))
-	output := binary.LittleEndian.AppendUint64(nil, sum)
-	tag := make([]byte, 6)
-	for i := range tag {
-		tag[i] = output[5-i]
-	}
+	tag := binary.LittleEndian.AppendUint64(nil, sum)[:6]
+	slices.Reverse(tag)
 	return tag
 }
 

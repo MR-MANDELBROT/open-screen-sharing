@@ -1,6 +1,10 @@
 package mvs
 
-import "errors"
+import (
+	"strconv"
+
+	E "github.com/sagernet/sing/common/exceptions"
+)
 
 const (
 	fullUnchanged = iota
@@ -11,7 +15,7 @@ const (
 
 func (d *Decoder) decodeFull(update []byte, x, y, width, height int, target *Target) error {
 	if len(update) < 3 {
-		return errors.New("mvs: short full update")
+		return E.New("mvs: full update of ", len(update), " bytes, shorter than its 3-byte header")
 	}
 	reader := newBitReader(update[3:])
 	luminanceLimit := min(int(update[1]), 64)
@@ -54,11 +58,12 @@ func (d *Decoder) decodeFull(update []byte, x, y, width, height int, target *Tar
 			}
 		}
 		if reader.failed() {
-			return errors.New("mvs: invalid full update")
+			return E.New("mvs: invalid full update of ", len(update), " bytes at tile row ", localY/8)
 		}
 	}
-	if reader.read(8) != 0x6d || reader.read(8) != 0x76 || reader.read(8) != 0x73 || reader.failed() {
-		return errors.New("mvs: invalid full update end marker")
+	marker := reader.read(24)
+	if marker != 0x6d7673 || reader.failed() {
+		return E.New("mvs: full update of ", len(update), " bytes ends with marker 0x", strconv.FormatUint(uint64(marker), 16), ", expected 0x6d7673")
 	}
 	return nil
 }
@@ -112,8 +117,13 @@ func (d *Decoder) decodeRefinement(r *bitReader, baseline *tileBaseline, luminan
 		scratch.luma[zigzag[scan]] = int16(values[scan])
 		scratch.lumaAC = scratch.lumaAC || scan > 0 && values[scan] != 0
 	}
-	// ScreenSharing decodes Cr before Cb, using header byte 1 for Cr and byte 2 for Cb.
-	// Verified in _DecodeMVSUpdate on macOS 26A434 and 26B5101f, arm64e.
+	// ScreenSharing decodes Cr before Cb, using header byte 1 for Cr and byte 2 for Cb
+	// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _DecodeMVSUpdate 0x1cc068b78..0x1cc068c9c, 0x1cc069404..0x1cc0694ec,
+	// _InitializeIDCT 0x1cc06b1a0..0x1cc06b1d8, _ycc_xrgb_convert32to32 0x1cc16b1c4..0x1cc16b1f4;
+	// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+	// _DecodeMVSUpdate 0x22e4abbfc..0x22e4abd20, 0x22e4ac488..0x22e4ac570,
+	// _InitializeIDCT 0x22e4ae224..0x22e4ae25c, _ycc_xrgb_convert32to32 0x22e5aef18..0x22e5aef48).
 	scratch.cr[0] = int16(oneStepDC(r, baseline.crDC))
 	var crLossless, cbLossless bool
 	scratch.crAC, crLossless = readHuffmanAC(r, &scratch.cr, luminanceLimit, len(cacheEntry{}.cr))

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sagernet/sing/common"
 	"howett.net/plist"
 )
 
@@ -135,28 +136,27 @@ func readInfoPlist() map[string]any {
 		log.Fatal(err)
 	}
 	defer archive.Close()
-	for _, file := range archive.File {
-		if !infoPlistName.MatchString(file.Name) {
-			continue
-		}
-		reader, err := file.Open()
-		if err != nil {
-			log.Fatal(err)
-		}
-		content, err := io.ReadAll(reader)
-		reader.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-		var info map[string]any
-		_, err = plist.Unmarshal(content, &info)
-		if err != nil {
-			log.Fatal(err)
-		}
-		return info
+	file := common.Find(archive.File, func(file *zip.File) bool {
+		return infoPlistName.MatchString(file.Name)
+	})
+	if file == nil {
+		log.Fatal("missing Info.plist in ", ipaPath)
 	}
-	log.Fatal("missing Info.plist in ", ipaPath)
-	return nil
+	reader, err := file.Open()
+	if err != nil {
+		log.Fatal(err)
+	}
+	content, err := io.ReadAll(reader)
+	reader.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	var info map[string]any
+	_, err = plist.Unmarshal(content, &info)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return info
 }
 
 func renderIcon(path string) {

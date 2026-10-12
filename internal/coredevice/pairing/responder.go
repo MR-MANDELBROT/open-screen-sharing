@@ -11,7 +11,7 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"encoding/base64"
-	"errors"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -24,22 +24,24 @@ import (
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/opack"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/tlv8"
+	E "github.com/sagernet/sing/common/exceptions"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // idevice PairableHost advertises _remotepairing-pairable-host._tcp
-// (idevice/src/remote_pairing/responder.rs).
+// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:38).
 const ServiceType = "_remotepairing-pairable-host._tcp"
 
 const (
-	// idevice PairableHostInfo defaults to Mac17,7.
+	// idevice PairableHostInfo defaults to Mac17,7
+	// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:115).
 	responderModel = "Mac17,7"
 
 	// idevice PairableHostInfo defaults to wire version 26, answers with
-	// minimum version 8, and advertises minVer=17
-	// (idevice/src/remote_pairing/responder.rs).
+	// minimum version 8, and advertises minVer=17 (idevice 3854a5d,
+	// idevice/src/remote_pairing/responder.rs:118, 229, 106).
 	responderWireProtocolVersion = 26
 	responderMinimumWireProtocol = 8
 	responderMinimumWireless     = 17
@@ -74,7 +76,7 @@ func NewResponder(options ResponderOptions) (*Responder, error) {
 	}
 	listener, err := net.ListenTCP("tcp", &net.TCPAddr{})
 	if err != nil {
-		return nil, fmt.Errorf("responder: listen: %w", err)
+		return nil, E.Cause(err, "responder: listen")
 	}
 	return &Responder{options: options, logger: logger, listener: listener, identity: identity}, nil
 }
@@ -111,14 +113,14 @@ func (r *Responder) Port() uint16 {
 }
 
 // idevice requires the Bonjour instance name to be the identifier that its
-// TXT record carries and its authTag is derived from
-// (idevice/src/remote_pairing/responder.rs, mdns_txt_records).
+// TXT record carries and its authTag is derived from (idevice 3854a5d,
+// idevice/src/remote_pairing/responder.rs:89-93).
 func (r *Responder) ServiceName() string {
 	return r.identity.Identifier
 }
 
 // idevice advertises these TXT keys with flags=1
-// (idevice/src/remote_pairing/responder.rs, mdns_txt_records).
+// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:94-108).
 func (r *Responder) TXTRecord() map[string]string {
 	return map[string]string{
 		"name":       r.options.HostName,
@@ -235,11 +237,11 @@ func (r *Responder) pair(state *acceptState, c *conn) (record *Record, attempt u
 	c.conn.SetDeadline(time.Now().Add(responderSetupStartTimeout))
 	data, err := c.readPairingData()
 	if err != nil {
-		return nil, 0, fmt.Errorf("read pair-setup M1: %w", err)
+		return nil, 0, E.Cause(err, "read pair-setup M1")
 	}
 	m1, err := tlv8.Decode(data)
 	if err != nil || m1.State() != 1 {
-		return nil, 0, fmt.Errorf("unexpected pair-setup M1 %x", data)
+		return nil, 0, E.New("unexpected pair-setup M1 ", hex.EncodeToString(data))
 	}
 	return r.pairSetup(state, c)
 }
@@ -291,19 +293,19 @@ func (r *Responder) drain(c *conn, logger *slog.Logger) {
 }
 
 // Handshake keys and option values match idevice PairableHost defaults
-// (idevice/src/remote_pairing/responder.rs, handshake).
+// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:111-123, 181-246).
 func (r *Responder) handshake(c *conn) error {
 	request, err := c.readPlain()
 	if err != nil {
-		return fmt.Errorf("read handshake: %w", err)
+		return E.Cause(err, "read handshake")
 	}
 	handshake := lookupObject(request, "request", "_0", "handshake", "_0")
 	if handshake == nil {
-		return fmt.Errorf("unexpected handshake request %v", request)
+		return E.New("unexpected handshake request ", fmt.Sprint(request))
 	}
 	r.logger.Debug("pairing handshake", slog.Any("request", handshake))
 	if attempt, _ := lookup(handshake, "hostOptions", "attemptPairVerify").(bool); attempt {
-		return errors.New("the device asked for pair-verify, which this responder does not support; only new pairings are accepted")
+		return E.New("the device asked for pair-verify, which this responder does not support; only new pairings are accepted")
 	}
 	return c.writePlain(object{"response": object{
 		"forRequestIdentifier": 0,
@@ -342,10 +344,10 @@ func (r *Responder) readSetup(c *conn, state byte) (tlv8.Values, error) {
 		return nil, err
 	}
 	if code, failed := values.Error(); failed {
-		return nil, fmt.Errorf("the device reported %s", tlv8.ErrorString(code))
+		return nil, E.New("pairing: the device reported ", tlv8.ErrorString(code))
 	}
 	if values.State() != state {
-		return nil, fmt.Errorf("expected state %d, got %d", state, values.State())
+		return nil, E.New("pairing: expected state ", state, ", got ", values.State())
 	}
 	return values, nil
 }
@@ -368,7 +370,7 @@ func (r *Responder) pairSetup(state *acceptState, c *conn) (*Record, uint64, err
 	state.access.Unlock()
 	record, err := r.pairSetupSteps(c, server)
 	if err != nil {
-		return nil, attempt, fmt.Errorf("pair-setup: %w", err)
+		return nil, attempt, E.Cause(err, "pair-setup")
 	}
 	return record, attempt, nil
 }
@@ -381,11 +383,11 @@ func (r *Responder) pairSetupSteps(c *conn, server *srpServer) (*Record, error) 
 		tlv8.Item{Type: tlv8.TypePublicKey, Value: server.PublicKey()},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("send M2: %w", err)
+		return nil, E.Cause(err, "send M2")
 	}
 	m3, err := r.readSetup(c, 3)
 	if err != nil {
-		return nil, fmt.Errorf("read M3: %w", err)
+		return nil, E.Cause(err, "read M3")
 	}
 	c.conn.SetDeadline(time.Now().Add(responderStepTimeout))
 	key, serverProof, err := server.Verify(m3[tlv8.TypePublicKey], m3[tlv8.TypeProof])
@@ -401,11 +403,11 @@ func (r *Responder) pairSetupSteps(c *conn, server *srpServer) (*Record, error) 
 		tlv8.Item{Type: tlv8.TypeProof, Value: serverProof},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("send M4: %w", err)
+		return nil, E.Cause(err, "send M4")
 	}
 
 	// idevice uses these Pair-Setup HKDF labels for M5/M6
-	// (idevice/src/remote_pairing/responder.rs).
+	// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:355-362).
 	setupKey, err := hkdf.Key(sha512.New, key, []byte("Pair-Setup-Encrypt-Salt"), "Pair-Setup-Encrypt-Info", chacha20poly1305.KeySize)
 	if err != nil {
 		return nil, err
@@ -416,17 +418,18 @@ func (r *Responder) pairSetupSteps(c *conn, server *srpServer) (*Record, error) 
 	}
 	m5, err := r.readSetup(c, 5)
 	if err != nil {
-		return nil, fmt.Errorf("read M5: %w", err)
+		return nil, E.Cause(err, "read M5")
 	}
 	plaintext, err := setupCipher.Open(nil, pairingNonce("PS-Msg05"), m5[tlv8.TypeEncryptedData], nil)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt M5: %w", err)
+		return nil, E.Cause(err, "decrypt M5")
 	}
 	// idevice parses the decrypted M5 identity without verifying its signature
-	// (idevice/src/remote_pairing/responder.rs, pair_setup).
+	// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:384-386;
+	// idevice/src/remote_pairing/peer_device.rs:115-120).
 	deviceValues, err := tlv8.Decode(plaintext)
 	if err != nil {
-		return nil, fmt.Errorf("M5: %w", err)
+		return nil, E.Cause(err, "decode M5")
 	}
 	record := *r.identity
 	record.DeviceIdentifier = string(deviceValues[tlv8.TypeIdentifier])
@@ -436,7 +439,7 @@ func (r *Responder) pairSetupSteps(c *conn, server *srpServer) (*Record, error) 
 	if infoData := deviceValues[tlv8.TypeInfo]; len(infoData) > 0 {
 		info, err := opack.Unmarshal(infoData)
 		if err != nil {
-			return nil, fmt.Errorf("M5 info: %w", err)
+			return nil, E.Cause(err, "decode M5 info")
 		}
 		r.logger.Debug("paired device info", slog.Any("info", info))
 		infoMap, _ := info.(map[string]any)
@@ -446,9 +449,9 @@ func (r *Responder) pairSetupSteps(c *conn, server *srpServer) (*Record, error) 
 		record.DeviceUDID, _ = infoMap["remotepairing_udid"].(string)
 	}
 	// idevice rejects altIRK values whose length is not 16 bytes
-	// (idevice/src/remote_pairing/peer_device.rs).
+	// (idevice 3854a5d, idevice/src/remote_pairing/peer_device.rs:47-54).
 	if len(record.AltIRK) != 16 {
-		return nil, fmt.Errorf("M5: the device sent an altIRK of %d bytes, expected 16", len(record.AltIRK))
+		return nil, E.New("pairing: M5: the device sent an altIRK of ", len(record.AltIRK), " bytes, expected 16")
 	}
 
 	m6, err := r.accessoryIdentity(&record, key)
@@ -460,7 +463,7 @@ func (r *Responder) pairSetupSteps(c *conn, server *srpServer) (*Record, error) 
 		tlv8.Item{Type: tlv8.TypeState, Value: []byte{6}},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("send M6: %w", err)
+		return nil, E.Cause(err, "send M6")
 	}
 	r.logger.Info("paired", slog.String("device", record.DeviceName), slog.String("udid", record.DeviceUDID))
 	return &record, nil
@@ -473,7 +476,7 @@ func (r *Responder) accessoryIdentity(record *Record, key []byte) ([]byte, error
 	}
 	signed := slices.Concat(accessoryX, []byte(record.Identifier), record.PublicKey)
 	// Info keys and placeholder addresses match idevice PairableHost
-	// (idevice/src/remote_pairing/responder.rs, build_accessory_identity_tlv).
+	// (idevice 3854a5d, idevice/src/remote_pairing/responder.rs:438-447).
 	info, err := opack.Marshal(map[string]any{
 		"altIRK":                      record.HostIRK,
 		"btAddr":                      "11:22:33:44:55:66",

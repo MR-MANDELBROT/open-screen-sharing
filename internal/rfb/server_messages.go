@@ -2,15 +2,19 @@ package rfb
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 	"slices"
+	"strconv"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-// ScreenSharing 776.27 (macOS 27.0.1, 26A434) reads the virtual-display
-// limit from ServerInit flag bits 5..7 when bit 0x10 is set; otherwise it
-// uses two (_RFBMaxVirtualDisplays, 0x1cc1498d8..0x1cc1498e8; arm64e UUID
-// EC0B2C20-F816-3FCE-822D-F9403C09EB50).
+// ScreenSharing reads the virtual-display limit from ServerInit flag bits
+// 5..7 when bit 0x10 is set; otherwise it uses two
+// (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _RFBAuthenticateCore 0x1cc141280..0x1cc14129c,
+// _RFBMaxVirtualDisplays 0x1cc1498d8..0x1cc1498e8).
 const DefaultServerFlags = ServerFlagExtended | ServerFlagControlPrivilege | 1<<5
 
 var DefaultServerCommands = []uint8{
@@ -26,7 +30,7 @@ func commandBitmap(commands []uint8) ([16]byte, error) {
 	var bitmap [16]byte
 	for _, command := range commands {
 		if !slices.Contains(serverParsedCommands, command) {
-			return bitmap, fmt.Errorf("the server cannot read client message %#02x", command)
+			return bitmap, E.New("rfb: the server cannot read client message 0x", strconv.FormatUint(uint64(command), 16))
 		}
 		bitmap[command/8] |= 0x80 >> (command % 8)
 	}
@@ -79,14 +83,18 @@ func mediaStreamUpdate(payload []byte) []byte {
 	return framebufferUpdate(newRectangle(0, 0, 0, 0, EncodingMediaStream, payload))
 }
 
-// ScreenSharing 776.27 (macOS 27.0.1, 26A434; arm64e UUID
-// EC0B2C20-F816-3FCE-822D-F9403C09EB50) passes the desktop dimensions
-// at layout-header offsets 2/4 to setFrame:, and framebuffer dimensions
-// at 6/8 to setScaledFrame: (-[SSSession handleDisplayInfo2:],
-// 0x1cc0df7ec..0x1cc0df828). Session-state bit 0 sets isUsingVirtualDisplay
-// in handleDisplayInfo2b: (0x1cc0e1734..0x1cc0e1800); Dynamic Resolution
-// also requires an AVC media stream and exactly one screen
-// (-[SSSessionView dynamicResolutionModeAvailable], 0x1cc0acacc..0x1cc0acb20).
+// ScreenSharing passes the desktop dimensions at layout-header offsets 2/4
+// to setFrame:, and framebuffer dimensions at 6/8 to setScaledFrame:.
+// Bit 0 of the u32 at header offset 14 sets isUsingVirtualDisplay; Dynamic
+// Resolution also requires an AVC media stream and exactly one screen
+// (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _HandleFramebufferUpdate 0x1cc151a30..0x1cc151a68,
+// -[SSSession handleDisplayInfo2:] 0x1cc0df7ec..0x1cc0df828,
+// 0x1cc0e0aac..0x1cc0e0acc,
+// -[SSSession handleDisplayInfo2b:screenFlags:screenConfiguration:newSelectedScreen:displayCountChanged:]
+// 0x1cc0e1734..0x1cc0e1800,
+// -[SSSessionView dynamicResolutionModeAvailable] 0x1cc0acacc..0x1cc0acb20).
 func displayLayoutRectangle(screen ServerScreen, scale float64, flags uint32) serverRectangle {
 	if !(scale > 0 && scale <= 1) {
 		scale = 1
@@ -128,9 +136,11 @@ func scaledFramebuffer(screen ServerScreen, scale float64) [2]int {
 	return [2]int{int(math.Round(float64(screen.Width) * scale)), int(math.Round(float64(screen.Height) * scale))}
 }
 
-// ScreenSharing 776.27 (macOS 27.0.1, 26A434) treats device-info flag
-// bit 0 as support for dynamic drag (-[SSSession handleDeviceInfoEncoding:],
-// 0x1cc0e9e50..0x1cc0e9e60; arm64e UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50).
+// ScreenSharing treats bit 0 of the device-info flags, the u32 after the
+// version, as support for dynamic drag (ScreenSharing 776.27,
+// macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _HandleFramebufferUpdate 0x1cc1517fc..0x1cc151814,
+// -[SSSession handleDeviceInfoEncoding:] 0x1cc0e9e50..0x1cc0e9e60).
 func deviceInfoRectangle(model string) serverRectangle {
 	fields := []string{model, "unknown", "unknown"}
 	body := binary.BigEndian.AppendUint16(nil, 2)
@@ -148,10 +158,11 @@ func deviceInfoRectangle(model string) serverRectangle {
 	return newRectangle(0, 0, 0, 0, EncodingDeviceInfo, append(payload, body...))
 }
 
-// ScreenSharing 776.27 (macOS 27.0.1, 26A434) reads the vendor-keysym
-// count at offset 2 and the u32 keysyms at offset 4
-// (-[SSSession handleVendorKeysymEncoding:], 0x1cc0e3e10..0x1cc0e3e50;
-// arm64e UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50).
+// ScreenSharing reads the vendor-keysym count at offset 2 and the u32
+// keysyms at offset 4 (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _HandleFramebufferUpdate 0x1cc1519bc..0x1cc1519e8,
+// -[SSSession handleVendorKeysymEncoding:] 0x1cc0e3e10..0x1cc0e3e1c).
 func vendorKeysymsRectangle(commands []SystemCommand) serverRectangle {
 	body := binary.BigEndian.AppendUint16(nil, 1)
 	body = binary.BigEndian.AppendUint16(body, uint16(len(commands)))

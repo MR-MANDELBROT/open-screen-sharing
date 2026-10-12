@@ -2,12 +2,12 @@ package main
 
 import (
 	"encoding/binary"
-	"fmt"
 	"log/slog"
 	"os"
 	"sync"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type mediaRecorder struct {
@@ -81,7 +81,7 @@ func (r *mediaRecorder) VideoAccessUnit(unit media.VideoAccessUnit) {
 func (r *mediaRecorder) write(data []byte) {
 	_, err := r.file.Write(data)
 	if err != nil {
-		fatal(fmt.Errorf("media recording: %w", err))
+		fatal(E.Cause(err, "write media recording"))
 	}
 }
 

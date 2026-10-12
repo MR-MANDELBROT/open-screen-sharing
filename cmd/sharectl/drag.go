@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type dropDestination struct {
@@ -84,7 +84,7 @@ func runDragAction(ctx context.Context, client *rfb.Client, h *handler, verb, ar
 		drag := h.drag
 		h.access.Unlock()
 		if drag == nil || len(drag.Items) == 0 {
-			return true, errors.New("no remote drag of files")
+			return true, E.New("no remote drag of files")
 		}
 		for _, item := range drag.Items {
 			err := copyFile(ctx, client, h, false, item.Path, argument)
@@ -117,7 +117,7 @@ func finishDrop(ctx context.Context, client *rfb.Client, h *handler, timeout tim
 			}
 			return nil
 		case <-deadline:
-			return errors.New("no drop destination in time")
+			return E.New("no drop destination for drag ", id, " within ", timeout)
 		case <-ctx.Done():
 			return ctx.Err()
 		}

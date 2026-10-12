@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -16,9 +15,10 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/filecopy"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-var errSessionEnded = errors.New("session ended")
+var errSessionEnded = E.New("session ended")
 
 func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []string, done <-chan struct{}, runErr *error) error {
 	wait := func(duration time.Duration) error {
@@ -151,7 +151,7 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 			saved, err = fetchClipboard(client, h)
 		case "clipboard-restore":
 			if saved == nil {
-				err = errors.New("nothing saved")
+				err = E.New("nothing saved")
 			} else {
 				err = client.SetClipboard(saved)
 			}
@@ -175,7 +175,7 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 			if found {
 				err = copyFile(ctx, client, h, verb == "upload", source, destination)
 			} else {
-				err = fmt.Errorf("%s needs SOURCE,DESTINATION", verb)
+				err = E.New(verb, " needs SOURCE,DESTINATION")
 			}
 		case "raw":
 			var message []byte
@@ -205,11 +205,11 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 				handled, err = runGestureAction(client, verb, argument, wait)
 			}
 			if !handled {
-				err = fmt.Errorf("unknown action %q", action)
+				err = E.New("unknown action ", strconv.Quote(action))
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("%s: %w", action, err)
+			return E.Cause(err, "run ", action)
 		}
 	}
 	return nil
@@ -251,7 +251,7 @@ func sendKeyCode(client *rfb.Client, argument string) error {
 		}
 		return client.SendKeyCode(uint16(keyCode), keyboardType, uint32(keysym), false)
 	default:
-		return fmt.Errorf("keycode action %q is not down, up or tap", action)
+		return E.New("keycode action ", strconv.Quote(action), " is not down, up or tap")
 	}
 }
 
@@ -266,13 +266,13 @@ var accessibilitySettings = map[string]rfb.AccessibilityFeature{
 func setAccessibility(client *rfb.Client, argument string) error {
 	name, state, found := strings.Cut(argument, ",")
 	if !found || (state != "on" && state != "off") {
-		return fmt.Errorf("a11y needs SETTING,on|off, got %q", argument)
+		return E.New("a11y needs SETTING,on|off, got ", strconv.Quote(argument))
 	}
 	feature, known := accessibilitySettings[name]
 	if !known {
 		number, err := strconv.ParseUint(name, 10, 32)
 		if err != nil {
-			return fmt.Errorf("unknown accessibility setting %q", name)
+			return E.New("unknown accessibility setting ", strconv.Quote(name))
 		}
 		feature = rfb.AccessibilityFeature(number)
 	}
@@ -284,7 +284,7 @@ func setClipboardFlavors(client *rfb.Client, argument string) error {
 	for _, pair := range strings.Split(argument, ",") {
 		flavorType, path, found := strings.Cut(pair, "=")
 		if !found {
-			return fmt.Errorf("flavor %q is not TYPE=FILE", pair)
+			return E.New("flavor ", strconv.Quote(pair), " is not TYPE=FILE")
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -321,7 +321,7 @@ func runHighPerformance(client *rfb.Client, h *handler, argument string, wait fu
 	err = wait(duration)
 	logStreamStatistics(h, client)
 	stopErr := client.StopMediaStream()
-	return errors.Join(err, stopErr)
+	return E.Errors(err, stopErr)
 }
 
 func logStreamStatistics(h *handler, client *rfb.Client) {
@@ -395,7 +395,7 @@ func fetchClipboard(client *rfb.Client, h *handler) (*rfb.Clipboard, error) {
 	case clipboard := <-h.clipboards:
 		return clipboard, nil
 	case <-time.After(10 * time.Second):
-		return nil, errors.New("no pasteboard within 10s")
+		return nil, E.New("no pasteboard within 10s")
 	}
 }
 
@@ -403,7 +403,7 @@ func setVirtualDisplay(client *rfb.Client, argument string) error {
 	size, densityText, _ := strings.Cut(argument, "@")
 	widthText, heightText, found := strings.Cut(size, "x")
 	if !found {
-		return fmt.Errorf("virtual display %q is not WxH", argument)
+		return E.New("virtual display ", strconv.Quote(argument), " is not WxH")
 	}
 	width, err := strconv.Atoi(widthText)
 	if err != nil {
@@ -443,7 +443,7 @@ func saveCursor(h *handler, path string) error {
 	cursor := h.cursor
 	h.access.Unlock()
 	if cursor == nil {
-		return errors.New("no cursor received")
+		return E.New("no cursor received")
 	}
 	picture := image.NewNRGBA(image.Rect(0, 0, cursor.Width, cursor.Height))
 	for i := 0; i < cursor.Width*cursor.Height; i++ {
@@ -465,5 +465,5 @@ func writePNG(path string, picture image.Image) error {
 	}
 	err = png.Encode(file, picture)
 	closeErr := file.Close()
-	return errors.Join(err, closeErr)
+	return E.Errors(err, closeErr)
 }

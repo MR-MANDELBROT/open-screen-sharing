@@ -2,7 +2,7 @@ package deviceserver
 
 import "encoding/binary"
 
-// Captured iPad17,1 streams on iPadOS 27.2 (24B5099f), modes 5/7/9, put VPS/SPS/PPS before each IDR.
+// In modes 5, 7 and 9, the device's streams put VPS/SPS/PPS before each IDR (observed on iPad17,1, iPadOS 27.2 24B5099f).
 
 const (
 	hevcNALSPS         = 33

@@ -6,16 +6,20 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
+	"strings"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 // idevice frames RPPairing JSON with this magic and a big-endian uint16
 // length; its envelope uses message, plain/streamEncrypted, originatedBy
-// and sequenceNumber (idevice/src/remote_pairing/socket.rs).
+// and sequenceNumber (idevice 3854a5d, idevice/src/remote_pairing/mod.rs:44;
+// idevice/src/remote_pairing/socket.rs:69-110).
 const rpPairingMagic = "RPPairing"
 
 const (
@@ -77,7 +81,7 @@ func (c *conn) read() (*envelope, error) {
 		return nil, err
 	}
 	if string(header[:len(rpPairingMagic)]) != rpPairingMagic {
-		return nil, fmt.Errorf("bad RPPairing magic %q", header[:len(rpPairingMagic)])
+		return nil, E.New("pairing: bad RPPairing magic ", strconv.Quote(string(header[:len(rpPairingMagic)])))
 	}
 	data := make([]byte, binary.BigEndian.Uint16(header[len(rpPairingMagic):]))
 	_, err = io.ReadFull(c.reader, data)
@@ -96,7 +100,7 @@ func (c *conn) read() (*envelope, error) {
 	}
 	err = json.Unmarshal(data, &message)
 	if err != nil {
-		return nil, fmt.Errorf("parse RPPairing message: %w", err)
+		return nil, E.Cause(err, "parse RPPairing message")
 	}
 	switch {
 	case message.Message.Plain != nil:
@@ -104,7 +108,7 @@ func (c *conn) read() (*envelope, error) {
 	case message.Message.StreamEncrypted != nil:
 		return &envelope{Encrypted: message.Message.StreamEncrypted.Value}, nil
 	default:
-		return nil, fmt.Errorf("unknown RPPairing message: %s", data)
+		return nil, E.New("pairing: unknown RPPairing message: ", string(data))
 	}
 }
 
@@ -114,7 +118,7 @@ func (c *conn) readPlain() (object, error) {
 		return nil, err
 	}
 	if message.Plain == nil {
-		return nil, errors.New("unexpected encrypted RPPairing message")
+		return nil, E.New("pairing: unexpected encrypted RPPairing message")
 	}
 	return message.Plain, nil
 }
@@ -163,7 +167,7 @@ func lookupString(value any, path ...string) string {
 func lookupBytes(value any, path ...string) ([]byte, error) {
 	text, isString := lookup(value, path...).(string)
 	if !isString {
-		return nil, fmt.Errorf("missing %v", path)
+		return nil, E.New("pairing: missing ", strings.Join(path, "."))
 	}
 	return base64.StdEncoding.DecodeString(text)
 }
@@ -194,7 +198,7 @@ func (c *conn) readPairingData() ([]byte, error) {
 	}
 	event := lookupObject(message, "event", "_0")
 	if event == nil {
-		return nil, fmt.Errorf("expected a pairing event, got %v", message)
+		return nil, E.New("pairing: expected a pairing event, got ", fmt.Sprint(message))
 	}
 	if rejected := lookupObject(event, "pairingRejectedWithError"); rejected != nil {
 		return nil, &PairingRejectedError{Reason: lookupString(rejected, "wrappedError", "userInfo", "NSLocalizedDescription")}
@@ -204,7 +208,7 @@ func (c *conn) readPairingData() ([]byte, error) {
 	}
 	data, err := lookupBytes(event, "pairingData", "_0", "data")
 	if err != nil {
-		return nil, fmt.Errorf("unexpected pairing event %v: %w", event, err)
+		return nil, E.Cause(err, "unexpected pairing event ", fmt.Sprint(event))
 	}
 	return data, nil
 }

@@ -2,8 +2,9 @@ package rfb
 
 import (
 	"encoding/binary"
-	"errors"
 	"math"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -29,8 +30,6 @@ const (
 	KeysymSuperLeft    uint32 = 0xffeb
 	KeysymSuperRight   uint32 = 0xffec
 )
-
-var errObserving = errors.New("input is not sent while observing")
 
 func (c *Client) sendInput(message []byte, motion bool) error {
 	c.access.Lock()
@@ -67,7 +66,7 @@ func (c *Client) SendPointer(x, y int, buttons uint8) error {
 	c.access.Lock()
 	if c.mode == ModeObserve {
 		c.access.Unlock()
-		return errObserving
+		return E.New("rfb: pointer events are not sent while observing")
 	}
 	motion := buttons == c.buttons
 	c.buttons = buttons
@@ -83,11 +82,13 @@ func (c *Client) SendPointer(x, y int, buttons uint8) error {
 	return c.sendInput(pointerEventMessage(c.wireButtons(buttons), wireX, wireY), motion)
 }
 
-// screensharingd 756.36.5.2 arm64e (UUID 44908B06-F788-3822-ABC4-2285001F6A8D) sends a drag's
-// messages only to the viewer whose last left-button press came as an encrypted or V2 event:
-// HandleEncryptedEventMessage reads a pointer from a block with byte 0 clear and byte 10 set
-// at 0x10003df9c..0x10003dfd4 and marks its viewer at 0x10003f528, the V2 handler at 0x100041f48,
-// while a message 5 is posted at 0x10003e62c without marking.
+// screensharingd sends a drag's messages only to the viewer that sent the last encrypted or V2
+// pointer event with button mask exactly 1; a message 5 never marks a viewer. Its encrypted
+// event handler reads a pointer from a block with byte 0 clear and byte 10 set
+// (screensharingd 756.36.5.2, macOS 27.0.1 26A434, UUID 44908B06-F788-3822-ABC4-2285001F6A8D,
+// sub_100036680 0x10003df9c..0x10003dfd4, 0x10003f51c..0x10003f528 and 0x10003e5fc..0x10003e61c,
+// sub_100041964 0x100041f3c..0x100041f48, sub_1000415bc 0x100041644..0x100041650,
+// sub_100007630 0x100007740..0x100007764).
 func encryptedPointerMessage(key [16]byte, buttons uint8, x, y int) ([]byte, error) {
 	message := make([]byte, 18)
 	message[0] = 0x10
@@ -110,9 +111,9 @@ func (c *Client) wirePositionLocked(x, y int) (int, int) {
 	return int(math.Round(float64(x) / c.scale)), int(math.Round(float64(y) / c.scale))
 }
 
-// ScreensharingAgent 756.36.5.2 arm64e passes each button-mask bit index as the
-// CGMouseButton: PostMouseEventIntoSession 0x10002328c..0x1000232f8 and
-// 0x1000233d0..0x1000233d4, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3.
+// ScreensharingAgent passes each button-mask bit index as the CGMouseButton
+// (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+// sub_1000231dc 0x10002328c..0x1000232f8, 0x1000233d0..0x1000233d4).
 func (c *Client) wireButtons(buttons uint8) uint8 {
 	if c.info.Dialect != DialectApple {
 		return buttons
@@ -137,7 +138,7 @@ func (c *Client) SendScroll(x, y int, deltaX, deltaY float64) error {
 	c.access.Lock()
 	if c.mode == ModeObserve {
 		c.access.Unlock()
-		return errObserving
+		return E.New("rfb: scrolling is not sent while observing")
 	}
 	buttons := c.wireButtons(c.buttons)
 	wireX, wireY := c.wirePositionLocked(x, y)
@@ -166,9 +167,9 @@ func (c *Client) SendScroll(x, y int, deltaX, deltaY float64) error {
 		}
 		for i := 0; i < min(count, maximumPulses); i++ {
 			if apple {
-				// screensharingd 756.36.5.2 arm64e scrolls only for masks exactly 8 or 16:
-				// HandlePointerEventMessage 0x100038d84..0x100038d9c,
-				// UUID 44908B06-F788-3822-ABC4-2285001F6A8D.
+				// screensharingd scrolls only for masks exactly 8 or 16 (screensharingd 756.36.5.2,
+				// macOS 27.0.1 26A434, UUID 44908B06-F788-3822-ABC4-2285001F6A8D,
+				// sub_100036680 0x100038d84..0x100038d9c).
 				messages = append(messages, pointerEventMessage(bit, wireX, wireY)...)
 			} else {
 				messages = append(messages, pointerEventMessage(buttons|bit, wireX, wireY)...)
@@ -233,7 +234,7 @@ func clampFloat(value, low, high float64) float64 {
 
 func (c *Client) SendKey(keysym uint32, down bool) error {
 	if c.observing() {
-		return errObserving
+		return E.New("rfb: key events are not sent while observing")
 	}
 	if c.info.Dialect == DialectApple {
 		keysym = appleKeysym(keysym)
@@ -270,7 +271,7 @@ func (c *Client) SendText(text string) error {
 		messages = append(messages, keyEventMessage(false, keysym)...)
 	}
 	if c.observing() {
-		return errObserving
+		return E.New("rfb: text is not typed while observing")
 	}
 	return c.sendKeyboard(messages)
 }

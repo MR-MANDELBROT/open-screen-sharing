@@ -1080,7 +1080,10 @@ extension RemoteScreenNSView {
                     return [(try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true ? url.lastPathComponent + "/" : url.lastPathComponent]
                 }
                 // -[NSFilePromiseReceiver initWithPasteboardPropertyList:ofType:] fills in only the file
-                // types; the names arrive with the files.
+                // types; the names arrive with the files (AppKit 2775.10.103.1, macOS 27.0.1 26A434,
+                // UUID 2688AFBC-5C39-3132-BCF5-8D00D32D7615,
+                // -[NSFilePromiseReceiver initWithPasteboardPropertyList:ofType:] 0x185b162c8..0x185b164d0,
+                // -[NSFilePromiseReceiver receivePromisedFilesAtDestination:options:operationQueue:reader:] 0x185b169e4).
                 return ((item as? NSFilePromiseReceiver)?.fileTypes ?? []).map { identifier in
                     let type = UTType(identifier)
                     let name = String(localized: "Item")
@@ -1127,7 +1130,9 @@ extension RemoteScreenNSView: NSDraggingSource, NSFilePromiseProviderDelegate {
         let scale = displayScale
         let items = offer.items.enumerated().map { index, item in
             // -[NSFilePromiseProvider initWithFileType:delegate:] throws for a type conforming to neither
-            // public.data nor public.directory.
+            // public.data nor public.directory (AppKit 2775.10.103.1, macOS 27.0.1 26A434,
+            // UUID 2688AFBC-5C39-3132-BCF5-8D00D32D7615,
+            // -[NSFilePromiseProvider initWithFileType:delegate:] 0x1859e5588..0x1859e566c).
             let extensionType = UTType(filenameExtension: (item.path as NSString).pathExtension).flatMap { type in
                 type.isDeclared && (type.conforms(to: .data) || type.conforms(to: .directory)) ? type : nil
             }

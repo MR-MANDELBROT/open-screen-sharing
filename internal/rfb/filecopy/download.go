@@ -3,12 +3,14 @@ package filecopy
 import (
 	"compress/zlib"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"strconv"
 	"strings"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Kind int
@@ -76,10 +78,10 @@ type download struct {
 
 func (m *Manager) Download(ctx context.Context, source string, receiver Receiver, onProgress func(Progress)) (*Transfer, error) {
 	if !strings.HasPrefix(source, "/") {
-		return nil, fmt.Errorf("filecopy: source %q is not an absolute path", source)
+		return nil, E.New("filecopy: source ", strconv.Quote(source), " is not an absolute path")
 	}
 	if receiver == nil {
-		return nil, errors.New("filecopy: no receiver")
+		return nil, E.New("filecopy: no receiver")
 	}
 	job := &download{
 		source:   source,
@@ -117,10 +119,7 @@ func (d *download) run(ctx context.Context) {
 		d.writer.Close()
 		d.writer = nil
 	}
-	finishErr := d.receiver.Finish(err)
-	if err == nil {
-		err = finishErr
-	}
+	err = E.Errors(err, d.receiver.Finish(err))
 	d.transfer.finish(Result{Name: d.rootName}, err)
 }
 
@@ -173,8 +172,9 @@ func (d *download) process(message received) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if uint64(compressed.uncompressedSize) > min(d.dataRemaining+d.resourceRemaining, maximumUncompressedSize) {
-			return false, fmt.Errorf("%w: %d compressed bytes for %d remaining", errMalformed, compressed.uncompressedSize, d.dataRemaining+d.resourceRemaining)
+		limit := min(d.dataRemaining+d.resourceRemaining, maximumUncompressedSize)
+		if uint64(compressed.uncompressedSize) > limit {
+			return false, E.New("filecopy: compressed data expands to ", compressed.uncompressedSize, " bytes, more than the ", limit, " bytes allowed")
 		}
 		if d.inflater == nil {
 			d.inflater = &inflater{}
@@ -190,10 +190,10 @@ func (d *download) process(message received) (bool, error) {
 			return true, &SourceError{Status: status}
 		}
 		if d.dataRemaining+d.resourceRemaining > 0 {
-			return true, fmt.Errorf("filecopy: %s ended %d bytes short", d.itemPath, d.dataRemaining+d.resourceRemaining)
+			return true, E.New("filecopy: ", d.itemPath, " ended ", d.dataRemaining+d.resourceRemaining, " bytes short")
 		}
 		if d.rootName == "" {
-			return true, errors.New("filecopy: the Mac sent no item")
+			return true, E.New("filecopy: the Mac sent no item")
 		}
 		return true, nil
 	}
@@ -202,7 +202,7 @@ func (d *download) process(message received) (bool, error) {
 
 func (d *download) newItem(body []byte) error {
 	if d.dataRemaining+d.resourceRemaining > 0 {
-		return fmt.Errorf("filecopy: %s is missing %d bytes", d.itemPath, d.dataRemaining+d.resourceRemaining)
+		return E.New("filecopy: ", d.itemPath, " is missing ", d.dataRemaining+d.resourceRemaining, " bytes")
 	}
 	wire, err := parseNewItem(body)
 	if err != nil {
@@ -229,14 +229,14 @@ func (d *download) newItem(body []byte) error {
 		item.Kind = Link
 		item.LinkTarget = wire.linkTarget
 	default:
-		return fmt.Errorf("filecopy: unknown item type %d", wire.itemType)
+		return E.New("filecopy: unknown item type ", wire.itemType)
 	}
 	if name == "." || name == ".." || strings.ContainsAny(name, "/\x00") {
-		return fmt.Errorf("filecopy: invalid item name %q", name)
+		return E.New("filecopy: invalid item name ", strconv.Quote(name))
 	}
 	level := int(wire.level)
 	if level >= len(d.folders) || (level == 0 && d.rootName != "") {
-		return fmt.Errorf("filecopy: item %q at level %d outside its folder", name, level)
+		return E.New("filecopy: item ", strconv.Quote(name), " at level ", level, " outside its folder")
 	}
 	item.Path = name
 	if level > 0 {
@@ -309,7 +309,7 @@ func (d *download) write(data []byte) error {
 			d.resourceRemaining -= n
 			data = data[n:]
 		default:
-			return fmt.Errorf("filecopy: %d bytes more than %s holds", len(data), d.itemPath)
+			return E.New("filecopy: ", len(data), " bytes more than ", d.itemPath, " holds")
 		}
 	}
 	d.transfer.update(func(progress *Progress) {
@@ -328,10 +328,11 @@ func (d *download) closeWriter() error {
 	return err
 }
 
-// SSFileCopySender 756.36.5.2 (macOS 27.0.1, arm64e UUID ED0F67AF-49DE-30F6-8611-CFB982CE83CD)
-// reuses its zlib state for command 103: 0x100004180..0x1000041c0 gates initialization,
-// 0x100004278..0x10000429c initializes level 9, and 0x10000445c..0x100004464
-// calls deflate with Z_SYNC_FLUSH (2).
+// SSFileCopySender reuses one zlib stream for every command 103: it initializes the stream
+// once at level 9 and calls deflate with Z_SYNC_FLUSH (2) (SSFileCopySender 756.36.5.2,
+// macOS 27.0.1 26A434, UUID ED0F67AF-49DE-30F6-8611-CFB982CE83CD,
+// sub_100003d40 0x100004180..0x1000041c0, 0x100004278..0x10000429c, 0x10000445c..0x100004464,
+// 0x1000044bc..0x1000044c0).
 type inflater struct {
 	input  []byte
 	offset int
@@ -371,7 +372,7 @@ func (f *inflater) inflate(compressed []byte, size int, output []byte) ([]byte, 
 	output = output[:size]
 	_, err := io.ReadFull(f.reader, output)
 	if err != nil {
-		return nil, fmt.Errorf("filecopy: inflate: %w", err)
+		return nil, E.Cause(err, "filecopy: inflate")
 	}
 	return output, nil
 }

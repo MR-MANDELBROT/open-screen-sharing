@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"math/big"
 	"slices"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const askGroupPrime = "" +
@@ -44,12 +44,12 @@ func (s *ServerSession) askToShare() error {
 	}
 	response, err := s.stream.bytes(askCredentialSize + askKeySize)
 	if err != nil {
-		return fmt.Errorf("read the viewer's request: %w", err)
+		return E.Cause(err, "read the viewer's request")
 	}
 	viewerPublic := new(big.Int).SetBytes(response[askCredentialSize:])
 	upper := new(big.Int).Sub(askModulus, big.NewInt(1))
 	if viewerPublic.Cmp(big.NewInt(1)) <= 0 || viewerPublic.Cmp(upper) >= 0 {
-		return errors.New("invalid Diffie-Hellman value from the viewer")
+		return E.New("invalid Diffie-Hellman value from the viewer")
 	}
 	shared := new(big.Int).Exp(viewerPublic, private, askModulus)
 	key := md5.Sum(shared.FillBytes(make([]byte, askKeySize)))

@@ -2,10 +2,9 @@ package rfb
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/mvs"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -37,7 +36,7 @@ func (d *decoders) readPayload(input *stream) ([]byte, error) {
 		return nil, err
 	}
 	if length > maximumCompressedRectangle {
-		return nil, fmt.Errorf("compressed payload of %d bytes", length)
+		return nil, E.New("rfb: compressed payload of ", length, " bytes is over the ", maximumCompressedRectangle, "-byte limit")
 	}
 	if cap(d.payload) < int(length) {
 		d.payload = make([]byte, length)
@@ -82,7 +81,7 @@ func (d *decoders) decode(input *stream, framebuffer *Framebuffer, rectangle Rec
 			return err
 		}
 		if len(data) != rowBytes*height {
-			return fmt.Errorf("inflated %d bytes, want %d", len(data), rowBytes*height)
+			return E.New("rfb: inflated ", len(data), " bytes, want ", rowBytes*height)
 		}
 		switch rectangle.Encoding {
 		case EncodingZlib:
@@ -116,7 +115,7 @@ func (d *decoders) decode(input *stream, framebuffer *Framebuffer, rectangle Rec
 		target := mvs.Target{Pix: framebuffer.Pix, Stride: framebuffer.Stride, Width: framebuffer.Width, Height: framebuffer.Height}
 		return d.mvs.Decode(payload, x, y, width, height, &target)
 	default:
-		return errors.New("not a pixel encoding")
+		return E.New("rfb: not a pixel encoding")
 	}
 }
 
@@ -298,7 +297,7 @@ func (d *decoders) decodeZRLE(framebuffer *Framebuffer, x, y, width, height int,
 	position := 0
 	take := func(length int) ([]byte, error) {
 		if position+length > len(data) {
-			return nil, errors.New("ZRLE data ends inside a tile")
+			return nil, E.New("rfb: ZRLE data ends inside a tile: ", length, " bytes needed at offset ", position, " of ", len(data))
 		}
 		value := data[position : position+length]
 		position += length
@@ -350,7 +349,7 @@ func (d *decoders) decodeZRLE(framebuffer *Framebuffer, x, y, width, height int,
 				}
 			case !rle:
 				if paletteSize > 16 {
-					return fmt.Errorf("ZRLE packed palette of %d colours", paletteSize)
+					return E.New("rfb: ZRLE packed palette of ", paletteSize, " colours, want at most 16")
 				}
 				bitsPerIndex := 4
 				if paletteSize <= 2 {
@@ -395,7 +394,7 @@ func (d *decoders) decodeZRLE(framebuffer *Framebuffer, x, y, width, height int,
 						}
 						index := int(indexByte[0] & 0x7f)
 						if index >= paletteSize {
-							return errors.New("ZRLE palette index out of range")
+							return E.New("rfb: ZRLE palette index ", index, " is outside a palette of ", paletteSize)
 						}
 						pixel = palette[index]
 						if indexByte[0]&0x80 != 0 {
@@ -406,7 +405,7 @@ func (d *decoders) decodeZRLE(framebuffer *Framebuffer, x, y, width, height int,
 						}
 					}
 					if filled+run > count {
-						return errors.New("ZRLE run past the tile")
+						return E.New("rfb: ZRLE run of ", run, " pixels at pixel ", filled, " passes the ", count, "-pixel tile")
 					}
 					for i := filled; i < filled+run; i++ {
 						binary.LittleEndian.PutUint32(pixels[i*4:], pixel)
@@ -418,7 +417,7 @@ func (d *decoders) decodeZRLE(framebuffer *Framebuffer, x, y, width, height int,
 		}
 	}
 	if position != len(data) {
-		return fmt.Errorf("%d bytes left after the ZRLE tiles", len(data)-position)
+		return E.New("rfb: ", len(data)-position, " bytes left after the ZRLE tiles")
 	}
 	return nil
 }
@@ -435,7 +434,7 @@ func zrleRunLength(take func(int) ([]byte, error)) (int, error) {
 			return run, nil
 		}
 		if run > 64*64 {
-			return 0, errors.New("ZRLE run past the tile")
+			return 0, E.New("rfb: ZRLE run of at least ", run, " pixels passes a 64x64 tile")
 		}
 	}
 }

@@ -7,13 +7,16 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-// pymobiledevice3 and go-ios use 58783 as the default RSD port.
+// pymobiledevice3 and go-ios use 58783 as the default RSD port
+// (pymobiledevice3 9c33842, pymobiledevice3/remote/remote_service_discovery.py:38;
+// go-ios ca2c56d, ios/rsd.go:119).
 const Port = 58783
 
 // idevice sends these MessagingProtocolVersion and RemoteXPCVersionFlags
-// values in its RSD handshake.
+// values in its RSD handshake (idevice 3854a5d, idevice/src/xpc/mod.rs:92-102).
 const (
 	messagingProtocolVersion = 7
 	remoteXPCVersionFlags    = 0x0100000000000006
@@ -25,8 +28,6 @@ type Peer struct {
 	Services                 map[string]uint16
 }
 
-// pymobiledevice3 reuses a hostname-derived UUID across RSD handshakes
-// (default_handshake_uuid in remote/remotexpc.py).
 func Handshake(ctx context.Context, conn *xpc.Conn, identity uuid.UUID) (*Peer, error) {
 	err := conn.Send(map[string]any{
 		"MessageType":              "Handshake",
@@ -39,12 +40,12 @@ func Handshake(ctx context.Context, conn *xpc.Conn, identity uuid.UUID) (*Peer, 
 		"Services": map[string]any{},
 	}, false)
 	if err != nil {
-		return nil, fmt.Errorf("RSD handshake: %w", err)
+		return nil, E.Cause(err, "RSD handshake")
 	}
 	for {
 		message, err := conn.ReceiveMessage(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("RSD handshake: %w", err)
+			return nil, E.Cause(err, "RSD handshake")
 		}
 		if message.Body["MessageType"] != "Handshake" {
 			continue
@@ -59,7 +60,7 @@ func parsePeer(body map[string]any) (*Peer, error) {
 	peer.Properties, _ = body["Properties"].(map[string]any)
 	services, isDictionary := body["Services"].(map[string]any)
 	if !isDictionary {
-		return nil, fmt.Errorf("RSD handshake: no services in %v", body)
+		return nil, E.New("RSD handshake: no services in ", fmt.Sprint(body))
 	}
 	for name, value := range services {
 		entry, _ := value.(map[string]any)
@@ -77,17 +78,17 @@ func parsePort(value any) (uint16, error) {
 	case string:
 		port, err := strconv.ParseUint(value, 10, 16)
 		if err != nil {
-			return 0, fmt.Errorf("bad port %q", value)
+			return 0, E.New("bad port ", strconv.Quote(value))
 		}
 		return uint16(port), nil
 	case int64, uint64:
 		port, _ := unsigned(value)
 		if port == 0 || port > 65535 {
-			return 0, fmt.Errorf("bad port %d", port)
+			return 0, E.New("bad port ", port)
 		}
 		return uint16(port), nil
 	}
-	return 0, fmt.Errorf("bad port %v", value)
+	return 0, E.New("bad port ", fmt.Sprint(value))
 }
 
 func unsigned(value any) (uint64, bool) {

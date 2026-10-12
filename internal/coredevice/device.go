@@ -2,7 +2,6 @@ package coredevice
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -13,6 +12,7 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/rsd"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/tunnel"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const checkinLabel = "open-screen-sharing"
@@ -62,11 +62,11 @@ func (d *Device) handshake(ctx context.Context, identity uuid.UUID) error {
 	}
 	conn, err := d.tunnel.DialTCP(ctx, port)
 	if err != nil {
-		return fmt.Errorf("connect to RSD: %w", err)
+		return E.Cause(err, "connect to RSD")
 	}
 	d.rsdConn, err = xpc.NewConn(ctx, conn, d.logger)
 	if err != nil {
-		return fmt.Errorf("connect to RSD: %w", err)
+		return E.Cause(err, "connect to RSD")
 	}
 	peer, err := rsd.Handshake(ctx, d.rsdConn, identity)
 	if err != nil {
@@ -99,7 +99,7 @@ func (d *Device) watch() {
 	if d.session != nil {
 		go func() {
 			err := d.session.Wait()
-			d.fail(fmt.Errorf("remote pairing connection closed: %w", err))
+			d.fail(E.Cause(err, "remote pairing connection closed"))
 		}()
 	}
 	go func() {
@@ -113,8 +113,8 @@ func (d *Device) watch() {
 				}
 				return
 			}
-			// iPad17,1 on iPadOS 27.2 (24B5099f) sent StartTls with
-			// YesNo=false and TlsPolicy=1 in the captured RSD exchange.
+			// The device sent StartTls with YesNo=false and TlsPolicy=1 in a
+			// captured RSD exchange (observed on iPad17,1, iPadOS 27.2 24B5099f).
 			if message.Body["MessageType"] == "StartTls" && message.Body["YesNo"] == true {
 				d.logger.Warn("the device asks for TLS on the RSD connection, which is not supported", slog.Any("body", message.Body))
 				continue
@@ -124,7 +124,7 @@ func (d *Device) watch() {
 	}()
 	select {
 	case <-d.tunnel.Done():
-		d.fail(fmt.Errorf("tunnel closed: %w", d.tunnel.Err()))
+		d.fail(E.Cause(d.tunnel.Err(), "tunnel closed"))
 	case <-d.done:
 	}
 }
@@ -164,11 +164,11 @@ func (d *Device) HasService(name string) bool {
 func (d *Device) DialService(ctx context.Context, name string) (net.Conn, error) {
 	port, found := d.services[name]
 	if !found {
-		return nil, fmt.Errorf("the device does not offer %s", name)
+		return nil, E.New("coredevice: the device does not offer ", name)
 	}
 	conn, err := d.tunnel.DialTCP(ctx, port)
 	if err != nil {
-		return nil, fmt.Errorf("connect to %s: %w", name, err)
+		return nil, E.Cause(err, "connect to ", name)
 	}
 	return conn, nil
 }
@@ -180,7 +180,7 @@ func (d *Device) DialXPC(ctx context.Context, name string) (*xpc.Conn, error) {
 	}
 	xpcConn, err := xpc.NewConn(ctx, conn, d.logger)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", name, err)
+		return nil, E.Cause(err, "connect to ", name)
 	}
 	return xpcConn, nil
 }
@@ -194,7 +194,7 @@ func (d *Device) DialShim(ctx context.Context, name string) (*rsd.PlistConn, err
 	err = plistConn.Checkin(ctx, checkinLabel)
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("%s: %w", name, err)
+		return nil, E.Cause(err, "connect to ", name)
 	}
 	return plistConn, nil
 }

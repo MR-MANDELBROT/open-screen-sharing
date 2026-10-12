@@ -1,7 +1,14 @@
 package media
 
-// In macOS 26A434, SSSession processes remote video orientation changes
-// only when isAppleIDAddress and connectingToIOSdevice are both true.
+// SSSession handles a remote video attributes change, including its
+// orientation, only when the address isAppleIDAddress and the connection
+// options have connectingToIOSdevice; otherwise it returns at once
+// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID
+// EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// -[SSSession remoteVideoClient:remoteVideoAttributesDidChange:] 0x1cc0de894..0x1cc0de8b0;
+// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID
+// 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+// -[SSSession remoteVideoClient:remoteVideoAttributesDidChange:] 0x22e521914..0x22e521930).
 const (
 	appleExtensionProfile = 0x9000
 	appleExtensionMask    = 0xf000

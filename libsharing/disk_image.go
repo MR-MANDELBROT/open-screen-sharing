@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/imagemounter"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 func DefaultDiskImageURL() string {
@@ -23,7 +24,7 @@ func DiskImageImported(directory string) (bool, error) {
 	if personalized {
 		return true, nil
 	}
-	return false, errors.Join(cryptexErr, personalizedErr)
+	return false, E.Errors(cryptexErr, personalizedErr)
 }
 
 type DiskImageImportHandler interface {
@@ -39,7 +40,7 @@ type DiskImageImport struct {
 
 func NewDiskImageImport(directory string, handler DiskImageImportHandler) (*DiskImageImport, error) {
 	if directory == "" || handler == nil {
-		return nil, errors.New("a directory and a handler are required")
+		return nil, E.New("a directory and a handler are required")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &DiskImageImport{directory: directory, handler: handler, ctx: ctx, cancel: cancel}, nil
@@ -61,7 +62,7 @@ func (i *DiskImageImport) ImportFile(path string) error {
 	defer closer.Close()
 	err = i.run(source)
 	if errors.Is(err, imagemounter.ErrNoManifest) {
-		return errors.New("no developer disk image found; choose a copy of " + imagemounter.XcodeDirectory + " from a Mac with Xcode")
+		return E.New("no developer disk image found; choose a copy of ", imagemounter.XcodeDirectory, " from a Mac with Xcode")
 	}
 	return err
 }
@@ -77,7 +78,7 @@ type MacImportOptions struct {
 
 func (i *DiskImageImport) ImportFromMac(options *MacImportOptions) error {
 	if options == nil {
-		return errors.New("no options")
+		return E.New("no options")
 	}
 	port := options.Port
 	if port == 0 {
@@ -96,7 +97,7 @@ func (i *DiskImageImport) ImportFromMac(options *MacImportOptions) error {
 	defer source.Close()
 	err = i.run(source)
 	if errors.Is(err, imagemounter.ErrNoManifest) {
-		return errors.New("this Mac has no developer disk image in " + imagemounter.XcodeDirectory + "; install Xcode on it and open Xcode once")
+		return E.New("this Mac has no developer disk image in ", imagemounter.XcodeDirectory, "; install Xcode on it and open Xcode once")
 	}
 	return err
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	E "github.com/sagernet/sing/common/exceptions"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/display"
@@ -20,13 +21,13 @@ import (
 const (
 	startInterval     = time.Second
 	startBackoffLimit = 10 * time.Second
-	// Recorded iPad streams send RTCP sender reports about once a second (iPadOS 27.2, 24B5089g).
+	// The device's streams sent RTCP sender reports about once a second (observed on iPad17,1, build 24B5089g).
 	silenceLimit     = 3 * time.Second
 	parkedAudioLimit = 5 * time.Second
 	idleDelay        = time.Second
 )
 
-var errVideoSilent = errors.New("the device stopped sending video")
+var errVideoSilent = E.New("the device stopped sending video")
 
 type streamManager struct {
 	logger      *slog.Logger
@@ -280,14 +281,14 @@ func (s *Server) startVideo(ctx context.Context, a *attachment, request media.Se
 		return nil, err
 	}
 	if a.ctx.Err() != nil {
-		return nil, errors.New("the device connection ended")
+		return nil, E.New("the device connection ended")
 	}
 	device := a.device
 	sessionID := uuid.New()
 	var audio *display.Stream
 	var err error
 	if s.options.Audio && !s.options.RFB.Media.DisableAudioLeg {
-		// The iPadOS 27.2 (24B5089g) capture returned a nonzero video SyncStreamToken with audio, zero without it.
+		// The device returned a nonzero video SyncStreamToken with audio, zero without it (observed on iPad17,1, build 24B5089g).
 		audio, err = a.display.StartAudio(ctx, display.StreamOptions{SessionID: sessionID})
 		if err != nil {
 			s.logger.Warn("start the device's sound", "error", err)
@@ -314,7 +315,7 @@ func (s *Server) startVideo(ctx context.Context, a *attachment, request media.Se
 			m.access.Unlock()
 			s.setVideoProblem(err)
 		}
-		return nil, fmt.Errorf("start the device's video: %w", err)
+		return nil, E.Cause(err, "start the device's video")
 	}
 	if ctx.Err() != nil {
 		m.stop(video)
@@ -396,13 +397,13 @@ func deviceMode(mode media.VideoMode) display.Mode {
 
 func pixelFormat(format uint32) media.PixelFormats {
 	switch format {
-	case 0x34323076: // iPad17,1 on 24B5099f replied with this format in mode 9.
+	case 0x34323076: // The device replied with this format in mode 9 (observed on iPad17,1, iPadOS 27.2 24B5099f).
 		return media.PixelFormat420VideoRange
-	case 0x34323066: // iPad17,1 on 24B5099f replied with this format in mode 5.
+	case 0x34323066: // The device replied with this format in mode 5 (observed on iPad17,1, iPadOS 27.2 24B5099f).
 		return media.PixelFormat420FullRange
 	case 0x34343476:
 		return media.PixelFormat444VideoRange
-	case 0x34343466: // iPad17,1 on 24B5099f replied with this format in mode 7.
+	case 0x34343466: // The device replied with this format in mode 7 (observed on iPad17,1, iPadOS 27.2 24B5099f).
 		return media.PixelFormat444FullRange
 	}
 	return 0

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 func newDumper(directory, encodings string) (func(rfb.RawRectangle), error) {
@@ -40,7 +41,7 @@ func newDumper(directory, encodings string) (func(rfb.RawRectangle), error) {
 				rectangle.Width, rectangle.Height, len(rectangle.Payload), file)
 		}
 		if writeErr != nil {
-			fatal(fmt.Errorf("dump: %w", writeErr))
+			fatal(E.Cause(writeErr, "dump"))
 		}
 	}, nil
 }

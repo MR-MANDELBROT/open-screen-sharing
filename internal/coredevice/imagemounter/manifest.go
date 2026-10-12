@@ -14,14 +14,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 	"howett.net/plist"
 )
 
 const manifestName = "BuildManifest.plist"
 
-// DeveloperDiskImage update_ddi.py publishes these fixed names. The
-// installed DDI 27A9266e instead uses 022-20899-111 and 022-20886-111
-// asset paths in its BuildManifest.plist.
+// DeveloperDiskImage update_ddi.py publishes these fixed names
+// (DeveloperDiskImage 6eae353, update_ddi.py:60-74). DDI 27A9266e instead
+// uses 022-20899-111 and 022-20886-111 asset paths in its BuildManifest.plist
+// (BuildManifest.plist, DDI 27A9266e).
 var fixedNames = map[string]string{
 	"PersonalizedDMG":            "Image.dmg",
 	"LoadableTrustCache":         "Image.dmg.trustcache",
@@ -32,7 +35,8 @@ var fixedNames = map[string]string{
 }
 
 // DDI build 27A9266e uses Info.Variant
-// "iOS Customer Developer Disk Image Cryptex".
+// "iOS Customer Developer Disk Image Cryptex" (BuildManifest.plist,
+// DDI 27A9266e).
 const cryptexVariantSuffix = "Developer Disk Image Cryptex"
 
 type manifest struct {
@@ -44,7 +48,7 @@ type buildIdentity map[string]any
 func loadManifest(dir string) (*manifest, error) {
 	data, err := os.ReadFile(filepath.Join(dir, manifestName))
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	return parseManifest(data)
 }
@@ -52,44 +56,50 @@ func loadManifest(dir string) (*manifest, error) {
 func parseManifest(data []byte) (*manifest, error) {
 	var m manifest
 	if _, err := plist.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("imagemounter: decode %s: %w", manifestName, err)
+		return nil, E.Cause(err, "imagemounter: decode ", manifestName)
 	}
 	return &m, nil
 }
 
 func (m *manifest) personalizedIdentity(board, chip uint64) (buildIdentity, error) {
-	for _, identity := range m.BuildIdentities {
+	identity := common.Find(m.BuildIdentities, func(identity buildIdentity) bool {
 		identityBoard, boardOK := numberValue(identity["ApBoardID"])
 		identityChip, chipOK := numberValue(identity["ApChipID"])
-		if boardOK && chipOK && identityBoard == board && identityChip == chip {
-			if _, ok := identity.entry("PersonalizedDMG"); ok {
-				return identity, nil
-			}
+		if !boardOK || !chipOK || identityBoard != board || identityChip != chip {
+			return false
 		}
+		_, hasImage := identity.entry("PersonalizedDMG")
+		return hasImage
+	})
+	if identity == nil {
+		return nil, E.New("imagemounter: the Developer Disk Image does not list this device (board 0x", strconv.FormatUint(board, 16), ", chip 0x", strconv.FormatUint(chip, 16), ")")
 	}
-	return nil, fmt.Errorf("%w (board %#x, chip %#x)", ErrNoBuildIdentity, board, chip)
+	return identity, nil
 }
 
 // All PersonalizedDMG identities in DDI build 27A9266e name the same
-// image and trust-cache paths.
+// image and trust-cache paths (BuildManifest.plist, DDI 27A9266e).
 func (m *manifest) anyPersonalizedIdentity() (buildIdentity, error) {
-	for _, identity := range m.BuildIdentities {
-		if _, ok := identity.entry("PersonalizedDMG"); ok {
-			return identity, nil
-		}
+	identity := common.Find(m.BuildIdentities, func(identity buildIdentity) bool {
+		_, hasImage := identity.entry("PersonalizedDMG")
+		return hasImage
+	})
+	if identity == nil {
+		return nil, E.New("imagemounter: the build manifest has no personalized image")
 	}
-	return nil, errors.New("imagemounter: the build manifest has no personalized image")
+	return identity, nil
 }
 
 func (m *manifest) cryptexIdentity() (buildIdentity, error) {
-	for _, identity := range m.BuildIdentities {
+	identity := common.Find(m.BuildIdentities, func(identity buildIdentity) bool {
 		info, _ := identity["Info"].(map[string]any)
 		variant, _ := info["Variant"].(string)
-		if strings.HasSuffix(variant, cryptexVariantSuffix) {
-			return identity, nil
-		}
+		return strings.HasSuffix(variant, cryptexVariantSuffix)
+	})
+	if identity == nil {
+		return nil, E.New("imagemounter: the build manifest has no cryptex")
 	}
-	return nil, errors.New("imagemounter: the build manifest has no cryptex")
+	return identity, nil
 }
 
 func (i buildIdentity) manifestEntries() map[string]any {
@@ -102,21 +112,23 @@ func (i buildIdentity) entry(key string) (map[string]any, bool) {
 	return entry, ok
 }
 
-// DDI build 27A9266e has SHA-384 digests for its Cryptex assets and most
-// PersonalizedDMG identities; the 18 identities with SHA-1 are A8 and A9 boards.
+// DDI build 27A9266e has SHA-384 digests for its Cryptex assets and 122 of
+// its 140 PersonalizedDMG identities; the 18 identities with SHA-1 digests
+// have ApChipID 0x7000, 0x7001, 0x8000, 0x8001 or 0x8003 (A8, A8X, A9, A9X)
+// (BuildManifest.plist, DDI 27A9266e).
 func (i buildIdentity) digest(key string) ([]byte, error) {
 	entry, ok := i.entry(key)
 	if !ok {
-		return nil, fmt.Errorf("imagemounter: the build identity has no %s", key)
+		return nil, E.New("imagemounter: the build identity has no ", key)
 	}
 	digest, _ := entry["Digest"].([]byte)
 	if len(digest) != sha512.Size384 {
-		return nil, fmt.Errorf("imagemounter: %s has no SHA-384 digest", key)
+		return nil, E.New("imagemounter: ", key, " has no SHA-384 digest")
 	}
 	return digest, nil
 }
 
-var errMissingFile = errors.New("imagemounter: missing")
+var errMissingFile = E.New("imagemounter: missing file")
 
 type resolvedFile struct {
 	key    string
@@ -147,10 +159,10 @@ func (i buildIdentity) resolve(dir, key string) (resolvedFile, error) {
 		if _, err := os.Stat(path); err == nil {
 			return resolvedFile{key: key, path: path, digest: digest}, nil
 		} else if !errors.Is(err, fs.ErrNotExist) {
-			return resolvedFile{}, fmt.Errorf("imagemounter: %w", err)
+			return resolvedFile{}, E.Cause(err, "imagemounter")
 		}
 	}
-	return resolvedFile{}, fmt.Errorf("%w %s in %s", errMissingFile, key, dir)
+	return resolvedFile{}, E.Extend(errMissingFile, key, " in ", dir)
 }
 
 func (i buildIdentity) readFile(dir, key string) ([]byte, error) {
@@ -160,7 +172,7 @@ func (i buildIdentity) readFile(dir, key string) ([]byte, error) {
 	}
 	data, err := os.ReadFile(file.path)
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	sum := sha512.Sum384(data)
 	if !bytes.Equal(sum[:], file.digest) {
@@ -172,12 +184,12 @@ func (i buildIdentity) readFile(dir, key string) ([]byte, error) {
 func (f resolvedFile) verify() error {
 	file, err := os.Open(f.path)
 	if err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	defer file.Close()
 	hash := sha512.New384()
 	if _, err = io.Copy(hash, file); err != nil {
-		return fmt.Errorf("imagemounter: read %s: %w", f.path, err)
+		return E.Cause(err, "imagemounter: read ", f.path)
 	}
 	if sum := hash.Sum(nil); !bytes.Equal(sum, f.digest) {
 		return f.mismatch(sum)

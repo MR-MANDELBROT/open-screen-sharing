@@ -5,12 +5,13 @@ import (
 	"compress/zlib"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -19,7 +20,12 @@ const (
 	ClientMessageMediaStream = 0x1c
 
 	// ScreenSharing copies 46 bytes for each negotiated SRTP key
-	// (macOS 26A434, RFBMediaStreamServerConfiguration).
+	// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID
+	// EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _RFBMediaStreamServerConfiguration 0x1cc14a08c..0x1cc14a100;
+	// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID
+	// 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+	// _RFBMediaStreamServerConfiguration 0x22e58d688..0x22e58d6fc).
 	masterKeyLength = 46
 
 	negotiatorModeRemoteMic                  = 4
@@ -37,13 +43,27 @@ const (
 
 	accessNetworkTypeViewer = 1
 
-	// AVConference native mode-7 offers on macOS 27.0.1 (26A434) and 27.2
-	// (26B5101f) carry blob version 2 and user agent "Viceroy 1.7.0".
+	// AVConference writes blob version 2 and user agent "Viceroy 1.7.0" into
+	// both offer and answer blobs (AVConference 2235.63.5.2, macOS 27.0.1
+	// 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// -[VCMediaNegotiator negotiationData] 0x1c122bdd4..0x1c122bde8,
+	// -[VCMediaNegotiator newResponseBlob] 0x1c122d41c..0x1c122d430;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+	// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// -[VCMediaNegotiator negotiationData] 0x1c089eb0c..0x1c089eb20,
+	// -[VCMediaNegotiator newResponseBlob] 0x1c08a0154..0x1c08a0168).
 	negotiatorUserAgent   = "Viceroy 1.7.0"
 	negotiatorBlobVersion = 2
 
-	// The same native mode-7 offers use transport 1, operations 1/2, format bitmap
-	// 0xc3c3, and these codec FLS prefixes before the display-dependent AR/XR.
+	// Native AVConference mode-7 offers use transport 1, operations 1/2 and
+	// format bitmap 0xc3c3, and add the display-dependent AR/XR after these
+	// codec FLS prefixes. VideoProcessing builds the two prefixes
+	// (VideoProcessing 1395.65.1, macOS 27.0.1 26A434, UUID
+	// D87079FD-5315-32B1-8022-E6144A69A8EE,
+	// _VCPCodecCopyProperties 0x1b4fdf4c4..0x1b4fdf4d8;
+	// VideoProcessing 1415.6.1, macOS 27.2 26B5101f, UUID
+	// A6FC3A01-8834-335F-A877-FDACE2E1AECC,
+	// _VCPCodecCopyProperties 0x1cb6084f0..0x1cb608504).
 	videoRuleTransport       = 1
 	videoRuleOperationEncode = 1
 	videoRuleOperationDecode = 2
@@ -53,7 +73,12 @@ const (
 	featureListH264         = "FLS;MS:-1;LF:-1;LTR;CABAC;POS:0;EOD:1;HTS:2;RR:3;SW:4;" + featureListAspectRatios
 	featureListHEVC         = "FLS;LF:-1;POS:5;EOD:1;HTS:2;RR:3;POSE:4;SW:0;" + featureListAspectRatios
 	// AVConference _VCVideoParameterSets_DefaultSupportedSets returns 1 for PT 123
-	// and 14 for PT 100 (macOS 27.0.1, 26A434, 0x1c1195f18); both native offers agree.
+	// and 14 for PT 100 (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+	// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// _VCVideoParameterSets_DefaultSupportedSets 0x1c1195f18..0x1c1195f3c;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+	// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// _VCVideoParameterSets_DefaultSupportedSets 0x1c0812664..0x1c0812688).
 	parameterSetsH264 = 1
 	parameterSetsHEVC = 14
 
@@ -74,7 +99,13 @@ const (
 )
 
 // AVConference maps modes 5/7/9 to CoreDeviceScreenSharing, RemoteDesktopScreenSharing,
-// and NearbyScreenSharing settings (macOS 27.0.1 26A434 and 27.2 26B5101f).
+// and NearbyScreenSharing settings (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
+// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// +[AVCMediaStreamNegotiatorSettings negotiatorSettingsForMode:deviceRole:options:errorString:] 0x1c11af820..0x1c11af8e0,
+// class table 0x1e1c9b9f0; AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+// +[AVCMediaStreamNegotiatorSettings negotiatorSettingsForMode:deviceRole:options:errorString:] 0x1c082bf6c..0x1c082c02c,
+// class table 0x1e18e2f80).
 type VideoMode int
 
 const (
@@ -174,11 +205,11 @@ func NewOffer(options OfferOptions) (*Offer, error) {
 	}
 	for _, codec := range options.Codecs {
 		if codec != CodecHEVC && codec != CodecH264 {
-			return nil, fmt.Errorf("media: unsupported codec %v", codec)
+			return nil, E.New("media: unsupported codec ", codec)
 		}
 	}
 	if options.Audio < AudioFromServer || options.Audio > AudioToServer {
-		return nil, fmt.Errorf("media: unsupported audio mode %d", options.Audio)
+		return nil, E.New("media: unsupported audio mode ", int(options.Audio))
 	}
 	if options.PixelFormats == 0 {
 		options.PixelFormats = PixelFormatsSDR420
@@ -188,21 +219,21 @@ func NewOffer(options OfferOptions) (*Offer, error) {
 		options.TilesPerFrame = 1
 	case 1, 4:
 	default:
-		return nil, fmt.Errorf("media: unsupported tiles per frame %d", options.TilesPerFrame)
+		return nil, E.New("media: unsupported tiles per frame ", options.TilesPerFrame)
 	}
 	if options.DecoderMaxPixelRate < 0 {
-		return nil, fmt.Errorf("media: decoder maximum pixel rate must not be negative")
+		return nil, E.New("media: decoder maximum pixel rate ", options.DecoderMaxPixelRate, " must not be negative")
 	}
 	switch options.MaximumFrameRate {
 	case 0, 30, 60:
 	default:
-		return nil, fmt.Errorf("media: unsupported maximum frame rate %d", options.MaximumFrameRate)
+		return nil, E.New("media: unsupported maximum frame rate ", options.MaximumFrameRate)
 	}
 	if options.MaximumBitrate == 0 {
 		options.MaximumBitrate = maximumVideoBitrate
 	}
 	if options.MaximumBitrate < minimumVideoBitrate || options.MaximumBitrate > maximumVideoBitrate {
-		return nil, fmt.Errorf("media: maximum bitrate must be between 5000000 and 60000000 bit/s")
+		return nil, E.New("media: maximum bitrate ", options.MaximumBitrate, " bit/s is outside ", minimumVideoBitrate, " to ", maximumVideoBitrate, " bit/s")
 	}
 	if options.DeviceModel == "" {
 		options.DeviceModel = defaultDeviceModel
@@ -218,13 +249,13 @@ func NewOffer(options OfferOptions) (*Offer, error) {
 		}
 	case VideoModeNearby:
 		if options.TilesPerFrame != 1 {
-			return nil, errors.New("media: the Nearby profile sends one band")
+			return nil, E.New("media: the Nearby profile sends one band, not ", options.TilesPerFrame)
 		}
 		offer.videoMode = negotiatorModeNearbyScreenSharing
 	case VideoModeRemoteDesktop, VideoModeCoreDevice:
 		offer.videoMode = int64(options.VideoMode)
 	default:
-		return nil, fmt.Errorf("media: unsupported video mode %d", options.VideoMode)
+		return nil, E.New("media: unsupported video mode ", int(options.VideoMode))
 	}
 	offer.UpdateVideoDimensions(options.Width, options.Height)
 	for _, buffer := range [][]byte{
@@ -295,9 +326,14 @@ func Supports60FPS(decoderMaxPixelRate int64, width, height int) bool {
 	if decoderMaxPixelRate <= 0 || width <= 0 || height <= 0 {
 		return false
 	}
-	// ScreenSharing _GetHEVCDecoderMaxSupportedFrameRate, macOS 27.0.1 (26A434):
-	// the single-display path divides MaxDecoderPixelRate by width * height * 3
-	// and selects 60 FPS at a result of at least 60 (0x1cc0fbf9c–0x1cc0fc068).
+	// ScreenSharing _GetHEVCDecoderMaxSupportedFrameRate: the single-display path
+	// divides MaxDecoderPixelRate by width * height * 3 and selects 60 FPS at a
+	// result of at least 60 (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID
+	// EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _GetHEVCDecoderMaxSupportedFrameRate 0x1cc0fbf9c..0x1cc0fc068;
+	// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID
+	// 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+	// _GetHEVCDecoderMaxSupportedFrameRate 0x22e53f01c..0x22e53f0e8).
 	return uint64(decoderMaxPixelRate)/uint64(width)/uint64(height)/3 >= 60
 }
 
@@ -342,11 +378,16 @@ func (o *Offer) message(now time.Time) []byte {
 	}
 	audioOffer := o.streamOffer(audioMode, o.audioCallID, o.audioBlob(created))
 	videoOffer := o.streamOffer(o.videoMode, o.videoCallID, o.videoBlob(created))
-	// ScreenSharing _RFBMediaStreamServerConfiguration, macOS 27.0.1 (26A434),
-	// 0x1cc14a050–0x1cc14a120: version 3, lengths at 0x0a/0x0c/0x0e, UUID at 0x14,
-	// 46-byte audio keys at 0x24/0x52, audio blob at 0x80, then two 46-byte video
-	// keys and the video blob. At 0x1cc14a458/0x1cc14a478, flag bits 0/2 select
-	// 60 FPS/no cursor.
+	// ScreenSharing _RFBMediaStreamServerConfiguration writes version 3, lengths
+	// at 0x0a/0x0c/0x0e, UUID at 0x14, 46-byte audio keys at 0x24/0x52, audio blob
+	// at 0x80, then two 46-byte video keys and the video blob; flag bits 0/2
+	// select 60 FPS/no cursor (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID
+	// EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _RFBMediaStreamServerConfiguration 0x1cc14a050..0x1cc14a120, 0x1cc14a458,
+	// 0x1cc14a478; ScreenSharing 786.3, macOS 27.2 26B5101f, UUID
+	// 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+	// _RFBMediaStreamServerConfiguration 0x22e58d64c..0x22e58d71c, 0x22e58da54,
+	// 0x22e58da74).
 	message := make([]byte, 0x80, 0x80+len(audioOffer)+2*masterKeyLength+len(videoOffer))
 	message[0] = ClientMessageMediaStream
 	binary.BigEndian.PutUint16(message[4:], mediaStreamMessageVersion)
@@ -397,8 +438,7 @@ func (o *Offer) streamOffer(mode int64, callID string, blob []byte) []byte {
 func (o *Offer) appendBlobTail(blob *protoMessage, created uint64, video bool) {
 	blob.addBytes(6, []byte(negotiatorUserAgent))
 	blob.addUint(8, 0)
-	// The fixed field-9 entries below occur in native AVConference mode-7 offers
-	// (macOS 27.0.1 26A434 and 27.2 26B5101f).
+	// The fixed field-9 entries below occur in native AVConference mode-7 offers.
 	for _, entry := range [][3]uint64{
 		{4074, 0, 16384},
 		{0, 20000000, 98304},
@@ -413,8 +453,16 @@ func (o *Offer) appendBlobTail(blob *protoMessage, created uint64, video bool) {
 	} {
 		if video && o.videoMode == negotiatorModeNearbyScreenSharing && entry[2] == 12288 {
 			// AVConference bandwidthConfigurationWithArbiterMode:connectionType: returns
-			// 4096 for arbiter 4 / connection 4 on macOS 27.0.1 (26A434) and 27.2 (26B5101f).
-			entry[1], entry[2] = uint64(o.options.MaximumBitrate), 4096
+			// 4096 for arbiter 4 / connection 4 (AVConference 2235.63.5.2, macOS 27.0.1
+			// 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+			// +[VCMediaNegotiationBlobBandwidthSettings(BandwidthSettings) bandwidthConfigurationWithArbiterMode:connectionType:] 0x1c1315910..0x1c1315a04,
+			// +[VCMediaNegotiationBlobBandwidthSettings(BandwidthSettings) bandwidthConfigurationForAWDLWithArbiterMode:] 0x1c13156d0..0x1c13156ec,
+			// table 0x1c15e9708; AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+			// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+			// +[VCMediaNegotiationBlobBandwidthSettings(BandwidthSettings) bandwidthConfigurationWithArbiterMode:connectionType:] 0x1c0986188..0x1c098627c,
+			// +[VCMediaNegotiationBlobBandwidthSettings(BandwidthSettings) bandwidthConfigurationForAWDLWithArbiterMode:] 0x1c0985f48..0x1c0985f64,
+			// table 0x1c0c66a78).
+			entry[1], entry[2] = uint64(min(o.options.MaximumBitrate, nearbyMaximumBitrate)), nearbyBandwidthBit
 		}
 		var item protoMessage
 		item.addUint(1, entry[0])
@@ -484,12 +532,23 @@ func (o *Offer) videoBlob(created uint64) []byte {
 	stream.addUint(6, uint64(o.options.TilesPerFrame))
 	stream.addUint(7, 1)
 	// AVConference storePixelFormatsInBitMap: maps bits 0–7 to 420f, 420v, x420,
-	// 444f, 444v, xf44, v0a8, s4as (macOS 27.0.1 26A434 and 27.2 26B5101f).
+	// 444f, 444v, xf44, v0a8, s4as (AVConference 2235.63.5.2, macOS 27.0.1
+	// 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// +[VCMediaNegotiationBlobVideoSettings(VideoRules) storePixelFormatsInBitMap:] 0x1c130f5e0..0x1c130f7cc;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+	// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// +[VCMediaNegotiationBlobVideoSettings(VideoRules) storePixelFormatsInBitMap:] 0x1c097fe58..0x1c0980044).
 	pixelFormats := o.options.PixelFormats
 	hdrModes := uint64(1 << hdrModeStandard)
 	if o.hdr.Load() && pixelFormats&PixelFormat444TenBitFullRange != 0 {
-		// AVConference isPixelFormatValid:hdrMode: rejects 444f and 420f for HDR mode 3
-		// (macOS 27.0.1 26A434 and 27.2 26B5101f).
+		// AVConference isPixelFormatValid:hdrMode: accepts only x444 and xf44 for
+		// HDR mode 3, and 444f and 420f only for HDR mode 0 (AVConference
+		// 2235.63.5.2, macOS 27.0.1 26A434, UUID
+		// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+		// +[AVCVideoStreamConfig isPixelFormatValid:hdrMode:] 0x1c143b3fc..0x1c143b56c;
+		// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+		// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+		// +[AVCVideoStreamConfig isPixelFormatValid:hdrMode:] 0x1c0ab88a4..0x1c0ab8a14).
 		hdrModes |= 1 << hdrModeReference
 	}
 	stream.addUint(8, uint64(pixelFormats))

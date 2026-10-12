@@ -4,7 +4,7 @@ import Libsharing
 import Network
 
 // The _remotepairing._tcp authTag authenticates the service identifier with the pairing record’s altIRK
-// (idevice d32c818, remote_pairing/peer_device.rs).
+// (idevice d32c818, idevice/src/remote_pairing/peer_device.rs:33-45, idevice/src/remote_pairing/peer_device.rs:129-140).
 final class RemotePairingBrowser: ObservableObject {
     static let serviceType = "_remotepairing._tcp"
 

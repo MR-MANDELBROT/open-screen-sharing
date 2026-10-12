@@ -4,10 +4,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"slices"
 	"sync/atomic"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -88,7 +90,7 @@ func (c *Client) endMediaSession(session *mediaSession, cause error) {
 	if !c.closed.Load() && hasPorts && canRetryMediaStart(session, cause) {
 		fallback, err := session.offer.LegacyFallback()
 		if err != nil {
-			cause = errors.Join(cause, err)
+			cause = E.Errors(cause, err)
 		} else if fallback != nil {
 			retry, err := c.startMediaSessionLocked(fallback, session.sink, session)
 			if err != nil && retry != nil {
@@ -99,7 +101,7 @@ func (c *Client) endMediaSession(session *mediaSession, cause error) {
 				c.mediaLifecycle.Unlock()
 				return
 			}
-			cause = errors.Join(cause, err)
+			cause = E.Errors(cause, err)
 		}
 	}
 	if !c.closed.Load() && hasPorts && errors.Is(cause, media.ErrKeyframeUnanswered) {
@@ -118,7 +120,7 @@ func (c *Client) endMediaSession(session *mediaSession, cause error) {
 			if restarted != nil {
 				defer restarted.stream.Close()
 			}
-			cause = errors.Join(cause, err)
+			cause = E.Errors(cause, err)
 		}
 	}
 	c.access.Lock()
@@ -148,7 +150,7 @@ func (c *Client) restartMediaSessionLocked(session *mediaSession) (*mediaSession
 
 func (c *Client) StartMediaStream(options media.OfferOptions, sink media.Sink) error {
 	if !c.info.Accepts(media.ClientMessageMediaStream) {
-		return errors.New("the server does not offer a media stream")
+		return E.New("rfb: the server does not offer a media stream")
 	}
 	if options.DecoderMaxPixelRate == 0 {
 		options.DecoderMaxPixelRate = c.options.DecoderMaxPixelRate
@@ -176,7 +178,7 @@ func (c *Client) startMediaSessionLocked(offer *media.Offer, sink media.Sink, pr
 	c.access.Lock()
 	if c.media != previous || c.mediaStopping {
 		c.access.Unlock()
-		return nil, errors.New("the media stream is already running")
+		return nil, E.New("rfb: the media stream is already running")
 	}
 	var portsPayload []byte
 	var ports media.Ports
@@ -186,7 +188,7 @@ func (c *Client) startMediaSessionLocked(offer *media.Offer, sink media.Sink, pr
 	}
 	c.access.Unlock()
 	if previous != nil && len(portsPayload) == 0 {
-		return nil, errors.New("cannot retry media before receiving server ports")
+		return nil, E.New("rfb: cannot retry media before receiving server ports")
 	}
 	remote := c.conn.RemoteAddr().(*net.TCPAddr).AddrPort().Addr()
 	local := c.conn.LocalAddr().(*net.TCPAddr).AddrPort().Addr()
@@ -266,10 +268,10 @@ func (c *Client) MediaStream() *media.Stream {
 }
 
 func (c *Client) receiveMediaStream(rectangle Rectangle) error {
-	// ScreenSharing dispatches media subtypes 1/2/3 as ports/answer/error:
-	// macOS 27.0.1 (26A434), ScreenSharing UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
-	// -[SSSession handleAVCMediaEncoding:] 0x1cc0e47b4-0x1cc0e47cc,
-	// 0x1cc0e4fe4-0x1cc0e5024, 0x1cc0e49b8-0x1cc0e49d0, 0x1cc0e4abc-0x1cc0e4ad4.
+	// ScreenSharing dispatches media subtypes 1/2/3 as ports/answer/error
+	// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// -[SSSession handleAVCMediaEncoding:] 0x1cc0e47b4..0x1cc0e47cc,
+	// 0x1cc0e4fe4..0x1cc0e5024, 0x1cc0e49b8..0x1cc0e49d0, 0x1cc0e4abc..0x1cc0e4ad4).
 	length, err := c.stream.u16()
 	if err != nil {
 		return err
@@ -296,11 +298,12 @@ func (c *Client) receiveMediaStream(rectangle Rectangle) error {
 		case 1:
 			session.portsSeen = true
 			// ScreenSharing ignores a ports message while mediaStreamMessage1Received is set,
-			// and clears the flag on the answer: -[SSSession handleAVCMediaEncoding:].
-			// macOS 27.0.1 (26A434), UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50:
-			// 0x1cc0e48e0..0x1cc0e48e4 and 0x1cc0e49d8..0x1cc0e49e8.
-			// Also checked on macOS 27.2 (26B5101f), UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735:
-			// 0x22e527960..0x22e527964 and 0x22e527a58..0x22e527a68.
+			// and clears the flag on the answer (ScreenSharing 776.27, macOS 27.0.1 26A434,
+			// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50, -[SSSession handleAVCMediaEncoding:]
+			// 0x1cc0e48e0..0x1cc0e48e4, 0x1cc0e49d8..0x1cc0e49e8; ScreenSharing 786.3,
+			// macOS 27.2 26B5101f, UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+			// -[SSSession handleAVCMediaEncoding:] 0x22e527960..0x22e527964,
+			// 0x22e527a58..0x22e527a68).
 			if session.unanswered {
 				if ports == nil || *ports != session.ports {
 					session.reoffer = true
@@ -355,10 +358,11 @@ func (c *Client) receiveMediaStream(rectangle Rectangle) error {
 }
 
 func (c *Client) sizeOfferForDisplay(offer *media.Offer) {
-	// ScreenSharing derives decoder-rate dimensions from each SSScreenInfo.frame size
-	// multiplied by UIResolution: macOS 27.0.1 (26A434), ScreenSharing UUID
-	// EC0B2C20-F816-3FCE-822D-F9403C09EB50, -[SSSession stConfigureServerMediaStream]
-	// 0x1cc0e9010-0x1cc0e9048 and 0x1cc0e91c0-0x1cc0e91f8.
+	// ScreenSharing derives the dimensions it passes to GetHEVCDecoderMaxSupportedFrameRate
+	// from each SSScreenInfo.frame size multiplied by UIResolution (ScreenSharing 776.27,
+	// macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// -[SSSession stConfigureServerMediaStream] 0x1cc0e9010..0x1cc0e9048,
+	// 0x1cc0e91c0..0x1cc0e91f8).
 	c.access.Lock()
 	layout := c.layout
 	c.access.Unlock()
@@ -367,11 +371,10 @@ func (c *Client) sizeOfferForDisplay(offer *media.Offer) {
 		return
 	}
 	display := layout.Displays[0]
-	for _, candidate := range layout.Displays {
-		if candidate.ID == layout.Current {
-			display = candidate
-			break
-		}
+	if index := slices.IndexFunc(layout.Displays, func(candidate Display) bool {
+		return candidate.ID == layout.Current
+	}); index >= 0 {
+		display = layout.Displays[index]
 	}
 	offer.UpdateVideoDimensions(int(float64(display.Logical.Width)*display.Density), int(float64(display.Logical.Height)*display.Density))
 }

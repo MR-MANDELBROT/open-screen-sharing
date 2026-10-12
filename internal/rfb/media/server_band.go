@@ -3,11 +3,20 @@ package media
 import "encoding/binary"
 
 // VideoProcessing reads the feature trailer from the last VCL NAL and skips
-// its emulation-prevention bytes (macOS 26A434 and 26B5101f).
+// its emulation-prevention bytes (VideoProcessing 1395.65.1, macOS 27.0.1
+// 26A434, UUID D87079FD-5315-32B1-8022-E6144A69A8EE,
+// sub_1b50c8bc0 0x1b50c8bc0..0x1b50c8dc4, sub_1b50c8858 0x1b50c8858..0x1b50c8bbc;
+// VideoProcessing 1415.6.1, macOS 27.2 26B5101f, UUID
+// A6FC3A01-8834-335F-A877-FDACE2E1AECC, sub_1cb6f1744 0x1cb6f1744..0x1cb6f1948,
+// sub_1cb6f13dc 0x1cb6f13dc..0x1cb6f1740).
 const (
 	controlByteChain = 0x80
-	// VideoProcessing's POS:5 field has three bytes; the first two encode
-	// x/16 and y/16 (macOS 26A434 and 26B5101f).
+	// VideoProcessing reads the POS:5 field as three bytes and multiplies the
+	// first two by 16 (VideoProcessing 1395.65.1, macOS 27.0.1 26A434, UUID
+	// D87079FD-5315-32B1-8022-E6144A69A8EE, sub_1b50c92f8 0x1b50c9418..0x1b50c9424,
+	// sub_1b50c95c4 0x1b50c97c4..0x1b50c97fc; VideoProcessing 1415.6.1,
+	// macOS 27.2 26B5101f, UUID A6FC3A01-8834-335F-A877-FDACE2E1AECC,
+	// sub_1cb6f1e7c 0x1cb6f1f9c..0x1cb6f1fa8, sub_1cb6f2148 0x1cb6f2348..0x1cb6f2380).
 	controlBytePosition = 1 << 5
 	controlByteKnown    = 0x03
 	positionUnit        = 16

@@ -2,12 +2,13 @@ package rfb
 
 import (
 	"crypto/des"
-	"errors"
-	"fmt"
 	"math/bits"
 	"slices"
 	"strconv"
 	"strings"
+
+	E "github.com/sagernet/sing/common/exceptions"
+	F "github.com/sagernet/sing/common/format"
 )
 
 type SecurityType uint8
@@ -54,7 +55,7 @@ func ParseSecurityType(value string) (SecurityType, error) {
 			return securityType, nil
 		}
 	}
-	return 0, fmt.Errorf("unknown security type %q", value)
+	return 0, E.New("rfb: unknown security type ", strconv.Quote(value))
 }
 
 var (
@@ -75,9 +76,9 @@ var authenticators = map[SecurityType]authenticator{
 	SecurityAppleSRP:    authenticateAppleSRP,
 }
 
-var ErrUnsupportedServer = errors.New("unsupported server")
+var ErrUnsupportedServer = E.New("rfb: unsupported server")
 
-var ErrUnverifiedServer = errors.New("the server offers only account logins that reveal the password")
+var ErrUnverifiedServer = E.New("rfb: the server offers only account logins that reveal the password")
 
 func chooseSecurityType(offered []SecurityType, preferred []SecurityType, allowUnverified bool) (SecurityType, error) {
 	var unverified bool
@@ -93,9 +94,9 @@ func chooseSecurityType(offered []SecurityType, preferred []SecurityType, allowU
 		return candidate, nil
 	}
 	if unverified {
-		return 0, fmt.Errorf("%w: it offers security types %v", ErrUnverifiedServer, offered)
+		return 0, E.Extend(ErrUnverifiedServer, "it offers security types ", strings.Join(F.MapToString(offered), ", "))
 	}
-	return 0, fmt.Errorf("%w: it offers security types %v, none of %v", ErrUnsupportedServer, offered, preferred)
+	return 0, E.Extend(ErrUnsupportedServer, "it offers security types ", strings.Join(F.MapToString(offered), ", "), "; none of ", strings.Join(F.MapToString(preferred), ", "))
 }
 
 func revealsPassword(securityType SecurityType, offered []SecurityType) bool {
@@ -134,19 +135,19 @@ func authenticateVNCPassword(h *handshake) ([]byte, error) {
 	return nil, err
 }
 
-var errLongCredentials = errors.New("user name and password must be shorter than 64 bytes")
-
 func credentialBlock(username, password string) ([]byte, error) {
 	// ScreenSharing's type-33 credential block randomizes 128 bytes, then copies
-	// the username and password into separate 64-byte slots before encryption.
-	// Verified in macOS 27.0.1 (26A434), ScreenSharing UUID
-	// EC0B2C20-F816-3FCE-822D-F9403C09EB50, _RFBAuthenticateCore,
-	// 0x1cc13faf4-0x1cc13fb44.
-	if len(username) > 63 || len(password) > 63 {
-		return nil, errLongCredentials
+	// the username and password into separate 64-byte slots before encryption
+	// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _RFBAuthenticateCore 0x1cc13faf4..0x1cc13fb44).
+	if len(username) > 63 {
+		return nil, E.New("rfb: user name of ", len(username), " bytes is over the 63-byte limit")
+	}
+	if len(password) > 63 {
+		return nil, E.New("rfb: password is over the 63-byte limit")
 	}
 	if strings.IndexByte(username, 0) >= 0 || strings.IndexByte(password, 0) >= 0 {
-		return nil, errors.New("user name or password contains NUL")
+		return nil, E.New("rfb: user name or password contains NUL")
 	}
 	block := randomBytes(128)
 	copy(block, username)

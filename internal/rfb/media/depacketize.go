@@ -66,7 +66,12 @@ func (u *accessUnit) isSync(codec Codec) bool {
 }
 
 // With FLS EOD:1, VideoProcessing reads bit 1 of the last VCL NAL's
-// control byte, ignoring suffix SEI (macOS 26A434 and 26B5101f).
+// control byte, ignoring non-VCL NALs such as suffix SEI (VideoProcessing
+// 1395.65.1, macOS 27.0.1 26A434, UUID D87079FD-5315-32B1-8022-E6144A69A8EE,
+// sub_1b50c8bc0 0x1b50c8bc0..0x1b50c8dc4, sub_1b50c95c4 0x1b50c987c..0x1b50c9894;
+// VideoProcessing 1415.6.1, macOS 27.2 26B5101f, UUID
+// A6FC3A01-8834-335F-A877-FDACE2E1AECC, sub_1cb6f1744 0x1cb6f1744..0x1cb6f1948,
+// sub_1cb6f2148 0x1cb6f2400..0x1cb6f2418).
 func (u *accessUnit) frameEnd(codec Codec) (end, hasPicture bool) {
 	for rest := u.data; len(rest) > 0; {
 		var nal []byte

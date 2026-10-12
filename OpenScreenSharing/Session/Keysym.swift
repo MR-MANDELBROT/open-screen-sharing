@@ -53,8 +53,10 @@ nonisolated enum Keysym {
     }
 
     static func typesInSecureInput(_ keysym: UInt32) -> Bool {
-        // ScreensharingAgent rejects the Unicode fallback under secure input (PostKeyEvent).
-        // arm64e: macOS 26A434 at 0x100027728; 26B5101f at 0x1000277b4.
+        // ScreensharingAgent's PostKeyEvent rejects the Unicode fallback under secure input
+        // (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+        // sub_100027410 0x100027720..0x1000277a4; ScreensharingAgent 766.8, macOS 27.2 26B5101f,
+        // UUID D8791A89-6EDB-3A0A-A720-EC3F5FB1AD4F, sub_10002749c 0x1000277ac..0x100027830).
         keysym < 0x80 || (0xff00...0xffff).contains(keysym)
     }
 

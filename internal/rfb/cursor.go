@@ -1,7 +1,7 @@
 package rfb
 
 import (
-	"fmt"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Cursor struct {
@@ -15,11 +15,12 @@ type Cursor struct {
 
 const maximumCursorSize = 1024
 
-// ScreenSharing 776.27 arm64e consumes only the ID for values <= 999; larger IDs
-// carry a length, with zero reusing cached pixels. The inflated alpha plane follows
-// the pixel plane. Evidence: HandleCursorImageWithAlphaUpdate at 0x1cc06c804,
-// 0x1cc06cd84..0x1cc06cde4 and 0x1cc06cf44..0x1cc06cf70,
-// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50.
+// ScreenSharing reads only the ID for values <= 999. Larger IDs carry a length: a length
+// above 1 MiB closes the connection, and zero reuses the cached pixels of that ID. The
+// inflated alpha plane follows the pixel plane (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50, _HandleCursorImageWithAlphaUpdate
+// 0x1cc06c804..0x1cc06c808, 0x1cc06c948..0x1cc06c96c, 0x1cc06cd84..0x1cc06cde4,
+// 0x1cc06cf44..0x1cc06cf70).
 func (c *Client) receiveCursorImage(rectangle Rectangle) error {
 	id, err := c.stream.u32()
 	if err != nil {
@@ -34,7 +35,7 @@ func (c *Client) receiveCursorImage(rectangle Rectangle) error {
 		return err
 	}
 	if length > 1<<20 {
-		return fmt.Errorf("cursor image of %d bytes", length)
+		return E.New("rfb: cursor image of ", length, " bytes is over the 1 MiB limit")
 	}
 	if length == 0 {
 		cursor, found := c.cursors[id]

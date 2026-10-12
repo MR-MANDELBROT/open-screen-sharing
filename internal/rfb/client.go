@@ -10,12 +10,14 @@ import (
 	"math"
 	"net"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/filecopy"
 	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type State int
@@ -174,7 +176,7 @@ func Dial(ctx context.Context, options Options, handler Handler) (*Client, error
 	})
 	err = client.setup()
 	if !stop() {
-		err = errors.Join(ctx.Err(), err)
+		err = E.Errors(ctx.Err(), err)
 	}
 	if err != nil {
 		conn.Close()
@@ -277,7 +279,7 @@ func (c *Client) LocalAddress() net.Addr {
 
 func (c *Client) startApple() error {
 	if c.wrapKey == [16]byte{} {
-		return errors.New("the security type left no key for the record layer")
+		return E.New("rfb: security type ", c.info.SecurityType, " left no key for the record layer")
 	}
 	var prelude []byte
 	prelude = append(prelude, viewerInfoMessage()...)
@@ -295,7 +297,7 @@ func (c *Client) startApple() error {
 	for c.pendingRekey {
 		err = c.receiveMessage()
 		if err != nil {
-			return fmt.Errorf("wait for the record layer: %w", err)
+			return E.Cause(err, "wait for the record layer")
 		}
 	}
 	encoder := &recordEncoder{}
@@ -316,9 +318,10 @@ func (c *Client) startApple() error {
 func (c *Client) firstMessages(displayChanges [][]byte) [][]byte {
 	var messages [][]byte
 	messages = append(messages, setPixelFormatMessage(pixelFormatBGRA))
-	// ScreenSharing 776.27 (macOS 27.0.1, 26A434) sends virtual-display
-	// configuration before SetEncodings in -[SSSession stConfigureSession]
-	// (0x1cc060514, 0x1cc060590; arm64e UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50).
+	// ScreenSharing sends the virtual display configuration before SetEncodings
+	// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// -[SSSession stConfigureSession] 0x1cc060514..0x1cc060590,
+	// -[SSSession stConfigureVirtualDisplaysWithDimensions:] 0x1cc0da478).
 	messages = append(messages, displayChanges...)
 	messages = append(messages, setEncodingsMessage(c.encodings()))
 	if c.displayID != 0 {
@@ -474,7 +477,7 @@ func (c *Client) Run() error {
 	if fileCopy != nil {
 		fileCopy.Close(err)
 	}
-	if closing && (errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF)) {
+	if closing && E.IsClosed(err) {
 		err = nil
 	}
 	writerFailed := !closing && c.writerError != nil && !errors.Is(c.writerError, net.ErrClosed)
@@ -521,7 +524,7 @@ func (c *Client) ensureFramebuffer(width, height int) error {
 
 func (c *Client) resizeLocked(width, height int) (bool, error) {
 	if width <= 0 || height <= 0 {
-		return false, fmt.Errorf("framebuffer size %dx%d", width, height)
+		return false, E.New("rfb: framebuffer size ", width, "x", height)
 	}
 	if c.framebuffer != nil && c.width == width && c.height == height {
 		return false, nil
@@ -551,7 +554,7 @@ func (c *Client) checkFramebuffer(framebuffer *Framebuffer) error {
 		return err
 	}
 	if framebuffer.Width != c.width || framebuffer.Height != c.height {
-		return fmt.Errorf("framebuffer is %dx%d, the session is %dx%d", framebuffer.Width, framebuffer.Height, c.width, c.height)
+		return E.New("rfb: framebuffer is ", framebuffer.Width, "x", framebuffer.Height, ", the session is ", c.width, "x", c.height)
 	}
 	return nil
 }
@@ -631,7 +634,7 @@ func (c *Client) receiveMessage() error {
 		handler := c.messageHandlers[messageType]
 		c.access.Unlock()
 		if handler == nil {
-			return fmt.Errorf("unknown server message type %#02x", messageType)
+			return E.New("rfb: unknown server message type 0x", strconv.FormatUint(uint64(messageType), 16))
 		}
 		return handler(c.stream)
 	}
@@ -708,7 +711,7 @@ func (c *Client) receiveRectangles(count int) (Update, error) {
 			c.options.RectangleObserver(RawRectangle{Sequence: sequence, Rectangle: rectangle, Payload: payload})
 		}
 		if err != nil {
-			return update, fmt.Errorf("%v rectangle %v: %w", rectangle.Encoding, rectangle, err)
+			return update, E.Cause(err, "read ", rectangle.Encoding, " rectangle ", rectangle)
 		}
 		if rectangle.Encoding.carriesPixels() && !rectangle.Empty() {
 			x, y, width, height := c.framebuffer.clip(rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height)
@@ -776,7 +779,7 @@ func (c *Client) receiveRectangle(rectangle Rectangle) error {
 	case EncodingMediaStream:
 		return c.receiveMediaStream(rectangle)
 	default:
-		return errors.New("unsupported encoding")
+		return E.New("rfb: unsupported encoding")
 	}
 }
 
@@ -792,7 +795,7 @@ func (c *Client) receiveRekey(rectangle Rectangle) error {
 	c.logger.Debug("rekey", "generation", generation, "pending", c.pendingRekey)
 	c.wrapKey = keys.key
 	if !c.pendingRekey {
-		return errors.New("unexpected rekey during the session")
+		return E.New("rfb: unexpected rekey to generation ", generation, " during the session")
 	}
 	c.rekeyKeys = keys
 	return c.stream.startRecords(keys)
@@ -879,7 +882,7 @@ func (c *Client) SelectDisplay(id uint32) error {
 
 func (c *Client) SetScale(factor float64) error {
 	if !(factor > 0 && factor <= 1) {
-		return fmt.Errorf("scale %v is outside (0, 1]", factor)
+		return E.New("rfb: scale ", factor, " is outside (0, 1]")
 	}
 	c.access.Lock()
 	c.access.Unlock()

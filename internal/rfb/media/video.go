@@ -12,9 +12,17 @@ const (
 	maxHeldUnits        = 32
 	decodeOrderWait     = 150 * time.Millisecond
 	maxTrackedVideoSSRC = 16
-	// AVConference jitter-buffer mode 2 defaults to 0.1–0.5 s, with average
-	// decode time 1/60 s; VCDefaults can override the defaults
-	// (macOS 26A434 and 26B5101f).
+	// In AVConference video jitter-buffer mode 2, the minimum and maximum
+	// queue sizes default to 0.1 s and 0.5 s, and the video player's average
+	// decode time defaults to 1/60 s; VCDefaults can override each default
+	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+	// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// _VCVideoJitterBuffer_UpdateMode 0x1c0e43644..0x1c0e43764,
+	// _VCVideoPlayer_UpdateJitterBufferMode 0x1c0f08f84..0x1c0f08fa0;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+	// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// _VCVideoJitterBuffer_UpdateMode 0x1c04bd9a4..0x1c04bdac4,
+	// _VCVideoPlayer_UpdateJitterBufferMode 0x1c0583a14..0x1c0583a30).
 	minReorderWait     = 100 * time.Millisecond
 	maxReorderWait     = 500 * time.Millisecond
 	displayAllowance   = time.Second / 60
@@ -338,10 +346,10 @@ func (a *videoAssembler) startChain(unit *accessUnit) {
 }
 
 func (a *videoAssembler) hold(unit *accessUnit) {
-	for _, held := range a.held {
-		if held.ssrc == unit.ssrc && held.decodeOrder == unit.decodeOrder && held.timestamp == unit.timestamp {
-			return
-		}
+	if slices.ContainsFunc(a.held, func(held *accessUnit) bool {
+		return held.ssrc == unit.ssrc && held.decodeOrder == unit.decodeOrder && held.timestamp == unit.timestamp
+	}) {
+		return
 	}
 	if len(a.held) >= maxHeldUnits {
 		if !a.awaitingSync && a.inGroup(unit.ssrc) {
@@ -357,13 +365,9 @@ func (a *videoAssembler) hold(unit *accessUnit) {
 func (a *videoAssembler) release() {
 	progressed := false
 	for {
-		index := -1
-		for i, held := range a.held {
-			if a.inGroup(held.ssrc) && uint16(held.decodeOrder) == a.nextOrder {
-				index = i
-				break
-			}
-		}
+		index := slices.IndexFunc(a.held, func(held *accessUnit) bool {
+			return a.inGroup(held.ssrc) && uint16(held.decodeOrder) == a.nextOrder
+		})
 		if index < 0 {
 			break
 		}
@@ -376,13 +380,9 @@ func (a *videoAssembler) release() {
 			return
 		}
 	}
-	waiting := false
-	for _, held := range a.held {
-		if a.inGroup(held.ssrc) {
-			waiting = true
-			break
-		}
-	}
+	waiting := slices.ContainsFunc(a.held, func(held *accessUnit) bool {
+		return a.inGroup(held.ssrc)
+	})
 	if !waiting {
 		a.stalledSince = 0
 	} else if progressed || a.stalledSince == 0 {

@@ -37,8 +37,11 @@ nonisolated struct MacKey: Hashable, Sendable {
     static let shift = MacKey(keyCode: 56, keysym: Keysym.shiftLeft)
     static let option = MacKey(keyCode: 58, keysym: Keysym.optionLeft)
     static let control = MacKey(keyCode: 59, keysym: Keysym.controlLeft)
-    // ScreensharingAgent sets Caps Lock on key-down and clears it on key-up.
-    // arm64e keyCode 0x39 dispatch: macOS 26A434 at 0x1000352b8; 26B5101f at 0x100035640.
+    // ScreensharingAgent sets the Caps Lock flag on key-down and clears it on key-up
+    // (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+    // sub_1000350fc 0x1000351a4..0x10003529c, keyCode 0x39 jump table entry 0x1000352b8;
+    // ScreensharingAgent 766.8, macOS 27.2 26B5101f, UUID D8791A89-6EDB-3A0A-A720-EC3F5FB1AD4F,
+    // sub_100035484 0x10003552c..0x100035624, keyCode 0x39 jump table entry 0x100035640).
     static let capsLock = MacKey(keyCode: 57, keysym: 0)
     static let function = MacKey(keyCode: 63, keysym: 0)
 

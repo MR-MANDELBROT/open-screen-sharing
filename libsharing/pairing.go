@@ -11,6 +11,8 @@ import (
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/lockdown"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/pairing"
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type PairingHandler interface {
@@ -30,7 +32,7 @@ type PairingResponder struct {
 
 func NewPairingResponderWithRecord(hostName string, record []byte, handler PairingHandler) (*PairingResponder, error) {
 	if handler == nil {
-		return nil, errors.New("no pairing handler")
+		return nil, E.New("no pairing handler")
 	}
 	var identity *pairing.Record
 	if len(record) > 0 {
@@ -66,11 +68,10 @@ func (r *PairingResponder) ServiceName() string { return r.responder.ServiceName
 
 func (r *PairingResponder) TXTRecord() *TXTRecord {
 	entries := r.responder.TXTRecord()
-	record := &TXTRecord{keys: slices.Sorted(maps.Keys(entries))}
-	for _, key := range record.keys {
-		record.values = append(record.values, entries[key])
-	}
-	return record
+	keys := slices.Sorted(maps.Keys(entries))
+	return &TXTRecord{keys: keys, values: common.Map(keys, func(key string) string {
+		return entries[key]
+	})}
 }
 
 func (r *PairingResponder) Start() {
@@ -181,7 +182,8 @@ func ParsePairingRecord(record []byte) (*PairingRecordInfo, error) {
 
 // idevice validates Bonjour authTag as SipHash of identifier with altIRK,
 // taking reversed bytes 0 through 5 of the little-endian result
-// (idevice/src/remote_pairing/peer_device.rs, validate_auth_tag).
+// (idevice 3854a5d, idevice/src/remote_pairing/peer_device.rs:33-45,
+// idevice/src/remote_pairing/peer_device.rs:129-140).
 func PairingRecordMatchesService(record []byte, identifier string, authTag string) bool {
 	parsed, err := pairing.ParseRecord(record)
 	if err != nil || len(parsed.AltIRK) != 16 || identifier == "" {

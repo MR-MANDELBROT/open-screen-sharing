@@ -3,13 +3,15 @@ package pasteboard
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
-	// pymobiledevice3 1146717 uses this remote notification-proxy service
-	// and sends ObserveNotification (services/notification_proxy.py:25,76).
+	// pymobiledevice3 uses this remote notification-proxy service and sends
+	// ObserveNotification (pymobiledevice3 1146717,
+	// pymobiledevice3/services/notification_proxy.py:25,76).
 	notificationProxyService = "com.apple.mobile.notification_proxy.shim.remote"
 	changedNotification      = "com.apple.pasteboard.notify.changed"
 
@@ -40,18 +42,18 @@ func (c *Client) Watch(ctx context.Context, changed func(Snapshot)) error {
 func (c *Client) watch(ctx context.Context, last *change, started *bool, changed func(Snapshot)) error {
 	conn, err := c.device.DialShim(ctx, notificationProxyService)
 	if err != nil {
-		return fmt.Errorf("pasteboard: %w", err)
+		return E.Cause(err, "pasteboard")
 	}
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
 	err = conn.Send(map[string]any{"Command": "ObserveNotification", "Name": changedNotification})
 	if err != nil {
-		return fmt.Errorf("pasteboard: observe %s: %w", changedNotification, err)
+		return E.Cause(err, "pasteboard: observe ", changedNotification)
 	}
 	if !*started {
 		snapshot, err := c.pull(ctx, policyAllPromised)
-		if err != nil {
+		if err != nil && !errors.Is(err, errRefused) {
 			return err
 		}
 		*last = snapshot.change
@@ -62,7 +64,7 @@ func (c *Client) watch(ctx context.Context, last *change, started *bool, changed
 	for {
 		message, err := conn.Receive()
 		if err != nil {
-			return fmt.Errorf("pasteboard: receive notification: %w", err)
+			return E.Cause(err, "pasteboard: receive notification")
 		}
 		switch message["Command"] {
 		case "RelayNotification":
@@ -70,13 +72,17 @@ func (c *Client) watch(ctx context.Context, last *change, started *bool, changed
 				c.check(ctx, last, changed)
 			}
 		case "ProxyDeath":
-			return errors.New("pasteboard: the notification proxy stopped")
+			return E.New("pasteboard: the notification proxy stopped")
 		}
 	}
 }
 
 func (c *Client) check(ctx context.Context, last *change, changed func(Snapshot)) {
 	snapshot, err := c.Read(ctx)
+	if errors.Is(err, errRefused) {
+		c.logger.Debug("the device refused to share a pasteboard change")
+		return
+	}
 	if err != nil {
 		c.logger.Warn("read the pasteboard after a change", "error", err)
 		return

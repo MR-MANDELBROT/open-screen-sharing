@@ -27,9 +27,9 @@ nonisolated struct DecoderCapabilities: Sendable {
     }
 
     private static func decoderMaximumPixelRate() -> Int64 {
-        // ScreenSharing's GetHEVCDecoderMaxSupportedFrameRate probes this hvcC at 3840×2160.
-        // macOS 27.0.1 (26A434), ScreenSharing arm64e UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50:
-        // dimensions at 0x1cc0fb924; 113-byte _dummy_hvcc_mem at 0x1cc1b62f8.
+        // ScreenSharing's GetHEVCDecoderMaxSupportedFrameRate probes this 113-byte hvcC at 3840×2160
+        // (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+        // _GetHEVCDecoderMaxSupportedFrameRate 0x1cc0fb880..0x1cc0fb930, _dummy_hvcc_mem 0x1cc1b62f8).
         let hvcc = hexData(
             "010160000000b0000000000099f000fcfdf8f800000f03a00001001840010c01ffff016000000300b000000300000300991b0240"
                 + "a10001002c420101016000000300b00000030000030099a001e020021c5881bb9148cb9fc4fc2fe86fd4a6a04040548040"

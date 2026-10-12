@@ -2,9 +2,11 @@ package libsharing
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -55,14 +57,27 @@ const (
 
 const (
 	VideoModeAutomatic int32 = 0
-	// AVConference mode 5 uses CoreDeviceScreenSharing settings on macOS
-	// 27.0.1 (26A434) and 27.2 (26B5101f).
+	// AVConference mode 5 uses CoreDeviceScreenSharing settings
+	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
+	// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// +[AVCMediaStreamNegotiatorSettings negotiatorSettingsForMode:deviceRole:options:errorString:]
+	// 0x1c11af840..0x1c11af874, mode table entry 0x1e1c9ba10;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f,
+	// UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// +[AVCMediaStreamNegotiatorSettings negotiatorSettingsForMode:deviceRole:options:errorString:]
+	// 0x1c082bf8c..0x1c082bfc0, mode table entry 0x1e18e2fa0).
 	VideoModeCoreDevice int32 = 5
-	// AVConference mode 7 uses RemoteDesktopScreenSharing settings on
-	// macOS 27.0.1 (26A434) and 27.2 (26B5101f).
+	// AVConference mode 7 uses RemoteDesktopScreenSharing settings
+	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
+	// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B, mode table entry 0x1e1c9ba20;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f,
+	// UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE, mode table entry 0x1e18e2fb0).
 	VideoModeRemoteDesktop int32 = 7
-	// AVConference mode 9 uses NearbyScreenSharing settings on macOS
-	// 27.0.1 (26A434) and 27.2 (26B5101f).
+	// AVConference mode 9 uses NearbyScreenSharing settings
+	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
+	// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B, mode table entry 0x1e1c9ba30;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f,
+	// UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE, mode table entry 0x1e18e2fc0).
 	VideoModeNearby int32 = 9
 )
 
@@ -185,7 +200,7 @@ func (s *Session) StartHighPerformance(options *HighPerformanceOptions) error {
 		return nil
 	}
 	if client == nil {
-		return errors.New("not connected")
+		return E.New("not connected")
 	}
 	return client.StartMediaStream(offer, &mediaEvents{session: s})
 }
@@ -207,7 +222,7 @@ func offerOptions(options *HighPerformanceOptions) (media.OfferOptions, error) {
 	}
 	if options.PixelFormats != 0 {
 		if options.PixelFormats < 0 || options.PixelFormats&^0xff != 0 {
-			return offer, errors.New("invalid decoder pixel formats")
+			return offer, E.New("invalid decoder pixel formats 0x", strconv.FormatUint(uint64(uint32(options.PixelFormats)), 16), "; only the low 8 bits may be set")
 		}
 		offer.PixelFormats = media.PixelFormats(options.PixelFormats)
 	}
@@ -215,7 +230,7 @@ func offerOptions(options *HighPerformanceOptions) (media.OfferOptions, error) {
 		offer.TilesPerFrame = 1
 	}
 	if options.SupportedCodecs == 0 || options.SupportedCodecs&^(DecoderCodecHEVC|DecoderCodecH264) != 0 {
-		return offer, errors.New("High Performance needs a supported hardware decoder")
+		return offer, E.New("High Performance needs a supported hardware decoder")
 	}
 	if options.SupportedCodecs&DecoderCodecHEVC != 0 {
 		offer.Codecs = append(offer.Codecs, media.CodecHEVC)
@@ -255,7 +270,7 @@ func (s *Session) SetHDR(enabled bool) error {
 		return nil
 	}
 	if client == nil {
-		return errors.New("not connected")
+		return E.New("not connected")
 	}
 	return client.SetHDR(enabled)
 }
@@ -278,7 +293,7 @@ func (s *Session) mediaStream() (*media.Stream, error) {
 	}
 	stream := client.MediaStream()
 	if stream == nil {
-		return nil, errors.New("the High Performance stream is not running")
+		return nil, E.New("the High Performance stream is not running")
 	}
 	return stream, nil
 }

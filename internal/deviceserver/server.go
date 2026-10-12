@@ -16,9 +16,11 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/imagemounter"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/pasteboard"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-// DDI 27A9266e registers this RemoteService for /System/Developer/usr/libexec/dtremotedisplayd.
+// The Developer Disk Image registers this RemoteService for /System/Developer/usr/libexec/dtremotedisplayd
+// (DDI 27A9266e, Library/LaunchDaemons/com.apple.coredevice.dtremotedisplayd.plist).
 const displayService = "com.apple.coredevice.displayservice"
 
 var retryDelays = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 10 * time.Second}
@@ -130,13 +132,13 @@ func New(options Options) (*Server, error) {
 	}
 	host, _, err := net.SplitHostPort(options.Listen)
 	if err != nil {
-		return nil, fmt.Errorf("deviceserver: listen address: %w", err)
+		return nil, E.Cause(err, "deviceserver: parse listen address")
 	}
 	var ip net.IP
 	if host != "" {
 		ip = net.ParseIP(host)
 		if ip == nil {
-			return nil, fmt.Errorf("deviceserver: listen address %q is not an IP address", host)
+			return nil, E.New("deviceserver: listen address ", strconv.Quote(host), " is not an IP address")
 		}
 	}
 	options.RFB.Media.ListenUDP = func(port uint16) (*net.UDPConn, error) {
@@ -173,10 +175,10 @@ func (s *Server) Start() error {
 	s.access.Lock()
 	defer s.access.Unlock()
 	if s.closed {
-		return errors.New("deviceserver: closed")
+		return E.New("deviceserver: closed")
 	}
 	if s.started {
-		return errors.New("deviceserver: already started")
+		return E.New("deviceserver: already started")
 	}
 	s.started = true
 	go s.run()
@@ -351,7 +353,7 @@ func (s *Server) serveDevice(device *coredevice.Device) error {
 	s.notify(func(observer Observer) { observer.DeviceConnected(info) })
 	s.setModel(info.ProductType)
 	if major, ok := majorVersion(info.OSVersion); ok && major < 27 {
-		return newError(ProblemUnsupported, "iOS %s cannot share its screen; it needs iOS 27 or later", info.OSVersion)
+		return newError(ProblemUnsupported, "iOS ", info.OSVersion, " cannot share its screen; it needs iOS 27 or later")
 	}
 	logger := s.logger.With("component", "device")
 	s.setState(StatePreparing, nil)
@@ -360,18 +362,18 @@ func (s *Server) serveDevice(device *coredevice.Device) error {
 		return lostOr(device, err)
 	}
 	if !device.HasService(displayService) {
-		return newError(ProblemUnsupported, "the device does not offer %s although its disk image is mounted", displayService)
+		return newError(ProblemUnsupported, "the device does not offer ", displayService, " although its disk image is mounted")
 	}
 	displayClient := display.New(device, logger.With("service", "display"))
 	ctx, cancel := context.WithTimeout(s.ctx, requestTimeout)
 	state, err := displayClient.Displays(ctx)
 	cancel()
 	if err != nil {
-		return lostOr(device, fmt.Errorf("read the device's displays: %w", err))
+		return lostOr(device, E.Cause(err, "read the device's displays"))
 	}
 	primary, found := primaryDisplay(state)
 	if !found {
-		return lostOr(device, errors.New("the device lists no screen"))
+		return lostOr(device, E.New("the device lists no usable screen among its ", len(state), " displays"))
 	}
 	s.updateDisplay(primary)
 	err = s.listen()
@@ -394,9 +396,9 @@ func (s *Server) serveDevice(device *coredevice.Device) error {
 	}
 	err = device.Err()
 	if err == nil {
-		err = errors.New("the device closed the connection")
+		err = E.New("the device closed the connection")
 	}
-	return &Error{Problem: ProblemNoTunnel, Err: fmt.Errorf("device connection lost: %w", err)}
+	return &Error{Problem: ProblemNoTunnel, Err: E.Cause(err, "device connection lost")}
 }
 
 func lostOr(device *coredevice.Device, err error) error {
@@ -406,7 +408,7 @@ func lostOr(device *coredevice.Device, err error) error {
 		if lost == nil {
 			lost = err
 		}
-		return &Error{Problem: ProblemNoTunnel, Err: fmt.Errorf("device connection lost: %w", lost)}
+		return &Error{Problem: ProblemNoTunnel, Err: E.Cause(lost, "device connection lost")}
 	default:
 		return err
 	}
@@ -441,7 +443,7 @@ func (s *Server) listen() error {
 			}
 			conn, err := media.ListenUDP(port)
 			if err != nil {
-				return &Error{Problem: ProblemListen, Err: fmt.Errorf("media port %d: %w", port, err)}
+				return &Error{Problem: ProblemListen, Err: E.Cause(err, "listen on media port ", port)}
 			}
 			_ = conn.Close()
 		}
@@ -456,7 +458,7 @@ func (s *Server) listen() error {
 	s.logger.Info("listening", "address", listener.Addr().String())
 	go func() {
 		err := s.rfb.Serve(listener)
-		if err != nil && !errors.Is(err, rfb.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+		if err != nil && !E.IsMulti(err, rfb.ErrServerClosed, net.ErrClosed) {
 			s.logger.Error("serve", "error", err)
 		}
 	}()
@@ -515,9 +517,9 @@ func (s *Server) waitDevice(ctx context.Context) (*attachment, error) {
 		select {
 		case <-wake:
 		case <-ctx.Done():
-			return nil, fmt.Errorf("the device is not connected: %w", ctx.Err())
+			return nil, E.Cause(ctx.Err(), "the device is not connected")
 		case <-s.ctx.Done():
-			return nil, errors.New("the server is closing")
+			return nil, E.New("the server is closing")
 		}
 	}
 }

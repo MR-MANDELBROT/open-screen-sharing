@@ -103,14 +103,20 @@ func appendReceiverReport(out []byte, sender uint32, sources map[uint32]*recepti
 
 // AVConference checks the first RTCP header before SRTCP authentication. With
 // reduced-size RTCP disabled, only SR, RR or APP may lead a datagram; a bare FIR
-// is rejected. Verified in RTCPParseVCPacket on macOS 27.0.1 (26A434),
-// 0x1c0ebf404–0x1c0ebf53c, and 27.2 (26B5101f), 0x1c0539ae4–0x1c0539c1c.
+// is rejected (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// __RTCPParseVCPacket 0x1c0ebf404..0x1c0ebf53c,
+// _RTCPReducedSizePackets 0x1c0eb9db4..0x1c0eb9dbc; AVConference 2260.14.1,
+// macOS 27.2 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+// __RTCPParseVCPacket 0x1c0539ae4..0x1c0539c1c,
+// _RTCPReducedSizePackets 0x1c0534494..0x1c053449c).
 func appendKeyframeRequest(out []byte, sender uint32, sources map[uint32]*receptionStats, now time.Time) []byte {
 	return appendFullIntraRequest(appendReceiverReport(out, sender, sources, now), sender)
 }
 
 // iShareScreen sends the LTR acknowledgment as APP with a 32-bit value 5
-// in the name slot followed by the picture identifier (e6db321, protocol/rtcp.py).
+// in the name slot followed by the picture identifier
+// (iShareScreen e6db321, src/isharescreen/proxy/protocol/rtcp.py:81-100).
 func appendReferenceAcknowledgment(out []byte, sender uint32, order uint16) []byte {
 	out = append(out, 0x80, rtcpApplication, 0, 3)
 	out = binary.BigEndian.AppendUint32(out, sender)
@@ -120,8 +126,11 @@ func appendReferenceAcknowledgment(out []byte, sender uint32, order uint16) []by
 
 func appendFullIntraRequest(out []byte, sender uint32) []byte {
 	// AVConference RTPSendRTCP writes PT 192, length 1 and the sender SSRC when
-	// the legacy FIR entry count is zero: macOS 27.0.1 (26A434), 0x1c0eba838,
-	// and 27.2 (26B5101f), 0x1c0534f18.
+	// the legacy FIR entry count is zero (AVConference 2235.63.5.2, macOS 27.0.1
+	// 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// _RTPSendRTCP 0x1c0eba838..0x1c0eba870; AVConference 2260.14.1, macOS 27.2
+	// 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// _RTPSendRTCP 0x1c0534f18..0x1c0534f50).
 	out = append(out, 0x80, rtcpFullIntraRequest, 0, 1)
 	return binary.BigEndian.AppendUint32(out, sender)
 }
@@ -191,12 +200,19 @@ func (f *rateFeedback) appendReport(out []byte, sender uint32, now time.Time) ([
 	if !f.haveSample || !f.videoArrived {
 		return out, false
 	}
-	// AVConference sendRateControlFeedback uses serializer configuration
-	// {2,1,1,1,0,0,0,0} and RTP >> 8 for low-precision echo
-	// (macOS 27.0.1 26A434, 0x1c1189ec8; 27.2 26B5101f, 0x1c0806670).
-	// On 26A434 the clock uses 1024 ticks per second, and the serializer returned
-	// 85000004123400000000007e0081040035670000 for echo=0x1234, loss=3,
-	// count=0x567, arrival=126, clock=129, packed delay=1024.
+	// AVConference sendRateControlFeedback passes serializer configuration bytes
+	// {2,1,1,1,0,0}, shifts the echo timestamp right by 8 when
+	// _useLowPrecisionEchoTimeStamp is set, and counts the clock in 1024 ticks
+	// per second. For echo=0x1234, loss=3, count=0x567, arrival=126, clock=129
+	// and packed delay=1024 the serializer writes
+	// 85000004123400000000007e0081040035670000 (AVConference 2235.63.5.2,
+	// macOS 27.0.1 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// -[VCVideoStreamRateAdaptationFeedbackOnly sendRateControlFeedback] 0x1c1189ec8..0x1c118a2a0,
+	// _VCMediaControlInfoSerializeWithData 0x1c13fc464..0x1c13fc780;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+	// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// -[VCVideoStreamRateAdaptationFeedbackOnly sendRateControlFeedback] 0x1c0806670..0x1c0806a48,
+	// _VCMediaControlInfoSerializeWithData 0x1c0a795a0..0x1c0a798bc).
 	start := len(out)
 	out = append(out, make([]byte, 32)...)
 	report := out[start:]

@@ -43,7 +43,7 @@ func servesOwnScreen(port int32) bool {
 
 // launchd keeps the enabled state of system daemons in this world-readable override file;
 // com.apple.screensharing defaults to disabled and is listed as false once Screen Sharing
-// is turned on.
+// is turned on (observed on Mac16,8, macOS 27.2 26B5101f).
 func macScreenSharingEnabled() bool {
 	content, err := os.ReadFile("/private/var/db/com.apple.xpc.launchd/disabled.plist")
 	if err != nil {

@@ -7,11 +7,11 @@ import (
 	"crypto/sha1"
 	"crypto/subtle"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"hash"
 	"io"
 	"sync/atomic"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -28,7 +28,7 @@ type recordKeys struct {
 
 func unwrapRekey(wrapKey [16]byte, body []byte) (uint32, recordKeys, error) {
 	if len(body) != rekeySize {
-		return 0, recordKeys{}, fmt.Errorf("rekey body is %d bytes", len(body))
+		return 0, recordKeys{}, E.New("rfb: rekey body is ", len(body), " bytes, want ", rekeySize)
 	}
 	block, err := aes.NewCipher(wrapKey[:])
 	if err != nil {
@@ -135,7 +135,7 @@ func (r *recordReader) next() error {
 	}
 	size := int(binary.BigEndian.Uint16(header[:]))
 	if size < 32 || size%16 != 0 {
-		return fmt.Errorf("record of %d bytes", size)
+		return E.New("rfb: record of ", size, " bytes, want at least 32 and a multiple of 16")
 	}
 	if cap(r.buffer) < size {
 		r.buffer = make([]byte, recordMaximumSize)
@@ -156,11 +156,11 @@ func (r *recordReader) next() error {
 	var checksum [recordChecksumSize]byte
 	hash.Sum(checksum[:0])
 	if subtle.ConstantTimeCompare(checksum[:], ciphertext[checksumOffset:size]) != 1 {
-		return errors.New("record checksum mismatch")
+		return E.New("rfb: checksum mismatch in record ", r.decoder.sequence, " of ", size, " bytes")
 	}
 	bodySize := int(binary.BigEndian.Uint16(ciphertext))
 	if 2+bodySize > checksumOffset {
-		return fmt.Errorf("record body of %d bytes in a %d byte record", bodySize, size)
+		return E.New("rfb: record body of ", bodySize, " bytes in a ", size, " byte record")
 	}
 	r.decoder.sequence++
 	r.records.Add(1)

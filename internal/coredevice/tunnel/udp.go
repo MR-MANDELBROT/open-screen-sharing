@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	tun "github.com/sagernet/sing-tun"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -20,8 +20,11 @@ const (
 	udpHeaderLength = 8
 )
 
-// sing-tun caps each iOS UDP socket receive buffer at 256 KiB
-// (stack_go_profile_ios.go and stack_go_udp_socket.go).
+// sing-tun drops datagrams for a UDP socket once 212992 bytes are queued;
+// on iOS, SetReadBuffer can raise that to at most 256 KiB
+// (sing-tun v0.9.7-0.20261002083955-3f8acd9da65b, stack_go_udp_socket.go:26,
+// 91; stack_go_udp_socket.go:172-174,
+// 445; stack_go_profile_ios.go:7).
 const udpQueueSize = 8 << 20
 
 type UDPConn struct {
@@ -50,7 +53,7 @@ func (t *Tunnel) ListenUDP(port uint16) (*UDPConn, error) {
 	case <-t.done:
 		t.udpAccess.Unlock()
 		conn.Close()
-		return nil, fmt.Errorf("tunnel closed: %w", t.err)
+		return nil, E.Cause(t.err, "tunnel closed")
 	default:
 	}
 	t.udpConns[c.port] = c
@@ -77,7 +80,7 @@ func (c *UDPConn) Port() uint16 {
 func (c *UDPConn) ReadFrom(ctx context.Context, buffer []byte) (n int, source netip.AddrPort, arrived time.Time, err error) {
 	for {
 		n, source, arrived, err = c.queue.pop(buffer)
-		if err != errQueueEmpty {
+		if !errors.Is(err, errQueueEmpty) {
 			return n, source, arrived, err
 		}
 		select {
@@ -140,11 +143,11 @@ func (t *Tunnel) closeUDP(err error) {
 	t.udpAccess.Lock()
 	defer t.udpAccess.Unlock()
 	for _, c := range t.udpConns {
-		c.queue.close(fmt.Errorf("tunnel closed: %w", err))
+		c.queue.close(E.Cause(err, "tunnel closed"))
 	}
 }
 
-var errQueueEmpty = errors.New("queue empty")
+var errQueueEmpty = E.New("queue empty")
 
 const datagramHeaderLength = 2 + 16 + 2 + 8
 

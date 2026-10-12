@@ -1,17 +1,20 @@
-// DDI 27A9266e CoreDeviceUtilities 651.13.2 defines PULL/PULL_REPLY
-// and SET/SET_REPLY. The replies carry PasteboardSnapshot, and SET
-// declares sourceMetadata.
+// The DDI's CoreDeviceUtilities defines PULL/PULL_REPLY and SET/SET_REPLY.
+// The replies carry PasteboardSnapshot, and SET declares sourceMetadata
+// (CoreDeviceUtilities 651.13.2, DDI 27A9266e, UUID
+// 93303947-1F03-3EF7-8EB1-2AF348389899, sub_2c4d48 0x2c4d48..0x2c4d54,
+// sub_2c5eb0 0x2c5eb0..0x2c5ec8, sub_2c830c 0x2c830c..0x2c8318, sub_2c9184
+// 0x2c9184..0x2c919c, field descriptors 0x475634, 0x475690, 0x475760 and
+// 0x4757a0).
 package pasteboard
 
 import (
 	"context"
 	"crypto/sha1"
-	"errors"
-	"fmt"
 	"log/slog"
 	"maps"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +23,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 	"howett.net/plist"
 )
 
@@ -55,10 +60,13 @@ var (
 		{TypeGIF, "image/gif"},
 		{TypeWebP, "image/webp"},
 	}
-	// These types appear in restrictedTransmissionTypes or
-	// confidentialTransmissionTypes in macOS CoreDeviceUtilities 651.13.2,
-	// arm64e UUID A41A1070-8100-3E29-B454-6937DEE7EA92, getters
-	// 0x2def90/0x2df1fc and string tables 0x57f460/0x57f418.
+	// These are the types in restrictedTransmissionTypes and
+	// confidentialTransmissionTypes (CoreDeviceUtilities 651.19, macOS 27.0.1
+	// 26A434, UUID 5DC3E05A-5AE3-39F9-A52C-CC96E83CC6E5, sub_2e1280
+	// 0x2e1280..0x2e12a0, sub_2e14ec 0x2e14ec..0x2e150c, string tables
+	// 0x583860 and 0x583818; CoreDeviceUtilities 651.13.2, DDI 27A9266e, UUID
+	// 93303947-1F03-3EF7-8EB1-2AF348389899, sub_2d1874 0x2d1874..0x2d1894,
+	// sub_2d1ae0 0x2d1ae0..0x2d1b00, string tables 0x5030e0 and 0x503098).
 	concealedTypes = []string{
 		"org.nspasteboard.ConcealedType",
 		"org.nspasteboard.TransientType",
@@ -66,12 +74,15 @@ var (
 		"de.petermaurer.TransientPasteboardType",
 		"com.agilebits.onepassword",
 		"com.typeit4me.clipping",
+		"Pasteboard generator type",
 		"com.apple.is-remote-clipboard",
 	}
 )
 
-// DDI 27A9266e CoreDeviceUtilities declares these as
-// PasteboardDataInclusionPolicy cases and Codable keys.
+// The DDI's CoreDeviceUtilities declares these as
+// PasteboardDataInclusionPolicy cases and Codable keys (CoreDeviceUtilities
+// 651.13.2, DDI 27A9266e, UUID 93303947-1F03-3EF7-8EB1-2AF348389899, field
+// descriptor 0x475a30, sub_2d2cc8 0x2d2cc8..0x2d2d80).
 var (
 	policyPromiseSecondary = map[string]any{"promiseSecondary": map[string]any{}}
 	policyAllPromised      = map[string]any{"allPromised": map[string]any{}}
@@ -161,8 +172,9 @@ func (s Snapshot) Image() (imageType string, data []byte, ok bool) {
 }
 
 func webArchiveImage(archive []byte) (imageType string, data []byte, ok bool) {
-	// howett.net/plist v1.0.1 re-panics runtime.Error in both the binary
-	// parser and Decoder.Decode (5afcd13, bplist_parser.go:65-74, decode.go:26-35).
+	// howett.net/plist re-panics runtime.Error in both the binary parser and
+	// Decoder.Decode (howett.net/plist v1.0.1, bplist_parser.go:65-74;
+	// howett.net/plist v1.0.1, decode.go:26-35).
 	defer func() {
 		if recover() != nil {
 			imageType, data, ok = "", nil, false
@@ -222,7 +234,7 @@ func (c *Client) pull(ctx context.Context, policy map[string]any) (Snapshot, err
 		"dataPolicy":     policy,
 	})
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("pasteboard: PULL: %w", err)
+		return Snapshot{}, E.Cause(err, "pasteboard: PULL")
 	}
 	return snapshotReply(reply, "PULL_REPLY")
 }
@@ -266,7 +278,7 @@ func (c *Client) write(ctx context.Context, item map[string]any, payload []byte,
 	}
 	if err != nil {
 		conn.Close()
-		return fmt.Errorf("pasteboard: send SET: %w", err)
+		return E.Cause(err, "pasteboard: send SET")
 	}
 	c.access.Lock()
 	if c.pendingWrites == 0 {
@@ -278,10 +290,11 @@ func (c *Client) write(ctx context.Context, item map[string]any, payload []byte,
 	return nil
 }
 
-// DDI 27A9266e CoreDeviceUtilities 651.13.2 (arm64e UUID
-// 93303947-1F03-3EF7-8EB1-2AF348389899) loads the snapshot sourceMetadata
-// optional at 0x2c17e4..0x2c1800 and passes its presence as localOnly to
-// setItemProviders:localOnly:expirationDate: at 0x2c24e8..0x2c24fc.
+// The DDI's CoreDeviceUtilities loads the snapshot sourceMetadata optional
+// and passes its presence as localOnly to
+// setItemProviders:localOnly:expirationDate: (CoreDeviceUtilities 651.13.2,
+// DDI 27A9266e, UUID 93303947-1F03-3EF7-8EB1-2AF348389899, sub_2c1744
+// 0x2c17e4..0x2c1800, 0x2c24e8..0x2c24fc).
 func (c *Client) sourceMetadata() map[string]any {
 	c.access.Lock()
 	c.writes++
@@ -298,9 +311,9 @@ func (c *Client) finishWrite(conn *xpc.Conn, fingerprint [sha1.Size]byte, writte
 	var snapshot Snapshot
 	switch {
 	case err != nil && expired:
-		err = fmt.Errorf("pasteboard: no SET_REPLY in %v", writeReplyTimeout)
+		err = E.New("pasteboard: no SET_REPLY in ", writeReplyTimeout)
 	case err != nil:
-		err = fmt.Errorf("pasteboard: receive SET_REPLY: %w", err)
+		err = E.Cause(err, "pasteboard: receive SET_REPLY")
 	default:
 		snapshot, err = snapshotReply(reply, "SET_REPLY")
 	}
@@ -369,47 +382,59 @@ func (c *Client) isOwn(snapshot Snapshot) bool {
 func (c *Client) dial(ctx context.Context) (*xpc.Conn, error) {
 	conn, err := c.device.DialXPC(ctx, service)
 	if err != nil {
-		return nil, fmt.Errorf("pasteboard: %w", err)
+		return nil, E.Cause(err, "pasteboard")
 	}
 	return conn, nil
 }
 
+// dtpasteboardd answers a request it refuses or fails with a dictionary that
+// holds only an encoded NSError under "error". It refuses a PULL while an item
+// on the pasteboard has a restricted type, or a confidential type unless the
+// device's pasteboardSyncConfidentialItems default is set (dtpasteboardd
+// 651.13.2, DDI 27A9266e, UUID FD90C1A2-FAF6-394A-8D29-06065D7EB459,
+// sub_1000227ac 0x100022910..0x1000229e0, sub_10000f3d8 0x10000f5c0..0x10000f698,
+// sub_100010364 0x1000106c0..0x1000107dc; CoreDeviceUtilities 651.13.2, DDI
+// 27A9266e, UUID 93303947-1F03-3EF7-8EB1-2AF348389899, sub_2bfc14
+// 0x2bfdb4..0x2c0050).
+var errRefused = E.New("pasteboard: the device refused the request")
+
 func snapshotReply(reply map[string]any, replyCommand string) (Snapshot, error) {
+	if _, refused := reply["error"]; refused {
+		return Snapshot{}, errRefused
+	}
 	if command, _ := reply["command"].(string); command != replyCommand {
-		return Snapshot{}, fmt.Errorf("pasteboard: got %q, want %s", reply["command"], replyCommand)
+		return Snapshot{}, E.New("pasteboard: got ", strconv.Quote(command), ", want ", replyCommand)
 	}
 	pasteboard, ok := reply["pasteboard"].(map[string]any)
 	if !ok {
-		return Snapshot{}, errors.New("pasteboard: " + replyCommand + " without a pasteboard")
+		return Snapshot{}, E.New("pasteboard: ", replyCommand, " without a pasteboard")
 	}
 	return parseSnapshot(pasteboard), nil
 }
 
 func parseSnapshot(pasteboard map[string]any) Snapshot {
-	var snapshot Snapshot
 	metadata, _ := pasteboard["metadata"].(map[string]any)
-	snapshot.change = change{nonce: metadata["nonce"], count: metadata["changeCount"]}
 	items, _ := pasteboard["items"].([]any)
-	for _, value := range items {
-		entry, _ := value.(map[string]any)
-		var item Item
-		types, _ := entry["types"].([]any)
-		for _, itemType := range types {
-			if itemType, ok := itemType.(string); ok {
-				item.Types = append(item.Types, itemType)
-			}
-		}
-		representations, _ := entry["data"].(map[string]any)
-		for itemType, representation := range representations {
-			representation, _ := representation.(map[string]any)
-			if data, ok := representation["data"].([]byte); ok {
-				if item.Data == nil {
-					item.Data = make(map[string][]byte)
+	return Snapshot{
+		Items: common.Map(items, func(value any) Item {
+			entry, _ := value.(map[string]any)
+			types, _ := entry["types"].([]any)
+			item := Item{Types: common.FilterIsInstance(types, func(it any) (string, bool) {
+				itemType, ok := it.(string)
+				return itemType, ok
+			})}
+			representations, _ := entry["data"].(map[string]any)
+			for itemType, representation := range representations {
+				representation, _ := representation.(map[string]any)
+				if data, ok := representation["data"].([]byte); ok {
+					if item.Data == nil {
+						item.Data = make(map[string][]byte)
+					}
+					item.Data[itemType] = data
 				}
-				item.Data[itemType] = data
 			}
-		}
-		snapshot.Items = append(snapshot.Items, item)
+			return item
+		}),
+		change: change{nonce: metadata["nonce"], count: metadata["changeCount"]},
 	}
-	return snapshot
 }

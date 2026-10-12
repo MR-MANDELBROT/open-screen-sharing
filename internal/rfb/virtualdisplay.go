@@ -1,10 +1,10 @@
 package rfb
 
 import (
-	"errors"
 	"slices"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type virtualDisplayRequest struct {
@@ -16,10 +16,9 @@ type virtualDisplayRequest struct {
 }
 
 // Without an explicit refresh-rate override, Apple's viewer asks
-// GetHEVCDecoderMaxSupportedFrameRate and falls back to 60 Hz on failure.
-// Rechecked in macOS 27.0.1 (26A434), ScreenSharing.framework arm64e UUID
-// EC0B2C20-F816-3FCE-822D-F9403C09EB50,
-// -[SSSession stConfigureVirtualDisplaysWithDimensions:], 0x1cc0d9888-0x1cc0d997c.
+// GetHEVCDecoderMaxSupportedFrameRate and falls back to 60 Hz on failure
+// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// -[SSSession stConfigureVirtualDisplaysWithDimensions:] 0x1cc0d9888..0x1cc0d997c).
 func (c *Client) displayConfiguration(request virtualDisplayRequest, hdr bool) ([]byte, error) {
 	refreshRate := 60.0
 	rate := c.options.DecoderMaxPixelRate
@@ -48,7 +47,7 @@ func (c *Client) SetVirtualDisplay(width, height int, density float64, maximumWi
 
 func (c *Client) SetHDR(enabled bool) error {
 	if !c.info.Accepts(0x1d) {
-		return errors.New("HDR needs a Mac that offers virtual displays")
+		return E.New("rfb: HDR needs a Mac that offers virtual displays")
 	}
 	c.access.Lock()
 	changed := c.hdr != enabled

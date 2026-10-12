@@ -2,11 +2,11 @@ package deviceserver
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/hid"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -133,7 +133,11 @@ var keysymUsages = func() map[uint32]uint8 {
 		0xff8d: usageKeypadEnter, 0xffaa: 0x55, 0xffab: 0x57, 0xffac: 0x85, 0xffad: 0x56,
 		0xffae: 0x63, 0xffaf: 0x54, 0xffbd: 0x67, 0xffb0: 0x62, 0xffe5: usageCapsLock,
 		0xffe1: usageLeftShift, 0xffe2: usageRightShift, 0xffe3: usageLeftControl, 0xffe4: usageRightControl,
-		// ScreenSharing maps Option to Meta by default (macOS 26A434 and 26B5101f).
+		// ScreenSharing maps Option to Meta (0xffe7/0xffe8) by default
+		// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+		// _MacVirtualKeycodeToKeysym 0x1e5a411e0, RFBPostKeyEventCore.optionKeyMapping 0x1e5a411dc;
+		// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+		// _MacVirtualKeycodeToKeysym 0x272252840, RFBPostKeyEventCore.optionKeyMapping 0x27225283c).
 		0xffe7: usageLeftAlt, 0xffe8: usageRightAlt, 0xffe9: usageLeftAlt, 0xffea: usageRightAlt,
 		0xffeb: usageLeftGUI, 0xffec: usageRightGUI,
 	}
@@ -302,7 +306,7 @@ func (k *keyboard) key(ctx context.Context, input *hid.Client, id keyID, down bo
 		}
 		err := k.release(ctx, input, pressed.usage)
 		if pressed.shift {
-			err = errors.Join(err, k.release(ctx, input, usageLeftShift))
+			err = E.Errors(err, k.release(ctx, input, usageLeftShift))
 		}
 		return err
 	}
@@ -325,8 +329,11 @@ func (k *keyboard) key(ctx context.Context, input *hid.Client, id keyID, down bo
 	return k.press(ctx, input, pressed.usage)
 }
 
-// ScreensharingAgent treats Caps Lock key-down/up as on/off, rather than toggling on each press.
-// Verified in the arm64e modifier dispatch on macOS 26A434 and 26B5101f.
+// ScreensharingAgent treats Caps Lock key-down/up as on/off, rather than toggling on each press
+// (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+// sub_1000350fc 0x1000350fc..0x100035128, 0x1000351a4..0x1000351ac, 0x100035298..0x1000352a4;
+// ScreensharingAgent 766.8, macOS 27.2 26B5101f, UUID D8791A89-6EDB-3A0A-A720-EC3F5FB1AD4F,
+// sub_100035484 0x100035484..0x1000354b0, 0x10003552c..0x100035534, 0x100035620..0x10003562c).
 func (k *keyboard) capsLockKey(ctx context.Context, input *hid.Client, on bool) error {
 	if on == k.capsLock {
 		return nil

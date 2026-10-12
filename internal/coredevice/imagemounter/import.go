@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Source interface {
@@ -23,7 +25,7 @@ const manifestLimit = 16 << 20
 
 func Import(ctx context.Context, src Source, dir string, progress func(received, total int64)) ([]Variant, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	counter := &progressCounter{ctx: ctx, report: progress}
 	manifestData, err := readManifest(ctx, src, counter)
@@ -44,7 +46,7 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 	for _, variant := range []Variant{Cryptex, Personalized} {
 		identity, err := variant.identity(manifest)
 		if err != nil {
-			missing = errors.Join(missing, fmt.Errorf("%v: %w", variant, err))
+			missing = E.Errors(missing, E.Cause(err, "import ", variant))
 			continue
 		}
 		stagedVariant, err := stageVariant(ctx, src, dir, variant, identity, counter)
@@ -53,7 +55,7 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 		case err == nil:
 			staged = append(staged, stagedVariant)
 		case errors.As(err, &notInSource):
-			missing = errors.Join(missing, fmt.Errorf("%v: %w", variant, err))
+			missing = E.Errors(missing, E.Cause(err, "import ", variant))
 		default:
 			return nil, err
 		}
@@ -75,14 +77,14 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 		case err == nil:
 			imported = append(imported, variant.variant)
 		case errors.As(err, &notInSource):
-			missing = errors.Join(missing, fmt.Errorf("%v: %w", variant.variant, err))
+			missing = E.Errors(missing, E.Cause(err, "import ", variant.variant))
 		default:
 			return nil, err
 		}
 	}
 	counter.flush()
 	if len(imported) == 0 {
-		return nil, fmt.Errorf("imagemounter: %s holds no usable Developer Disk Image: %w", src, missing)
+		return nil, E.Cause(missing, "imagemounter: ", src, " holds no usable Developer Disk Image")
 	}
 	return imported, nil
 }
@@ -112,12 +114,12 @@ func Present(dir string, variant Variant) (bool, error) {
 	return true, nil
 }
 
-var ErrNoManifest = errors.New("imagemounter: no " + manifestName)
+var ErrNoManifest = E.New("imagemounter: no " + manifestName)
 
 func readManifest(ctx context.Context, src Source, counter *progressCounter) ([]byte, error) {
 	file, err := src.Open(ctx, manifestName)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("%w in %s", ErrNoManifest, src)
+		return nil, E.Extend(ErrNoManifest, src)
 	}
 	if err != nil {
 		return nil, err
@@ -125,7 +127,7 @@ func readManifest(ctx context.Context, src Source, counter *progressCounter) ([]
 	defer file.Close()
 	var data bytes.Buffer
 	if _, err = io.Copy(io.MultiWriter(&data, counter), io.LimitReader(file, manifestLimit)); err != nil {
-		return nil, fmt.Errorf("imagemounter: read %s: %w", manifestName, err)
+		return nil, E.Cause(err, "imagemounter: read ", manifestName)
 	}
 	return data.Bytes(), nil
 }
@@ -160,7 +162,7 @@ type sourceFile struct {
 func stageVariant(ctx context.Context, src Source, dir string, variant Variant, identity buildIdentity, counter *progressCounter) (*stagedVariant, error) {
 	staging, err := os.MkdirTemp(dir, "."+variant.String()+".*")
 	if err != nil {
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	keys := variant.keys()
 	files := make([]sourceFile, 0, len(keys))
@@ -208,14 +210,14 @@ func finishVariant(ctx context.Context, src Source, dir string, variant *stagedV
 		return err
 	}
 	if err = os.Chmod(variant.staging, 0o755); err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	target := filepath.Join(dir, variant.variant.String())
 	if err = os.RemoveAll(target); err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	if err = os.Rename(variant.staging, target); err != nil {
-		return fmt.Errorf("imagemounter: %w", err)
+		return E.Cause(err, "imagemounter")
 	}
 	return nil
 }
@@ -247,7 +249,7 @@ func copyFile(ctx context.Context, src Source, name string, file resolvedFile, c
 	return writeFile(file.path, func(output *os.File) error {
 		hash := sha512.New384()
 		if _, err := io.Copy(io.MultiWriter(output, hash, counter), input); err != nil {
-			return fmt.Errorf("imagemounter: read %s from %s: %w", name, src, err)
+			return E.Cause(err, "imagemounter: read ", name, " from ", src)
 		}
 		if sum := hash.Sum(nil); !bytes.Equal(sum, file.digest) {
 			return &mismatchError{path: name, sum: sum, want: file.digest}

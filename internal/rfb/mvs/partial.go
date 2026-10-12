@@ -2,8 +2,10 @@ package mvs
 
 import (
 	"encoding/binary"
-	"errors"
 	"math/bits"
+	"strconv"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -20,8 +22,11 @@ const (
 var (
 	colorWhite = pixelFromRGB(0xff, 0xff, 0xff)
 	colorBlack = pixelFromRGB(0, 0, 0)
-	// ScreenSharing initializes the second partial-update colour to 0x00B5D5FE.
-	// Verified in _DecodeMVSUpdate on macOS 26A434 and 26B5101f, arm64e.
+	// ScreenSharing initializes the second partial-update colour to 0x00B5D5FE
+	// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// _DecodeMVSUpdate 0x1cc06a1f0..0x1cc06a1f8;
+	// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+	// _DecodeMVSUpdate 0x22e4ad274..0x22e4ad27c).
 	colorSecondDefault = pixelFromRGB(0xb5, 0xd5, 0xfe)
 )
 
@@ -36,11 +41,11 @@ type riceBlock struct {
 
 func (d *Decoder) decodePartial(update []byte, x, y, width, height int, target *Target) error {
 	if len(update) < 6 {
-		return errors.New("mvs: short partial update")
+		return E.New("mvs: partial update of ", len(update), " bytes, shorter than its 6-byte header")
 	}
 	secondaryOffset := int(update[3])<<16 | int(update[4])<<8 | int(update[5])
 	if secondaryOffset < 6 || secondaryOffset > len(update) {
-		return errors.New("mvs: invalid secondary stream offset")
+		return E.New("mvs: invalid secondary stream offset ", secondaryOffset, " in partial update of ", len(update), " bytes")
 	}
 	primary := newBitReader(update[6:secondaryOffset])
 	secondary := newBitReader(update[secondaryOffset:])
@@ -66,7 +71,7 @@ func (d *Decoder) decodePartial(update []byte, x, y, width, height int, target *
 		tileType := primary.read(3)
 		run := readRepeatCount(&primary)
 		if run > total-tileIndex {
-			return errors.New("mvs: tile run exceeds rectangle")
+			return E.New("mvs: tile run of ", run, " at tile ", tileIndex, " exceeds the ", total, " tiles of the rectangle")
 		}
 		for end := tileIndex + run; tileIndex < end; tileIndex++ {
 			localX := column * 8
@@ -117,7 +122,7 @@ func (d *Decoder) decodePartial(update []byte, x, y, width, height int, target *
 			case tileRice:
 				if secondary.readBit() {
 					if !hasPrevious {
-						return errors.New("mvs: Rice tile repeats a missing block")
+						return E.New("mvs: Rice tile ", tileIndex, " repeats a missing block")
 					}
 				} else {
 					decodeRice(&secondary, &previous, hasPrevious, luminanceLimit, chrominanceLimit)
@@ -142,11 +147,13 @@ func (d *Decoder) decodePartial(update []byte, x, y, width, height int, target *
 			}
 		}
 		if primary.failed() || secondary.failed() {
-			return errors.New("mvs: invalid partial update")
+			return E.New("mvs: invalid partial update of ", len(update), " bytes after ", tileIndex, " of ", total, " tiles")
 		}
 	}
-	if primary.read(8) != 0x6d || secondary.read(8) != 0x6d || primary.failed() || secondary.failed() {
-		return errors.New("mvs: invalid partial update end marker")
+	primaryMarker, secondaryMarker := primary.read(8), secondary.read(8)
+	if primaryMarker != 0x6d || secondaryMarker != 0x6d || primary.failed() || secondary.failed() {
+		return E.New("mvs: partial update of ", len(update), " bytes ends with markers 0x", strconv.FormatUint(uint64(primaryMarker), 16),
+			" and 0x", strconv.FormatUint(uint64(secondaryMarker), 16), ", expected 0x6d")
 	}
 	return nil
 }

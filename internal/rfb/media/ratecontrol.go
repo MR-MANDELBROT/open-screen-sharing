@@ -2,8 +2,13 @@ package media
 
 import "math"
 
-// AVConference uses short-average weights 0.9/0.1 and long-average weights
-// 0.9999/0.0001 in VCRateControlOWRDEstimator (macOS 26A434 and 26B5101f).
+// AVConference VCRateControlOWRDEstimator uses short-average weights 0.9/0.1
+// and long-average weights 0.9999/0.0001 (AVConference 2235.63.5.2,
+// macOS 27.0.1 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// -[VCRateControlOWRDEstimator calculateOWRDWithSendTime:receiveTime:roundTripTime:] 0x1c0f14340..0x1c0f1436c;
+// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+// -[VCRateControlOWRDEstimator calculateOWRDWithSendTime:receiveTime:roundTripTime:] 0x1c058efd8..0x1c058f004).
 type owrdEstimator struct {
 	send         owrdClock
 	receive      owrdClock
@@ -71,7 +76,12 @@ func (e *owrdEstimator) sample(timestamp uint32, clockRate float64, arrivalMilli
 }
 
 // AVConference resetOWRDEstimation preserves the OWRD result and both
-// timestamp wrap counters (macOS 26A434 and 26B5101f).
+// timestamp wrap counters (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
+// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// -[VCRateControlOWRDEstimator resetOWRDEstimation] 0x1c0f158c4..0x1c0f158dc;
+// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+// -[VCRateControlOWRDEstimator resetOWRDEstimation] 0x1c059055c..0x1c0590574).
 func (e *owrdEstimator) reset() {
 	for _, clock := range []*owrdClock{&e.send, &e.receive} {
 		clock.base, clock.last, clock.seen, clock.step = 0, 0, 0, 0
@@ -97,7 +107,14 @@ func (c *owrdClock) relative(e *owrdEstimator, timestamp uint32, rate float64) f
 		c.last = relative
 	}
 	// AVConference counts each 32-bit timestamp wrap as 2^32-1
-	// (macOS 26A434 and 26B5101f).
+	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID
+	// 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// -[VCRateControlOWRDEstimator relativeSendTimeWithTimestamp:timestampRate:] 0x1c0f13af8..0x1c0f13b20,
+	// -[VCRateControlOWRDEstimator relativeReceiveTimeWithTimestamp:timestampRate:] 0x1c0f13dc0..0x1c0f13de8;
+	// AVConference 2260.14.1, macOS 27.2 26B5101f, UUID
+	// EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// -[VCRateControlOWRDEstimator relativeSendTimeWithTimestamp:timestampRate:] 0x1c058e790..0x1c058e7b8,
+	// -[VCRateControlOWRDEstimator relativeReceiveTimeWithTimestamp:timestampRate:] 0x1c058ea58..0x1c058ea80).
 	return float64(c.wraps*math.MaxUint32+uint64(relative)) / rate
 }
 

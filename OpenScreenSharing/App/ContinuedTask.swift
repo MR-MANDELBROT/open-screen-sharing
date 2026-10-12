@@ -21,8 +21,9 @@ final class ContinuedTask {
     private var total: Int64 = 0
 
     init(kind: String) {
-        // AltStore replaces CFBundleIdentifier without rewriting BGTaskSchedulerPermittedIdentifiers;
-        // SideStore rewrites both (ResignAppOperation.swift, commits 56854e6 and 0dd743f).
+        // AltStore replaces CFBundleIdentifier without rewriting BGTaskSchedulerPermittedIdentifiers
+        // (AltStore 56854e6, AltStore/Operations/ResignAppOperation.swift:112-152); SideStore rewrites both
+        // (SideStore 0dd743f, SideStore/Core/Operations/PipelineOperations/ResignAppOperation.swift:132-141).
         let permitted = Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String]
         let prefix = permitted?.first { $0.hasSuffix(".\(kind).*") }?.dropLast() ?? ""
         identifier = String(prefix) + UUID().uuidString

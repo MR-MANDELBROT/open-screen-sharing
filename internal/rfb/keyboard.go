@@ -2,10 +2,13 @@ package rfb
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
+	"slices"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type KeyboardType uint16
@@ -49,9 +52,9 @@ type textPaste struct {
 	lastPasted time.Time
 }
 
-// screensharingd 756.36.5.2 arm64e rejects decrypted events unless bytes 0 and 10
-// are each 0 or 0xff: HandleEncryptedEventMessage 0x10003c218..0x10003c234,
-// UUID 44908B06-F788-3822-ABC4-2285001F6A8D.
+// screensharingd rejects decrypted events unless bytes 0 and 10 are each 0 or 0xff
+// (screensharingd 756.36.5.2, macOS 27.0.1 26A434, UUID 44908B06-F788-3822-ABC4-2285001F6A8D,
+// sub_100036680 0x10003c218..0x10003c234).
 func encryptedKeyMessage(key [16]byte, flags uint8, keysym uint32, down bool, keyboardType KeyboardType, keyCode uint16) ([]byte, error) {
 	message := make([]byte, 18)
 	message[0] = 0x10
@@ -87,7 +90,7 @@ func (c *Client) SendKeyCode(keyCode uint16, keyboardType KeyboardType, keysym u
 		return c.SendKey(keysym, down)
 	}
 	if c.observing() {
-		return errObserving
+		return E.New("rfb: key events are not sent while observing")
 	}
 	message, err := encryptedKeyMessage(c.wrapKey, keyFlagKeyCodeValid|keyFlagPreferKeyCode, appleKeysym(keysym), down, keyboardType, keyCode)
 	if err != nil {
@@ -149,10 +152,10 @@ func (c *Client) SetKeyboardSource(id string) error {
 
 func (c *Client) SelectKeyboardSource(id string) error {
 	if id == "" {
-		return errors.New("no input source")
+		return E.New("rfb: no input source")
 	}
 	if c.observing() {
-		return errObserving
+		return E.New("rfb: input source ", strconv.Quote(id), " is not selected while observing")
 	}
 	message := keyboardSourceMessage(id)
 	message = append(message, keyEventMessage(false, keysymVoid)...)
@@ -162,10 +165,10 @@ func (c *Client) SelectKeyboardSource(id string) error {
 
 func (c *Client) PasteText(text string) error {
 	if c.info.Dialect != DialectApple {
-		return errors.New("only a Mac takes pasted text")
+		return E.New("rfb: only a Mac takes pasted text")
 	}
 	if c.observing() {
-		return errObserving
+		return E.New("rfb: text is not pasted while observing")
 	}
 	clipboard := NewTextClipboard(text)
 	if len(clipboard.Items) > 0 {
@@ -221,7 +224,7 @@ func (c *Client) pasteText(message []byte) error {
 	}
 	if unsaved != nil {
 		c.logger.Warn("pasteboard is not put back after pasting", "error", unsaved)
-		c.handler.ClipboardFailed(ClipboardNotRestored, fmt.Errorf("pasteboard is not put back after pasting: %w", unsaved))
+		c.handler.ClipboardFailed(ClipboardNotRestored, E.Cause(unsaved, "fetch the pasteboard to restore after pasting"))
 	}
 	return nil
 }
@@ -298,19 +301,16 @@ func (c *Client) pasteboardToRestore() (*Clipboard, error) {
 			if clipboard != nil {
 				return restorableClipboard(clipboard), nil
 			}
-			err = errors.New("the Mac's pasteboard is unreadable")
+			err = E.New("rfb: the Mac's pasteboard is unreadable")
 		case <-timer.C:
-			err = errors.New("no pasteboard in time")
+			err = E.New("rfb: no pasteboard in ", pasteFetchTimeout)
 		case <-c.writerDone:
-			err = errors.New("session ended")
+			err = E.New("rfb: session ended")
 		}
 	}
 	c.access.Lock()
-	for i, pending := range c.keyboard.pasteboardWaiters {
-		if pending == waiter {
-			c.keyboard.pasteboardWaiters = append(c.keyboard.pasteboardWaiters[:i], c.keyboard.pasteboardWaiters[i+1:]...)
-			break
-		}
+	if index := slices.Index(c.keyboard.pasteboardWaiters, waiter); index >= 0 {
+		c.keyboard.pasteboardWaiters = slices.Delete(c.keyboard.pasteboardWaiters, index, index+1)
 	}
 	c.access.Unlock()
 	return nil, err
@@ -319,12 +319,9 @@ func (c *Client) pasteboardToRestore() (*Clipboard, error) {
 func restorableClipboard(clipboard *Clipboard) *Clipboard {
 	restorable := &Clipboard{}
 	for _, item := range clipboard.Items {
-		var kept ClipboardItem
-		for _, flavor := range item.Flavors {
-			if !flavor.Promise {
-				kept.Flavors = append(kept.Flavors, flavor)
-			}
-		}
+		kept := ClipboardItem{Flavors: common.Filter(item.Flavors, func(flavor ClipboardFlavor) bool {
+			return !flavor.Promise
+		})}
 		if len(kept.Flavors) > 0 {
 			restorable.Items = append(restorable.Items, kept)
 		}

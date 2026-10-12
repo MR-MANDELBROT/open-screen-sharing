@@ -3,10 +3,10 @@ package vpnpeer
 import (
 	"net"
 	"net/netip"
-	"slices"
 	"strings"
 	"syscall"
 
+	"github.com/sagernet/sing/common"
 	"golang.org/x/net/route"
 )
 
@@ -81,7 +81,7 @@ func scan() ([]tunnel, []netip.Addr) {
 			tunnels[index].peers = append(tunnels[index].peers, address)
 		}
 	}
-	slices.SortStableFunc(tunnels, func(a, b tunnel) int { return strings.Compare(a.name, b.name) })
+	common.SortBy(tunnels, func(it tunnel) string { return it.name })
 	return tunnels, local
 }
 

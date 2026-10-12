@@ -1,8 +1,7 @@
 package mvs
 
 import (
-	"errors"
-	"fmt"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -34,8 +33,11 @@ type tileBaseline struct {
 	luma      [64]int8
 }
 
-// ScreenSharing caches 64 Y, 15 Cr and 20 Cb bytes per entry (99 bytes total).
-// Verified in _DecodeMVSUpdate on macOS 26A434 and 26B5101f, arm64e.
+// ScreenSharing caches 64 Y, 15 Cr and 20 Cb bytes per entry (99 bytes total)
+// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// _DecodeMVSUpdate 0x1cc068da0..0x1cc068dcc, 0x1cc069428..0x1cc06951c, 0x1cc069568..0x1cc0695b4;
+// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+// _DecodeMVSUpdate 0x22e4abe24..0x22e4abe50, 0x22e4ac4ac..0x22e4ac5a0, 0x22e4ac5ec..0x22e4ac638).
 type cacheEntry struct {
 	luma     [64]int8
 	cb       [20]int8
@@ -113,12 +115,12 @@ func (d *Decoder) Reset(width, height int) {
 
 func (d *Decoder) Decode(update []byte, x, y, width, height int, target *Target) error {
 	if len(update) == 0 {
-		return errors.New("mvs: empty update")
+		return E.New("mvs: empty update")
 	}
 	switch update[0] {
 	case updateQuantization:
 		if len(update) != quantizationUpdateLength {
-			return fmt.Errorf("mvs: quantisation update has %d bytes", len(update))
+			return E.New("mvs: quantisation update has ", len(update), " bytes, expected ", quantizationUpdateLength)
 		}
 		for i := range 64 {
 			d.luminanceQuantization[i] = int32(update[1+i])
@@ -128,17 +130,17 @@ func (d *Decoder) Decode(update []byte, x, y, width, height int, target *Target)
 		return nil
 	case updatePartial, updateFull:
 	default:
-		return fmt.Errorf("mvs: unknown update type %d", update[0])
+		return E.New("mvs: unknown update type ", update[0])
 	}
 	if width <= 0 || height <= 0 {
-		return errors.New("mvs: empty rectangle")
+		return E.New("mvs: empty rectangle ", width, "x", height)
 	}
 	if target.Width <= 0 || target.Height <= 0 || target.Stride < target.Width*4 ||
 		len(target.Pix) < (target.Height-1)*target.Stride+target.Width*4 {
-		return errors.New("mvs: invalid target")
+		return E.New("mvs: invalid target ", target.Width, "x", target.Height, " with stride ", target.Stride, " and ", len(target.Pix), " bytes")
 	}
 	if x < 0 || y < 0 || x+width > target.Width || y+height > target.Height {
-		return fmt.Errorf("mvs: rectangle %dx%d at %d,%d outside %dx%d framebuffer", width, height, x, y, target.Width, target.Height)
+		return E.New("mvs: rectangle ", width, "x", height, " at ", x, ",", y, " outside ", target.Width, "x", target.Height, " framebuffer")
 	}
 	d.Reset(target.Width, target.Height)
 	if update[0] == updatePartial {

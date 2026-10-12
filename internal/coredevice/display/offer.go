@@ -16,22 +16,24 @@ import (
 	"howett.net/plist"
 )
 
-// pymobiledevice3 1146717 retains captured video/audio media blobs in
-// remote/core_device/media_stream_offer.py:483-505. They contain these tier
-// tables, codec-bank layout, decoder name and five-byte SSRC varints.
+// The captured video and audio media blobs kept by pymobiledevice3 contain
+// these tier tables, codec-bank layout, decoder name and five-byte SSRC
+// varints (pymobiledevice3 1146717,
+// pymobiledevice3/remote/core_device/media_stream_offer.py:484-505).
 
 type Mode int
 
-// On iPad17,1, iOS 27.2 build 24B5099f, the mode-5 capture is
-// 2432x1680; modes 7 and 9 display 2420x1668 from a 2432x1680 coded frame.
+// The mode-5 capture is 2432x1680; modes 7 and 9 display 2420x1668 from a
+// 2432x1680 coded frame (observed on iPad17,1, iPadOS 27.2 24B5099f).
 const (
-	// Mode 5 returned TXMaxBitrate=6000000 and 420f on iPad17,1,
-	// iOS 27.2 build 24B5099f.
+	// Mode 5 returned TXMaxBitrate=6000000 and 420f (observed on iPad17,1,
+	// iPadOS 27.2 24B5099f).
 	ModeCoreDevice Mode = 5
-	// Mode 7 returned TXMaxBitrate=60000000 and 444f on the same build;
-	// its capture is HEVC range extensions, 4:4:4.
+	// Mode 7 returned TXMaxBitrate=60000000 and 444f; its capture is HEVC
+	// range extensions, 4:4:4 (observed on iPad17,1, iPadOS 27.2 24B5099f).
 	ModeRemoteDesktop Mode = 7
-	// Mode 9 returned TXMaxBitrate=40000000 and 420v on the same build.
+	// Mode 9 returned TXMaxBitrate=40000000 and 420v (observed on iPad17,1,
+	// iPadOS 27.2 24B5099f).
 	ModeNearby Mode = 9
 )
 
@@ -48,7 +50,8 @@ const (
 	bankFeatures = "FLS;SW:1;"
 )
 
-// An offer with these endpoint values succeeded on iPad17,1 build 24B5089g.
+// An offer with these endpoint values succeeded (observed on iPad17,1,
+// build 24B5089g).
 const (
 	hostModel            = "Mac17,7"
 	hostFrameworkVersion = "2205.3.1"
@@ -61,9 +64,9 @@ type bitrateTier struct {
 	bufferCap uint64
 }
 
-// On iPad17,1 build 24B5099f, mode 7 with the 262144 tier set to 10 Mbit/s
-// and mode 9 with the 12288 tier set to 10 Mbit/s each returned
-// TXMaxBitrate=10000000 while TXMinBitrate stayed 20000000.
+// Mode 7 with the 262144 tier set to 10 Mbit/s and mode 9 with the 12288
+// tier set to 10 Mbit/s each returned TXMaxBitrate=10000000 while
+// TXMinBitrate stayed 20000000 (observed on iPad17,1, iPadOS 27.2 24B5099f).
 const (
 	screenTierBufferCap = 262144
 	screenTierLimit     = 60_000_000
@@ -137,9 +140,14 @@ func codecBank(payloadType uint64, features string, trailer uint64, resPairCount
 	return appendVarint(bank, 4, trailer)
 }
 
-// The video-settings field numbers match pymobiledevice3 1146717,
-// media_stream_offer.py:292-302: SSRC=1, RTCP feedback=2, codec banks=3,
-// tiles=6, LTRP=7, FEC=10 and RTX=11. It emits 63 in field 8 and 1 in field 12.
+// AVConference writes these video-settings fields: rtpSSRC=1,
+// allowRTCPFB=2, videoPayloadCollections=3, tilesPerFrame=6, ltrpEnabled=7,
+// pixelFormats=8 and blackFrameOnClearScreenEnabled=12 (AVConference
+// 2235.63.5.2, macOS 27.0.1 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+// -[VCMediaNegotiationBlobVideoSettings writeTo:] 0x1c1014608..0x1c1014908).
+// pymobiledevice3 uses the same field numbers and always sends 63 in field 8
+// and 1 in field 12 (pymobiledevice3 1146717,
+// pymobiledevice3/remote/core_device/media_stream_offer.py:292-302).
 func videoBlob(options StreamOptions, timestamp uint64) []byte {
 	pixelFormats := uint64(videoPixelFormats)
 	if narrowed := uint64(options.PixelFormats) & videoPixelFormats; narrowed != 0 {
@@ -205,8 +213,9 @@ func encodeMediaBlob(settingsField uint64, settings []byte, tiers []bitrateTier,
 }
 
 func remoteEndpointInfo() []byte {
-	// idevice d32c818 encodes call_id and client_version in fields 1 and 2
-	// (display_stream/negotiation.rs:138-150).
+	// idevice encodes call_id and client_version in fields 1 and 2 (idevice
+	// d32c818,
+	// idevice/src/services/core_device/display_stream/negotiation.rs:128-142).
 	info := appendVarint(nil, 1, 0)
 	info = appendVarint(info, 2, 1)
 	info = appendBytes(info, 3, []byte(hostModel))

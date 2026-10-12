@@ -2,11 +2,13 @@ package rfb
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type GesturePhase uint32
@@ -69,7 +71,7 @@ func ParseSystemCommand(name string) (SystemCommand, error) {
 			return command, nil
 		}
 	}
-	return 0, fmt.Errorf("unknown system command %q", name)
+	return 0, E.New("rfb: unknown system command ", strconv.Quote(name))
 }
 
 const (
@@ -90,8 +92,6 @@ const (
 	gestureMagnify uint8 = 1 << iota
 	gestureRotate
 )
-
-var errNeedsEventMessage = errors.New("the server does not take Apple's gesture messages")
 
 type gestureState struct {
 	systemCommands   []SystemCommand
@@ -174,10 +174,10 @@ func assistCursorMessage(visible bool, x, y int, flags uint32) []byte {
 
 func (c *Client) gestureTargetLocked(x, y int) (int, int, error) {
 	if c.mode == ModeObserve {
-		return 0, 0, errObserving
+		return 0, 0, E.New("rfb: gestures are not sent while observing")
 	}
 	if !c.info.Accepts(0x17) {
-		return 0, 0, errNeedsEventMessage
+		return 0, 0, E.New("rfb: the server does not take Apple's gesture messages")
 	}
 	wireX, wireY := c.wirePositionLocked(x, y)
 	return wireX, wireY, nil
@@ -377,12 +377,12 @@ func (c *Client) SendSystemCommand(command SystemCommand) error {
 	c.access.Lock()
 	if c.mode == ModeObserve {
 		c.access.Unlock()
-		return errObserving
+		return E.New("rfb: system command ", command, " is not sent while observing")
 	}
 	supported := slices.Contains(c.gestures.systemCommands, command)
 	c.access.Unlock()
 	if !supported {
-		return errors.New("the server does not offer this command")
+		return E.New("rfb: the server does not offer system command ", command)
 	}
 	message, err := encryptedKeyMessage(c.wrapKey, 0, uint32(command), true, 0, 0)
 	if err != nil {
@@ -405,7 +405,7 @@ func (c *Client) SetAssistCursor(x, y int, pointer uint32, pressed bool) error {
 	c.access.Lock()
 	if !c.info.Accepts(0x16) {
 		c.access.Unlock()
-		return errors.New("the server does not take the assist cursor")
+		return E.New("rfb: the server does not take the assist cursor")
 	}
 	wireX, wireY := c.wirePositionLocked(x, y)
 	c.access.Unlock()
@@ -414,7 +414,7 @@ func (c *Client) SetAssistCursor(x, y int, pointer uint32, pressed bool) error {
 
 func (c *Client) HideAssistCursor() error {
 	if !c.info.Accepts(0x16) {
-		return errors.New("the server does not take the assist cursor")
+		return E.New("rfb: the server does not take the assist cursor")
 	}
 	return c.sendInput(assistCursorMessage(false, 0, 0, 0), false)
 }

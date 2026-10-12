@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	E "github.com/sagernet/sing/common/exceptions"
 	"howett.net/plist"
 )
 
@@ -24,7 +25,7 @@ func NewPlistConn(conn net.Conn) *PlistConn {
 func (c *PlistConn) Send(message map[string]any) error {
 	data, err := plist.Marshal(message, plist.XMLFormat)
 	if err != nil {
-		return fmt.Errorf("encode %v: %w", message, err)
+		return E.Cause(err, "encode ", fmt.Sprint(message))
 	}
 	frame := binary.BigEndian.AppendUint32(make([]byte, 0, 4+len(data)), uint32(len(data)))
 	_, err = c.conn.Write(append(frame, data...))
@@ -39,7 +40,7 @@ func (c *PlistConn) Receive() (map[string]any, error) {
 	}
 	length := binary.BigEndian.Uint32(header)
 	if length > maxPlistLength {
-		return nil, fmt.Errorf("message of %d bytes is too large", length)
+		return nil, E.New("rsd: message of ", length, " bytes is too large, at most ", maxPlistLength)
 	}
 	data := make([]byte, length)
 	_, err = io.ReadFull(c.conn, data)
@@ -49,7 +50,7 @@ func (c *PlistConn) Receive() (map[string]any, error) {
 	var message map[string]any
 	_, err = plist.Unmarshal(data, &message)
 	if err != nil {
-		return nil, fmt.Errorf("decode message: %w", err)
+		return nil, E.Cause(err, "decode message")
 	}
 	return message, nil
 }
@@ -72,7 +73,8 @@ func (c *PlistConn) Request(ctx context.Context, message map[string]any) (map[st
 }
 
 // pymobiledevice3 reads two replies after RSDCheckin: RSDCheckin first,
-// then StartService, whose Error field reports a failure.
+// then StartService, whose Error field reports a failure (pymobiledevice3
+// 9c33842, pymobiledevice3/remote/remote_service_discovery.py:437-447).
 func (c *PlistConn) Checkin(ctx context.Context, label string) error {
 	stop := c.applyContext(ctx)
 	defer stop()
@@ -86,24 +88,24 @@ func (c *PlistConn) Checkin(ctx context.Context, label string) error {
 func (c *PlistConn) checkin(label string) error {
 	err := c.Send(map[string]any{"Label": label, "ProtocolVersion": "2", "Request": "RSDCheckin"})
 	if err != nil {
-		return fmt.Errorf("RSDCheckin: %w", err)
+		return E.Cause(err, "RSDCheckin")
 	}
 	reply, err := c.Receive()
 	if err != nil {
-		return fmt.Errorf("RSDCheckin: %w", err)
+		return E.Cause(err, "RSDCheckin")
 	}
 	if reply["Request"] != "RSDCheckin" {
-		return fmt.Errorf("RSDCheckin: unexpected reply %v", reply)
+		return E.New("RSDCheckin: unexpected reply ", fmt.Sprint(reply))
 	}
 	reply, err = c.Receive()
 	if err != nil {
-		return fmt.Errorf("RSDCheckin: %w", err)
+		return E.Cause(err, "RSDCheckin")
 	}
 	if reply["Request"] != "StartService" {
-		return fmt.Errorf("RSDCheckin: unexpected reply %v", reply)
+		return E.New("RSDCheckin: unexpected reply ", fmt.Sprint(reply))
 	}
 	if message, failed := reply["Error"]; failed {
-		return fmt.Errorf("RSDCheckin: service did not start: %v", message)
+		return E.New("RSDCheckin: service did not start: ", fmt.Sprint(message))
 	}
 	return nil
 }

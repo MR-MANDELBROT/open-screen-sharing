@@ -9,14 +9,14 @@ import (
 	"log/slog"
 	"math"
 	"net"
-	"os"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -126,7 +126,7 @@ func (s *ServerSession) run() {
 			s.logger.Info("viewer failed to sign in", "user", s.userName, "error", err)
 		case hungUp(err):
 			s.logger.Debug("viewer left during the handshake", "error", err)
-		case errors.Is(err, os.ErrDeadlineExceeded):
+		case E.IsTimeout(err):
 			s.logger.Debug("viewer did not sign in in time", "error", err)
 		default:
 			s.logger.Warn("handshake", "error", err)
@@ -179,8 +179,7 @@ func (s *ServerSession) finish(err error) {
 }
 
 func hungUp(err error) bool {
-	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
-		errors.Is(err, net.ErrClosed) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE)
+	return err == nil || E.IsClosed(err) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 func (s *ServerSession) stopWriter() {
@@ -199,12 +198,12 @@ func (s *ServerSession) handshake() error {
 	}
 	banner, err := s.stream.bytes(12)
 	if err != nil {
-		return fmt.Errorf("read the viewer's version: %w", err)
+		return E.Cause(err, "read the viewer's version")
 	}
 	var version ProtocolVersion
 	_, err = fmt.Sscanf(string(banner), "RFB %03d.%03d\n", &version.Major, &version.Minor)
 	if err != nil || !version.apple() {
-		return fmt.Errorf("the viewer speaks %q, not Apple's 003.889", banner)
+		return E.New("the viewer speaks ", strconv.Quote(string(banner)), ", not Apple's 003.889")
 	}
 	offered := []byte{1, byte(SecurityAppleSRP)}
 	if options.NoAuthentication {
@@ -216,7 +215,7 @@ func (s *ServerSession) handshake() error {
 	}
 	selected, err := s.stream.u8()
 	if err != nil {
-		return fmt.Errorf("read the security type: %w", err)
+		return E.Cause(err, "read the security type")
 	}
 	switch {
 	case SecurityType(selected) == SecurityAppleSRP:
@@ -224,14 +223,14 @@ func (s *ServerSession) handshake() error {
 	case SecurityType(selected) == SecurityAskControl && options.NoAuthentication:
 		err = s.askToShare()
 	default:
-		return fmt.Errorf("the viewer chose security type %v", SecurityType(selected))
+		return E.New("the viewer chose security type ", SecurityType(selected))
 	}
 	if err != nil {
 		return err
 	}
 	clientInit, err := s.stream.u8()
 	if err != nil {
-		return fmt.Errorf("read ClientInit: %w", err)
+		return E.Cause(err, "read ClientInit")
 	}
 	screen := s.server.handler.Screen()
 	s.screen = screen
@@ -247,7 +246,7 @@ func (s *ServerSession) readSRPMessage() ([]byte, error) {
 		return nil, err
 	}
 	if size < 4 || size > srpMessageLimit {
-		return nil, fmt.Errorf("SRP message of %d bytes", size)
+		return nil, E.New("SRP message of ", size, " bytes, want 4 to ", srpMessageLimit)
 	}
 	message, err := s.stream.bytes(int(size))
 	if err != nil {
@@ -255,7 +254,7 @@ func (s *ServerSession) readSRPMessage() ([]byte, error) {
 	}
 	inner := int(binary.BigEndian.Uint32(message))
 	if inner > len(message)-4 {
-		return nil, fmt.Errorf("SRP message of %d bytes in %d", inner, len(message)-4)
+		return nil, E.New("SRP message of ", inner, " bytes in ", len(message)-4)
 	}
 	return message[4 : 4+inner], nil
 }
@@ -263,7 +262,7 @@ func (s *ServerSession) readSRPMessage() ([]byte, error) {
 func (s *ServerSession) signIn() error {
 	identity, err := s.readSRPMessage()
 	if err != nil {
-		return fmt.Errorf("read the SRP identity: %w", err)
+		return E.Cause(err, "read the SRP identity")
 	}
 	reader := &fieldReader{data: identity}
 	reader.u16()
@@ -275,11 +274,11 @@ func (s *ServerSession) signIn() error {
 	}
 	proof, err := s.readSRPMessage()
 	if err != nil {
-		return fmt.Errorf("read the SRP proof: %w", err)
+		return E.Cause(err, "read the SRP proof")
 	}
 	serverProof, wrapKey, err := exchange.verify(proof)
 	if err == nil && !s.server.acceptsUserName(s.userName) {
-		err = errSRPUserName
+		err = E.New("the viewer's user name does not match")
 	}
 	if err != nil {
 		timer := time.NewTimer(s.server.signInFailureWait(time.Now()))
@@ -290,7 +289,7 @@ func (s *ServerSession) signIn() error {
 		timer.Stop()
 		answer := append(srpVerification(nil), 0, 0, 0, 1)
 		_, _ = s.conn.Write(answer)
-		return fmt.Errorf("%w: %w", ErrAuthenticationFailed, err)
+		return E.Cause1(ErrAuthenticationFailed, err)
 	}
 	s.wrapKey = wrapKey
 	_, err = s.conn.Write(append(srpVerification(serverProof), 0, 0, 0, 0))
@@ -308,7 +307,7 @@ func (s *ServerSession) prelude() ([][]byte, error) {
 		if message[0] != clientSetEncryption {
 			heldBytes += len(message)
 			if len(held) >= preludeLimit || heldBytes > preludeByteLimit {
-				return nil, errors.New("too much before encryption")
+				return nil, E.New(len(held)+1, " messages of ", heldBytes, " bytes before encryption, over the limit of ", preludeLimit, " messages or ", preludeByteLimit, " bytes")
 			}
 			held = append(held, message)
 			continue
@@ -416,7 +415,7 @@ func (s *ServerSession) dispatch(message []byte) error {
 	case clientEncryptedEvent:
 		event, err := parseEncryptedEvent(s.keys.key, message)
 		if err != nil {
-			return fmt.Errorf("encrypted input event: %w", err)
+			return E.Cause(err, "parse encrypted input event")
 		}
 		s.emitInput(event)
 	case clientSetScale:

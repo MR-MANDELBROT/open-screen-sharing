@@ -8,6 +8,7 @@ import (
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/pasteboard"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 var clipboardImageTypes = []string{
@@ -104,7 +105,7 @@ func (c *clipboardBridge) read(ctx context.Context) (*rfb.Clipboard, error) {
 	}
 	a := c.server.currentDevice()
 	if a == nil {
-		return nil, errors.New("the device is not connected")
+		return nil, E.New("the device is not connected")
 	}
 	snapshot, err := a.pasteboard.Read(ctx)
 	if err != nil {

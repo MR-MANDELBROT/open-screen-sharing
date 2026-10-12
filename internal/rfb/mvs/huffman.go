@@ -1,8 +1,14 @@
 package mvs
 
-// ScreenSharing uses this luminance AC table for both chroma AC streams.
-// Verified through _DCTHuffmanDecodeInit and _DCTHuffmanDecodePartialUpdate
-// on macOS 26A434 and 26B5101f, arm64e.
+// ScreenSharing uses this luminance AC table for both chroma AC streams
+// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+// std_huff_tables.bits_ac_luminance 0x1cc1b90ba, _DCTHuffmanDecodeInit 0x1cc06b3e8..0x1cc06b464,
+// _jpeg_make_d_derived_tbl 0x1cc06b538..0x1cc06b548, _DCTHuffmanDecodePartialUpdate 0x1cc06de20,
+// _DecodeMVSUpdate 0x1cc069418, 0x1cc0694ec;
+// ScreenSharing 786.3, macOS 27.2 26B5101f, UUID 21DF7A41-0D38-3DF3-B87A-8A6249686735,
+// std_huff_tables.bits_ac_luminance 0x22e5fdcfa, _DCTHuffmanDecodeInit 0x22e4ae46c..0x22e4ae4e8,
+// _jpeg_make_d_derived_tbl 0x22e4ae5bc..0x22e4ae5cc, _DCTHuffmanDecodePartialUpdate 0x22e4b0ea0,
+// _DecodeMVSUpdate 0x22e4ac49c, 0x22e4ac570).
 var luminanceACCounts = [17]uint8{
 	0x00, 0x00, 0x02, 0x01, 0x03, 0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00, 0x01,
 	0x7d,

@@ -4,12 +4,13 @@ import (
 	"archive/zip"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
 	"strings"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const manifestDepth = 3
@@ -17,7 +18,7 @@ const manifestDepth = 3
 func OpenFile(name string) (Source, io.Closer, error) {
 	info, err := os.Stat(name)
 	if err != nil {
-		return nil, nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, nil, E.Cause(err, "imagemounter")
 	}
 	var fsys fs.FS
 	var closer io.Closer = io.NopCloser(nil)
@@ -26,19 +27,19 @@ func OpenFile(name string) (Source, io.Closer, error) {
 	} else {
 		archive, err := zip.OpenReader(name)
 		if err != nil {
-			return nil, nil, fmt.Errorf("imagemounter: %s is neither a directory nor a ZIP archive: %w", name, err)
+			return nil, nil, E.Cause(err, "imagemounter: ", name, " is neither a directory nor a ZIP archive")
 		}
 		fsys, closer = archive, archive
 	}
 	root, err := findManifest(fsys)
 	if err != nil {
 		closer.Close()
-		return nil, nil, fmt.Errorf("%w in %s", err, name)
+		return nil, nil, E.Extend(err, name)
 	}
 	sub, err := fs.Sub(fsys, root)
 	if err != nil {
 		closer.Close()
-		return nil, nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, nil, E.Cause(err, "imagemounter")
 	}
 	return &fsSource{fsys: sub, name: path.Join(info.Name(), root)}, closer, nil
 }
@@ -82,7 +83,7 @@ func (s *fsSource) Size(ctx context.Context, name string) (int64, error) {
 		if errors.Is(err, fs.ErrNotExist) {
 			return 0, err
 		}
-		return 0, fmt.Errorf("imagemounter: %w", err)
+		return 0, E.Cause(err, "imagemounter")
 	}
 	return info.Size(), nil
 }
@@ -96,7 +97,7 @@ func (s *fsSource) Open(ctx context.Context, name string) (io.ReadCloser, error)
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, err
 		}
-		return nil, fmt.Errorf("imagemounter: %w", err)
+		return nil, E.Cause(err, "imagemounter")
 	}
 	return file, nil
 }

@@ -1,6 +1,11 @@
 package rfb
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+
+	E "github.com/sagernet/sing/common/exceptions"
+)
 
 type Encoding int32
 
@@ -84,7 +89,7 @@ func ParseEncoding(name string) (Encoding, error) {
 			return encoding, nil
 		}
 	}
-	return 0, fmt.Errorf("unknown encoding %q", name)
+	return 0, E.New("rfb: unknown encoding ", strconv.Quote(name))
 }
 
 var appleMetadataEncodings = []Encoding{
