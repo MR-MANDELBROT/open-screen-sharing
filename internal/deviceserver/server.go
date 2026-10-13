@@ -17,17 +17,21 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/pasteboard"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 	E "github.com/sagernet/sing/common/exceptions"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 // The Developer Disk Image registers this RemoteService for /System/Developer/usr/libexec/dtremotedisplayd
 // (DDI 27A9266e, Library/LaunchDaemons/com.apple.coredevice.dtremotedisplayd.plist).
 const displayService = "com.apple.coredevice.displayservice"
 
+var errRerouted = E.New("a new connection to the device would take a different route; reconnecting")
+
 var retryDelays = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 10 * time.Second}
 
 const (
 	stableConnection    = 30 * time.Second
 	displayPollInterval = 5 * time.Second
+	routeCheckInterval  = 5 * time.Second
 	connectTimeout      = 30 * time.Second
 	requestTimeout      = 10 * time.Second
 	shutdownLimit       = 3 * time.Second
@@ -298,7 +302,7 @@ func (s *Server) run() {
 			return
 		}
 		switch {
-		case errors.Is(err, errRemounted):
+		case E.IsMulti(err, errRemounted, errRerouted):
 			lastErr = nil
 			failures = 0
 			continue
@@ -386,19 +390,48 @@ func (s *Server) serveDevice(device *coredevice.Device) error {
 		pasteboard: pasteboard.New(device, logger.With("service", "pasteboard")),
 	})
 	s.setRunning()
-	select {
-	case <-device.Done():
-	case <-s.ctx.Done():
-	}
+	rerouted := s.watchRoute(device)
 	s.detach(a)
 	if s.ctx.Err() != nil {
 		return s.ctx.Err()
+	}
+	if rerouted != nil {
+		return rerouted
 	}
 	err = device.Err()
 	if err == nil {
 		err = E.New("the device closed the connection")
 	}
 	return &Error{Problem: ProblemNoTunnel, Err: E.Cause(err, "device connection lost")}
+}
+
+func (s *Server) watchRoute(device *coredevice.Device) error {
+	local, remote := device.TransportAddr()
+	var tick <-chan time.Time
+	if local.IsValid() && remote.IsValid() {
+		ticker := time.NewTicker(routeCheckInterval)
+		defer ticker.Stop()
+		tick = ticker.C
+	}
+	for {
+		select {
+		case <-device.Done():
+			return nil
+		case <-s.ctx.Done():
+			return nil
+		case <-tick:
+		}
+		conn, err := net.DialUDP("udp", nil, net.UDPAddrFromAddrPort(remote))
+		if err != nil {
+			continue
+		}
+		current := M.AddrPortFromNet(conn.LocalAddr()).Addr().Unmap()
+		_ = conn.Close()
+		if current != local.Addr().Unmap() {
+			s.logger.Info("device route changed", "from", local.Addr(), "to", current)
+			return errRerouted
+		}
+	}
 }
 
 func lostOr(device *coredevice.Device, err error) error {

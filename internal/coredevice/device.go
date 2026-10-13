@@ -13,6 +13,7 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/tunnel"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
 	E "github.com/sagernet/sing/common/exceptions"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 const checkinLabel = "open-screen-sharing"
@@ -150,6 +151,10 @@ func (d *Device) Address() netip.Addr {
 
 func (d *Device) LocalAddress() netip.Addr {
 	return d.tunnel.Parameters().ClientAddress
+}
+
+func (d *Device) TransportAddr() (local netip.AddrPort, remote netip.AddrPort) {
+	return M.AddrPortFromNet(d.tunnel.LocalAddr()), M.AddrPortFromNet(d.tunnel.RemoteAddr())
 }
 
 func (d *Device) Info() DeviceInfo {

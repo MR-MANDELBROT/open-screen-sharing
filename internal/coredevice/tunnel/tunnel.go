@@ -185,6 +185,14 @@ func (t *Tunnel) Parameters() *Parameters {
 	return t.parameters
 }
 
+func (t *Tunnel) LocalAddr() net.Addr {
+	return t.conn.LocalAddr()
+}
+
+func (t *Tunnel) RemoteAddr() net.Addr {
+	return t.conn.RemoteAddr()
+}
+
 // sing-tun waits for its outbound callback; a full data queue returns
 // errGoTransmitBlocked (sing-tun v0.9.7-0.20261002083955-3f8acd9da65b,
 // tun_memory_queue.go:80-95, 155-156).
