@@ -3,16 +3,18 @@ import Foundation
 import Libsharing
 import UIKit
 import dnssd
+import os
 
 final class ServerController: ObservableObject {
     static let shared = ServerController()
+    nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "server")
 
     enum Phase: Equatable {
         case stopped
         case starting
-        case connecting(ServerProblem?)
+        case connecting
         case preparing
-        case running(ServerProblem?)
+        case running
         case failed(ServerProblem)
 
         var isActive: Bool {
@@ -35,10 +37,10 @@ final class ServerController: ObservableObject {
     }
 
     @Published private(set) var advertisedName: String?
-    @Published private(set) var advertisingProblem: String?
-    @Published private(set) var viewerProblem: String?
+    @Published private(set) var localNetworkDenied = false
     @Published private(set) var backgroundProblem: String?
     @Published private(set) var tunnelFound: Bool?
+    @Published private(set) var tunnelThroughLocalNetwork = false
 
     let remotePairing = RemotePairingBrowser()
     let pairingSession = PairingSession()
@@ -103,15 +105,23 @@ final class ServerController: ObservableObject {
         guard probeTask == nil else { return }
         probeTask = Task {
             while !Task.isCancelled {
-                if !phase.isActive {
+                let throughLocalNetwork: Bool
+                if phase.isActive {
+                    throughLocalNetwork = server?.loopbackAddress()?.localNetwork ?? false
+                } else {
                     let port = remotePairing.port ?? 0
-                    let found = await Task.detached(priority: .utility) {
-                        !LibsharingDetectLoopbackAddress(Int32(port)).isEmpty
+                    let (found, localNetwork) = await Task.detached(priority: .utility) {
+                        let loopback = LibsharingDetectLoopbackAddress(Int32(port))
+                        return (loopback != nil, loopback?.localNetwork ?? false)
                     }.value
                     guard !Task.isCancelled else { return }
                     if tunnelFound != found {
                         tunnelFound = found
                     }
+                    throughLocalNetwork = localNetwork
+                }
+                if tunnelThroughLocalNetwork != throughLocalNetwork {
+                    tunnelThroughLocalNetwork = throughLocalNetwork
                 }
                 try? await Task.sleep(seconds: 2)
             }
@@ -145,7 +155,6 @@ final class ServerController: ObservableObject {
         settings.isEnabled = true
         generation += 1
         let generation = generation
-        viewerProblem = nil
         phase = .starting
         setBrowsing(true)
         startTask = Task {
@@ -183,17 +192,13 @@ final class ServerController: ObservableObject {
             state: { [weak self] change in
                 DispatchQueue.main.async { self?.handle(change, generation: generation) }
             },
-            viewer: { [weak self] viewerID, connected, problem in
+            viewer: { [weak self] viewerID, connected in
                 DispatchQueue.main.async {
                     guard let self, generation == self.generation else { return }
                     if connected {
                         self.viewers.insert(viewerID)
-                        self.viewerProblem = nil
                     } else {
                         self.viewers.remove(viewerID)
-                        if let problem {
-                            self.viewerProblem = problem
-                        }
                     }
                     self.volume.setWatched(!self.viewers.isEmpty)
                 }
@@ -243,11 +248,11 @@ final class ServerController: ObservableObject {
         let problem = change.errorCode == LibsharingDeviceErrorNone ? nil : ServerProblem(code: change.errorCode, message: change.message)
         switch change.state {
         case LibsharingDeviceServerConnecting:
-            phase = .connecting(problem)
+            phase = .connecting
         case LibsharingDeviceServerPreparing:
             phase = .preparing
         case LibsharingDeviceServerRunning:
-            phase = .running(problem)
+            phase = .running
         case LibsharingDeviceServerFailed:
             fail(problem ?? ServerProblem(kind: .other, message: change.message))
         case LibsharingDeviceServerStopped:
@@ -320,13 +325,13 @@ final class ServerController: ObservableObject {
         guard phase.isRunning else {
             advertiser.stop()
             advertisedName = nil
-            advertisingProblem = nil
+            localNetworkDenied = false
             return
         }
         guard !advertiser.isPublishing else { return }
         let errorCode = advertiser.start(name: name, type: "_rfb._tcp", port: settings.port, txt: ["model": Self.model])
         if errorCode == kDNSServiceErr_NoError {
-            advertisingProblem = nil
+            localNetworkDenied = false
         } else {
             advertisingFailed(errorCode)
         }
@@ -334,10 +339,8 @@ final class ServerController: ObservableObject {
 
     private func advertisingFailed(_ errorCode: DNSServiceErrorType) {
         advertisedName = nil
-        advertisingProblem =
-            errorCode == kDNSServiceErr_PolicyDenied
-            ? String(localized: "Screen Sharing isn’t allowed to use the local network. Allow it in Settings › Privacy & Security › Local Network.")
-            : "DNSServiceRegister: error \(errorCode)"
+        localNetworkDenied = errorCode == kDNSServiceErr_PolicyDenied
+        Self.logger.error("DNSServiceRegister: error \(errorCode, privacy: .public)")
     }
 
     private static let model: String = {

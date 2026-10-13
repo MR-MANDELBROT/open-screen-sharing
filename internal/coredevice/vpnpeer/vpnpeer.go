@@ -10,6 +10,7 @@ import (
 
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 // LocalDevVPN defaults its peer address to 10.7.0.1/32; StosVPN defaults
@@ -55,14 +56,20 @@ func candidates(tunnels []tunnel, local []netip.Addr) []netip.Addr {
 	return result
 }
 
-func Find(ctx context.Context, candidates []netip.Addr, port uint16, timeout time.Duration) (netip.Addr, error) {
+type Peer struct {
+	Address      netip.Addr
+	LocalNetwork bool
+}
+
+func Find(ctx context.Context, candidates []netip.Addr, port uint16, timeout time.Duration) (Peer, error) {
 	if len(candidates) == 0 {
-		return netip.Addr{}, E.New("vpnpeer: no VPN address to try")
+		return Peer{}, E.New("vpnpeer: no VPN address to try")
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	type result struct {
 		index int
+		local netip.Addr
 		err   error
 	}
 	results := make(chan result, len(candidates))
@@ -70,19 +77,21 @@ func Find(ctx context.Context, candidates []netip.Addr, port uint16, timeout tim
 		go func() {
 			var dialer net.Dialer
 			conn, err := dialer.DialContext(ctx, "tcp", netip.AddrPortFrom(address, port).String())
+			var local netip.Addr
 			if err == nil {
+				local = M.AddrPortFromNet(conn.LocalAddr()).Addr().Unmap()
 				_ = conn.Close()
 			}
-			results <- result{index: index, err: err}
+			results <- result{index: index, local: local, err: err}
 		}()
 	}
 	errs := make([]error, len(candidates))
 	for range candidates {
 		answer := <-results
 		if answer.err == nil {
-			return candidates[answer.index], nil
+			return Peer{Address: candidates[answer.index], LocalNetwork: onLocalNetwork(answer.local)}, nil
 		}
 		errs[answer.index] = answer.err
 	}
-	return netip.Addr{}, E.Cause(E.Errors(errs...), "none of the VPN addresses ", strings.Join(F.MapToString(candidates), ", "), " answers on port ", port)
+	return Peer{}, E.Cause(E.Errors(errs...), "none of the VPN addresses ", strings.Join(F.MapToString(candidates), ", "), " answers on port ", port)
 }

@@ -102,27 +102,18 @@ struct ServerView: View {
                 .disabled(!controller.isActive && !controller.canStart)
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
+                if controller.tunnelThroughLocalNetwork {
+                    Text("Loopback through the local network performs poorly.")
+                        .foregroundStyle(.yellow)
+                }
                 if !controller.isActive, controller.tunnelFound == false {
-                    Text("No loopback address found.")
+                    Text("No loopback address found. Turn on [LocalDevVPN](https://apps.apple.com/app/id6755608044), or [sing-box](https://sing-box.sagernet.org) with `loopback_address` configured.")
                 }
-                if let problem = phaseProblem {
-                    Text(verbatim: problem.message.isEmpty ? problem.title : "\(problem.title): \(problem.message)")
-                }
-                if let problem = controller.viewerProblem {
-                    Text(problem)
-                }
-                if let problem = controller.advertisingProblem {
-                    Text(problem)
+                if controller.localNetworkDenied {
+                    Text("Screen Sharing isn’t allowed to use the local network. Allow it in Settings › Privacy & Security › Local Network.")
                 }
             }
             .foregroundStyle(.red)
-        }
-    }
-
-    private var phaseProblem: ServerProblem? {
-        switch controller.phase {
-        case .connecting(let problem), .running(let problem): problem
-        default: nil
         }
     }
 

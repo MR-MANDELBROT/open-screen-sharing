@@ -48952,6 +48952,310 @@
         }
       }
     },
+    "Loopback through the local network performs poorly." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أداء الاسترجاع عبر الشبكة المحلية ضعيف."
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback през локалната мрежа има ниска производителност."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লোকাল নেটওয়ার্কের মাধ্যমে লুপব্যাকের পারফরম্যান্স খারাপ।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El bucle local a través de la xarxa local té un rendiment baix."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zpětná smyčka přes místní síť má nízký výkon."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback via det lokale netværk har dårlig ydeevne."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback über das lokale Netzwerk hat eine schlechte Leistung."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το loopback μέσω του τοπικού δικτύου έχει χαμηλή απόδοση."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El bucle invertido a través de la red local tiene un rendimiento bajo."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El loopback a través de la red local tiene un rendimiento bajo."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback lähiverkon kautta toimii heikosti."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le bouclage via le réseau local offre de faibles performances."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le bouclage via le réseau local offre de faibles performances."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "લોકલ નેટવર્ક દ્વારા લૂપબૅકનું પર્ફોર્મન્સ નબળું છે."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לולאה חוזרת דרך הרשת המקומית מספקת ביצועים ירודים."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोकल नेटवर्क के ज़रिए लूपबैक का परफ़ॉर्मेंस खराब है।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Povratna petlja preko lokalne mreže ima slabe performanse."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A helyi hálózaton keresztüli visszacsatolás teljesítménye gyenge."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback melalui jaringan lokal memiliki performa yang buruk."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il loopback tramite la rete locale ha prestazioni scarse."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ローカルネットワーク経由のループバックはパフォーマンスが低くなります。"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Жергілікті желі арқылы loopback өнімділігі төмен."
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಲೋಕಲ್ ನೆಟ್‌ವರ್ಕ್ ಮೂಲಕ ಲೂಪ್‌ಬ್ಯಾಕ್‌ನ ಕಾರ್ಯಕ್ಷಮತೆ ಕಳಪೆಯಾಗಿದೆ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로컬 네트워크를 통한 루프백은 성능이 낮습니다."
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grįžtamasis ryšys per vietinį tinklą veikia prastai."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ലോക്കൽ നെറ്റ്‌വർക്ക് വഴിയുള്ള ലൂപ്പ്ബാക്കിന്റെ പ്രകടനം മോശമാണ്."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोकल नेटवर्कद्वारे लूपबॅकची कामगिरी खराब आहे."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gelung balik melalui rangkaian setempat mempunyai prestasi yang lemah."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback via det lokale nettverket gir dårlig ytelse."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback via het lokale netwerk presteert slecht."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଲୋକାଲ୍ ନେଟୱର୍କ ମାଧ୍ୟମରେ ଲୁପ୍‌ବ୍ୟାକ୍‌ର ପ୍ରଦର୍ଶନ ଖରାପ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਲੋਕਲ ਨੈੱਟਵਰਕ ਰਾਹੀਂ ਲੂਪਬੈਕ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਮਾੜੀ ਹੈ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pętla zwrotna przez sieć lokalną ma słabą wydajność."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O loopback pela rede local tem desempenho ruim."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O loopback através da rede local tem um desempenho fraco."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback-ul prin rețeaua locală are performanțe slabe."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback через локальную сеть имеет низкую производительность."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback cez lokálnu sieť má nízky výkon."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Povratna zanka prek lokalnega omrežja ima slabo zmogljivost."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback via det lokala nätverket har dålig prestanda."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "லோக்கல் நெட்வொர்க் வழியான லூப்பேக்கின் செயல்திறன் மோசமாக உள்ளது."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "లోకల్ నెట్‌వర్క్ ద్వారా లూప్‌బ్యాక్ పనితీరు తక్కువగా ఉంటుంది."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลูปแบ็คผ่านเครือข่ายเฉพาะที่มีประสิทธิภาพต่ำ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yerel ağ üzerinden geri döngü düşük performans gösterir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зворотна петля через локальну мережу має низьку продуктивність."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لوکل نیٹ ورک کے ذریعے لوپ بیک کی کارکردگی خراب ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loopback qua mạng cục bộ có hiệu năng kém."
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "透過區域網絡實現的 Loopback 效能較差。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过局域网实现的 Loopback 性能较差。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "透過區域網路實現的 Loopback 效能較差。"
+          }
+        }
+      }
+    },
     "Lost the Connection to “%@”" : {
       "localizations" : {
         "ar" : {
@@ -56856,306 +57160,306 @@
         }
       }
     },
-    "No loopback address found." : {
+    "No loopback address found. Turn on [LocalDevVPN](https://apps.apple.com/app/id6755608044), or [sing-box](https://sing-box.sagernet.org) with `loopback_address` configured." : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "لم يتم العثور على عنوان استرجاع."
+            "value" : "لم يتم العثور على عنوان استرجاع. يجب تشغيل [LocalDevVPN](https://apps.apple.com/app/id6755608044)، أو [sing-box](https://sing-box.sagernet.org) مع تهيئة `loopback_address`."
           }
         },
         "bg" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не е намерен loopback адрес."
+            "value" : "Не е намерен loopback адрес. Включете [LocalDevVPN](https://apps.apple.com/app/id6755608044) или [sing-box](https://sing-box.sagernet.org) с конфигуриран `loopback_address`."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "কোনো লুপব্যাক ঠিকানা পাওয়া যায়নি।"
+            "value" : "কোনো লুপব্যাক ঠিকানা পাওয়া যায়নি। [LocalDevVPN](https://apps.apple.com/app/id6755608044) চালু করুন, অথবা `loopback_address` কনফিগার করা [sing-box](https://sing-box.sagernet.org) চালু করুন।"
           }
         },
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No s’ha trobat cap adreça de bucle local."
+            "value" : "No s’ha trobat cap adreça de bucle local. Activa [LocalDevVPN](https://apps.apple.com/app/id6755608044), o bé [sing-box](https://sing-box.sagernet.org) amb `loopback_address` configurat."
           }
         },
         "cs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nebyla nalezena žádná adresa zpětné smyčky."
+            "value" : "Nebyla nalezena žádná adresa zpětné smyčky. Zapněte [LocalDevVPN](https://apps.apple.com/app/id6755608044) nebo [sing-box](https://sing-box.sagernet.org) s nastaveným `loopback_address`."
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Der blev ikke fundet nogen loopback-adresse."
+            "value" : "Der blev ikke fundet nogen loopback-adresse. Slå [LocalDevVPN](https://apps.apple.com/app/id6755608044) til, eller [sing-box](https://sing-box.sagernet.org) med `loopback_address` konfigureret."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Loopback-Adresse gefunden."
+            "value" : "Keine Loopback-Adresse gefunden. Aktiviere [LocalDevVPN](https://apps.apple.com/app/id6755608044) oder [sing-box](https://sing-box.sagernet.org) mit konfiguriertem `loopback_address`."
           }
         },
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Δεν βρέθηκε διεύθυνση loopback."
+            "value" : "Δεν βρέθηκε διεύθυνση loopback. Ενεργοποιήστε το [LocalDevVPN](https://apps.apple.com/app/id6755608044) ή το [sing-box](https://sing-box.sagernet.org) με ρυθμισμένο το `loopback_address`."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se ha encontrado ninguna dirección de bucle invertido."
+            "value" : "No se ha encontrado ninguna dirección de bucle invertido. Activa [LocalDevVPN](https://apps.apple.com/app/id6755608044), o [sing-box](https://sing-box.sagernet.org) con `loopback_address` configurado."
           }
         },
         "es-419" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se encontró ninguna dirección loopback."
+            "value" : "No se encontró ninguna dirección loopback. Activa [LocalDevVPN](https://apps.apple.com/app/id6755608044), o [sing-box](https://sing-box.sagernet.org) con `loopback_address` configurado."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Loopback-osoitetta ei löytynyt."
+            "value" : "Loopback-osoitetta ei löytynyt. Ota käyttöön [LocalDevVPN](https://apps.apple.com/app/id6755608044) tai [sing-box](https://sing-box.sagernet.org), jossa on määritetty `loopback_address`."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune adresse de bouclage trouvée."
+            "value" : "Aucune adresse de bouclage trouvée. Activez [LocalDevVPN](https://apps.apple.com/app/id6755608044), ou [sing-box](https://sing-box.sagernet.org) avec `loopback_address` configuré."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune adresse de bouclage trouvée."
+            "value" : "Aucune adresse de bouclage trouvée. Activez [LocalDevVPN](https://apps.apple.com/app/id6755608044), ou [sing-box](https://sing-box.sagernet.org) avec `loopback_address` configuré."
           }
         },
         "gu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "કોઈ લૂપબૅક ઍડ્રેસ મળ્યું નથી."
+            "value" : "કોઈ લૂપબૅક ઍડ્રેસ મળ્યું નથી. [LocalDevVPN](https://apps.apple.com/app/id6755608044) ચાલુ કરો, અથવા `loopback_address` કન્ફિગર કરેલું [sing-box](https://sing-box.sagernet.org) ચાલુ કરો."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "לא נמצאה כתובת לולאה חוזרת."
+            "value" : "לא נמצאה כתובת לולאה חוזרת. יש להפעיל את [LocalDevVPN](https://apps.apple.com/app/id6755608044), או את [sing-box](https://sing-box.sagernet.org) עם `loopback_address` מוגדר."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "कोई लूपबैक पता नहीं मिला।"
+            "value" : "कोई लूपबैक पता नहीं मिला। [LocalDevVPN](https://apps.apple.com/app/id6755608044) चालू करें, या `loopback_address` कॉन्फ़िगर किया हुआ [sing-box](https://sing-box.sagernet.org) चालू करें।"
           }
         },
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adresa povratne petlje nije pronađena."
+            "value" : "Adresa povratne petlje nije pronađena. Uključite [LocalDevVPN](https://apps.apple.com/app/id6755608044) ili [sing-box](https://sing-box.sagernet.org) s konfiguriranim `loopback_address`."
           }
         },
         "hu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nem található visszacsatolási cím."
+            "value" : "Nem található visszacsatolási cím. Kapcsolja be a(z) [LocalDevVPN](https://apps.apple.com/app/id6755608044) alkalmazást, vagy a(z) [sing-box](https://sing-box.sagernet.org) alkalmazást beállított `loopback_address` értékkel."
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alamat loopback tidak ditemukan."
+            "value" : "Alamat loopback tidak ditemukan. Aktifkan [LocalDevVPN](https://apps.apple.com/app/id6755608044), atau [sing-box](https://sing-box.sagernet.org) dengan `loopback_address` yang telah dikonfigurasi."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nessun indirizzo di loopback trovato."
+            "value" : "Nessun indirizzo di loopback trovato. Attiva [LocalDevVPN](https://apps.apple.com/app/id6755608044), oppure [sing-box](https://sing-box.sagernet.org) con `loopback_address` configurato."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ループバックアドレスが見つかりません。"
+            "value" : "ループバックアドレスが見つかりません。[LocalDevVPN](https://apps.apple.com/app/id6755608044)、または`loopback_address`を設定した[sing-box](https://sing-box.sagernet.org)をオンにしてください。"
           }
         },
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Loopback мекенжайы табылмады."
+            "value" : "Loopback мекенжайы табылмады. [LocalDevVPN](https://apps.apple.com/app/id6755608044) қолданбасын немесе `loopback_address` бапталған [sing-box](https://sing-box.sagernet.org) қолданбасын қосыңыз."
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ಯಾವುದೇ ಲೂಪ್‌ಬ್ಯಾಕ್ ವಿಳಾಸ ಕಂಡುಬಂದಿಲ್ಲ."
+            "value" : "ಯಾವುದೇ ಲೂಪ್‌ಬ್ಯಾಕ್ ವಿಳಾಸ ಕಂಡುಬಂದಿಲ್ಲ. [LocalDevVPN](https://apps.apple.com/app/id6755608044) ಆನ್ ಮಾಡಿ, ಅಥವಾ `loopback_address` ಕಾನ್ಫಿಗರ್ ಮಾಡಿದ [sing-box](https://sing-box.sagernet.org) ಆನ್ ಮಾಡಿ."
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "루프백 주소를 찾을 수 없습니다."
+            "value" : "루프백 주소를 찾을 수 없습니다. [LocalDevVPN](https://apps.apple.com/app/id6755608044)을(를) 켜거나 `loopback_address`이(가) 설정된 [sing-box](https://sing-box.sagernet.org)을(를) 켜십시오."
           }
         },
         "lt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Grįžtamojo ryšio adresas nerastas."
+            "value" : "Grįžtamojo ryšio adresas nerastas. Įjunkite [LocalDevVPN](https://apps.apple.com/app/id6755608044) arba [sing-box](https://sing-box.sagernet.org) su sukonfigūruotu `loopback_address`."
           }
         },
         "ml" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ലൂപ്പ്ബാക്ക് വിലാസമൊന്നും കണ്ടെത്തിയില്ല."
+            "value" : "ലൂപ്പ്ബാക്ക് വിലാസമൊന്നും കണ്ടെത്തിയില്ല. [LocalDevVPN](https://apps.apple.com/app/id6755608044) ഓണാക്കൂ, അല്ലെങ്കിൽ `loopback_address` കോൺഫിഗർ ചെയ്ത [sing-box](https://sing-box.sagernet.org) ഓണാക്കൂ."
           }
         },
         "mr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "लूपबॅक पत्ता सापडला नाही."
+            "value" : "लूपबॅक पत्ता सापडला नाही. [LocalDevVPN](https://apps.apple.com/app/id6755608044) सुरू करा, किंवा `loopback_address` कॉन्फिगर केलेले [sing-box](https://sing-box.sagernet.org) सुरू करा."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tiada alamat gelung balik ditemui."
+            "value" : "Tiada alamat gelung balik ditemui. Hidupkan [LocalDevVPN](https://apps.apple.com/app/id6755608044), atau [sing-box](https://sing-box.sagernet.org) dengan `loopback_address` dikonfigurasikan."
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fant ingen loopback-adresse."
+            "value" : "Fant ingen loopback-adresse. Slå på [LocalDevVPN](https://apps.apple.com/app/id6755608044), eller [sing-box](https://sing-box.sagernet.org) med `loopback_address` konfigurert."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geen loopbackadres gevonden."
+            "value" : "Geen loopbackadres gevonden. Schakel [LocalDevVPN](https://apps.apple.com/app/id6755608044) in, of [sing-box](https://sing-box.sagernet.org) met `loopback_address` geconfigureerd."
           }
         },
         "or" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "କୌଣସି ଲୁପ୍‌ବ୍ୟାକ୍ ଠିକଣା ମିଳିଲା ନାହିଁ।"
+            "value" : "କୌଣସି ଲୁପ୍‌ବ୍ୟାକ୍ ଠିକଣା ମିଳିଲା ନାହିଁ। [LocalDevVPN](https://apps.apple.com/app/id6755608044) ଚାଲୁ କରନ୍ତୁ, କିମ୍ବା `loopback_address` କନଫିଗର୍ କରାଯାଇଥିବା [sing-box](https://sing-box.sagernet.org) ଚାଲୁ କରନ୍ତୁ।"
           }
         },
         "pa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ਕੋਈ ਲੂਪਬੈਕ ਪਤਾ ਨਹੀਂ ਮਿਲਿਆ।"
+            "value" : "ਕੋਈ ਲੂਪਬੈਕ ਪਤਾ ਨਹੀਂ ਮਿਲਿਆ। [LocalDevVPN](https://apps.apple.com/app/id6755608044) ਚਾਲੂ ਕਰੋ, ਜਾਂ `loopback_address` ਕੌਂਫਿਗਰ ਕੀਤਾ [sing-box](https://sing-box.sagernet.org) ਚਾਲੂ ਕਰੋ।"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nie znaleziono adresu pętli zwrotnej."
+            "value" : "Nie znaleziono adresu pętli zwrotnej. Włącz [LocalDevVPN](https://apps.apple.com/app/id6755608044) lub [sing-box](https://sing-box.sagernet.org) ze skonfigurowanym `loopback_address`."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nenhum endereço de loopback encontrado."
+            "value" : "Nenhum endereço de loopback encontrado. Ative o [LocalDevVPN](https://apps.apple.com/app/id6755608044), ou o [sing-box](https://sing-box.sagernet.org) com `loopback_address` configurado."
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não foi encontrado nenhum endereço de loopback."
+            "value" : "Não foi encontrado nenhum endereço de loopback. Ative o [LocalDevVPN](https://apps.apple.com/app/id6755608044), ou o [sing-box](https://sing-box.sagernet.org) com `loopback_address` configurado."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nu s-a găsit nicio adresă de loopback."
+            "value" : "Nu s-a găsit nicio adresă de loopback. Activați [LocalDevVPN](https://apps.apple.com/app/id6755608044) sau [sing-box](https://sing-box.sagernet.org) cu `loopback_address` configurat."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Петлевой адрес не найден."
+            "value" : "Петлевой адрес не найден. Включите [LocalDevVPN](https://apps.apple.com/app/id6755608044) или [sing-box](https://sing-box.sagernet.org) с настроенным `loopback_address`."
           }
         },
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nenašla sa žiadna loopback adresa."
+            "value" : "Nenašla sa žiadna loopback adresa. Zapnite [LocalDevVPN](https://apps.apple.com/app/id6755608044) alebo [sing-box](https://sing-box.sagernet.org) s nakonfigurovaným `loopback_address`."
           }
         },
         "sl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Naslov povratne zanke ni bil najden."
+            "value" : "Naslov povratne zanke ni bil najden. Vklopite [LocalDevVPN](https://apps.apple.com/app/id6755608044) ali [sing-box](https://sing-box.sagernet.org) z nastavljenim `loopback_address`."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ingen loopback-adress hittades."
+            "value" : "Ingen loopback-adress hittades. Slå på [LocalDevVPN](https://apps.apple.com/app/id6755608044), eller [sing-box](https://sing-box.sagernet.org) med `loopback_address` konfigurerat."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "லூப்பேக் முகவரி எதுவும் கண்டறியப்படவில்லை."
+            "value" : "லூப்பேக் முகவரி எதுவும் கண்டறியப்படவில்லை. [LocalDevVPN](https://apps.apple.com/app/id6755608044)-ஐ இயக்கவும், அல்லது `loopback_address` உள்ளமைக்கப்பட்ட [sing-box](https://sing-box.sagernet.org)-ஐ இயக்கவும்."
           }
         },
         "te" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "లూప్‌బ్యాక్ అడ్రస్ ఏదీ కనుగొనబడలేదు."
+            "value" : "లూప్‌బ్యాక్ అడ్రస్ ఏదీ కనుగొనబడలేదు. [LocalDevVPN](https://apps.apple.com/app/id6755608044)‌ను ఆన్ చేయండి, లేదా `loopback_address` కాన్ఫిగర్ చేసిన [sing-box](https://sing-box.sagernet.org)‌ను ఆన్ చేయండి."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ไม่พบที่อยู่ลูปแบ็ค"
+            "value" : "ไม่พบที่อยู่ลูปแบ็ค เปิด [LocalDevVPN](https://apps.apple.com/app/id6755608044) หรือ [sing-box](https://sing-box.sagernet.org) ที่ตั้งค่า `loopback_address` ไว้"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Geri döngü adresi bulunamadı."
+            "value" : "Geri döngü adresi bulunamadı. [LocalDevVPN](https://apps.apple.com/app/id6755608044) uygulamasını ya da `loopback_address` yapılandırılmış [sing-box](https://sing-box.sagernet.org) uygulamasını açın."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не знайдено адреси зворотної петлі."
+            "value" : "Не знайдено адреси зворотної петлі. Увімкніть [LocalDevVPN](https://apps.apple.com/app/id6755608044) або [sing-box](https://sing-box.sagernet.org) з налаштованим `loopback_address`."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "کوئی لوپ بیک ایڈریس نہیں ملا۔"
+            "value" : "کوئی لوپ بیک ایڈریس نہیں ملا۔ [LocalDevVPN](https://apps.apple.com/app/id6755608044) آن کریں، یا `loopback_address` کنفیگر کیا ہوا [sing-box](https://sing-box.sagernet.org) آن کریں۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Không tìm thấy địa chỉ loopback."
+            "value" : "Không tìm thấy địa chỉ loopback. Hãy bật [LocalDevVPN](https://apps.apple.com/app/id6755608044), hoặc [sing-box](https://sing-box.sagernet.org) đã cấu hình `loopback_address`."
           }
         },
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到回繞位址。"
+            "value" : "找不到回繞位址。請開啟 [LocalDevVPN](https://apps.apple.com/app/id6755608044)，或已設定 `loopback_address` 的 [sing-box](https://sing-box.sagernet.org)。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未探测到回环地址。"
+            "value" : "未探测到回环地址。需要开启 [LocalDevVPN](https://apps.apple.com/app/id6755608044)，或配置了 `loopback_address` 的 [sing-box](https://sing-box.sagernet.org)。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "找不到回送位址。"
+            "value" : "找不到回送位址。請開啟 [LocalDevVPN](https://apps.apple.com/app/id6755608044)，或已設定 `loopback_address` 的 [sing-box](https://sing-box.sagernet.org)。"
           }
         }
       }

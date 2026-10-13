@@ -85,6 +85,33 @@ func scan() ([]tunnel, []netip.Addr) {
 	return tunnels, local
 }
 
+func onLocalNetwork(address netip.Addr) bool {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return false
+	}
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagBroadcast == 0 {
+			continue
+		}
+		addresses, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, ifaceAddress := range addresses {
+			network, isNetwork := ifaceAddress.(*net.IPNet)
+			if !isNetwork {
+				continue
+			}
+			ip, valid := netip.AddrFromSlice(network.IP)
+			if valid && ip.Unmap() == address {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func readRIB(kind route.RIBType) []route.Message {
 	rib, err := route.FetchRIB(syscall.AF_UNSPEC, kind, 0)
 	if err != nil {

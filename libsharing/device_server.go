@@ -62,21 +62,31 @@ const defaultRemotePairingPort = 49152
 
 const vpnProbeTimeout = 2 * time.Second
 
-func DetectLoopbackAddress(remotePairingPort int32) string {
+type LoopbackAddress struct {
+	Address      string
+	LocalNetwork bool
+}
+
+func newLoopbackAddress(peer vpnpeer.Peer) *LoopbackAddress {
+	return &LoopbackAddress{Address: peer.Address.String(), LocalNetwork: peer.LocalNetwork}
+}
+
+func DetectLoopbackAddress(remotePairingPort int32) *LoopbackAddress {
 	port := uint16(remotePairingPort)
 	if port == 0 {
 		port = defaultRemotePairingPort
 	}
-	address, err := vpnpeer.Find(context.Background(), vpnpeer.Candidates(), port, time.Second)
+	peer, err := vpnpeer.Find(context.Background(), vpnpeer.Candidates(), port, time.Second)
 	if err != nil {
-		return ""
+		return nil
 	}
-	return address.String()
+	return newLoopbackAddress(peer)
 }
 
 type DeviceServer struct {
 	pairingPort atomic.Uint32
 	port        int32
+	loopback    atomic.Pointer[LoopbackAddress]
 	server      *deviceserver.Server
 }
 
@@ -109,22 +119,23 @@ func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) 
 			if file.lockdown != nil {
 				port = lockdown.Port
 			}
-			address, err := vpnpeer.Find(ctx, vpnpeer.Candidates(), port, vpnProbeTimeout)
+			peer, err := vpnpeer.Find(ctx, vpnpeer.Candidates(), port, vpnProbeTimeout)
 			if err != nil {
 				return nil, err
 			}
+			s.loopback.Store(newLoopbackAddress(peer))
 			if connectLogger != nil {
-				connectLogger.Info("device address", "address", address)
+				connectLogger.Info("device address", "address", peer.Address, "local_network", peer.LocalNetwork)
 			}
 			if file.lockdown != nil {
 				return coredevice.ConnectLockdown(ctx, coredevice.LockdownOptions{
-					Address: address,
+					Address: peer.Address,
 					Record:  file.lockdown,
 					Logger:  connectLogger,
 				})
 			}
 			return coredevice.ConnectRemotePairing(ctx, coredevice.RemotePairingOptions{
-				Address: netip.AddrPortFrom(address, port),
+				Address: netip.AddrPortFrom(peer.Address, port),
 				Record:  file.remote,
 				Logger:  connectLogger,
 			})
@@ -162,6 +173,10 @@ func (s *DeviceServer) Start() error {
 	servingDevices.ports[s] = s.port
 	servingDevices.access.Unlock()
 	return nil
+}
+
+func (s *DeviceServer) LoopbackAddress() *LoopbackAddress {
+	return s.loopback.Load()
 }
 
 func (s *DeviceServer) SetRemotePairingPort(port int32) {

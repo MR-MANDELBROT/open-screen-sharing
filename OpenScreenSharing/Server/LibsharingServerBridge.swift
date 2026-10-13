@@ -9,11 +9,11 @@ nonisolated struct DeviceServerStateChange: Sendable {
 
 nonisolated final class DeviceServerEvents: NSObject, LibsharingDeviceServerHandlerProtocol, @unchecked Sendable {
     private let deliver: @Sendable (DeviceServerStateChange) -> Void
-    private let deliverViewer: @Sendable (_ viewerID: Int64, _ connected: Bool, _ problem: String?) -> Void
+    private let deliverViewer: @Sendable (_ viewerID: Int64, _ connected: Bool) -> Void
 
     init(
         state deliver: @escaping @Sendable (DeviceServerStateChange) -> Void,
-        viewer deliverViewer: @escaping @Sendable (_ viewerID: Int64, _ connected: Bool, _ problem: String?) -> Void
+        viewer deliverViewer: @escaping @Sendable (_ viewerID: Int64, _ connected: Bool) -> Void
     ) {
         self.deliver = deliver
         self.deliverViewer = deliverViewer
@@ -26,11 +26,11 @@ nonisolated final class DeviceServerEvents: NSObject, LibsharingDeviceServerHand
     func onDeviceInfo(_ name: String?, model: String?, osVersion: String?) {}
 
     func onViewerConnected(_ viewerID: Int64, address: String?) {
-        deliverViewer(viewerID, true, nil)
+        deliverViewer(viewerID, true)
     }
 
     func onViewerDisconnected(_ viewerID: Int64, errorCode: Int32, message: String?) {
-        deliverViewer(viewerID, false, errorCode == LibsharingDeviceErrorNone ? nil : message ?? "")
+        deliverViewer(viewerID, false)
     }
 
     func onStreaming(_ active: Bool) {}
