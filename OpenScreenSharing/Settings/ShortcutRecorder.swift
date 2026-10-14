@@ -114,6 +114,8 @@ private struct KeyCapture: UIViewRepresentable {
 
         override var canBecomeFocused: Bool { true }
 
+        override var keyCommands: [UIKeyCommand]? { KeyShortcuts.shared.passthroughKeyCommands(includingAssigned: true) }
+
         override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
             let unhandled = presses.filter { press in
                 guard let key = press.key else { return true }

@@ -551,6 +551,28 @@ final class KeyShortcuts: ObservableObject {
     func isAssigned(_ event: NSEvent) -> Bool {
         KeyShortcut(event: event).map { action(using: $0) != nil } ?? false
     }
+    #else
+    // The SwiftUI App lifecycle on iPadOS consumes these chords before the first responder's pressesBegan,
+    // unless the responder chain declares a key command for them; one whose action nobody performs lets the press through.
+    private static let swiftUIConsumed: [(input: String, flags: UIKeyModifierFlags)] = [
+        ("b", .command), ("i", .command), ("u", .command), ("e", .command), ("f", .command), ("f", [.command, .alternate]),
+        ("g", .command), ("g", [.command, .shift]), ("-", .command), ("=", [.command, .shift]), ("[", [.command, .shift]),
+        ("]", [.command, .shift]), ("\\", [.command, .shift]), ("s", [.command, .control]),
+    ]
+
+    func passthroughKeyCommands(includingAssigned: Bool) -> [UIKeyCommand] {
+        Self.swiftUIConsumed.compactMap { input, flags in
+            var modifiers: EventModifiers = []
+            if flags.contains(.control) { modifiers.insert(.control) }
+            if flags.contains(.alternate) { modifiers.insert(.option) }
+            if flags.contains(.shift) { modifiers.insert(.shift) }
+            if flags.contains(.command) { modifiers.insert(.command) }
+            guard includingAssigned || action(using: KeyShortcut(key: input, modifiers: modifiers)) == nil else { return nil }
+            let command = UIKeyCommand(input: input, modifierFlags: flags, action: NSSelectorFromString("passKeyThrough:"))
+            command.wantsPriorityOverSystemBehavior = true
+            return command
+        }
+    }
     #endif
 }
 

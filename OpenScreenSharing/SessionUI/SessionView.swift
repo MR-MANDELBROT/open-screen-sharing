@@ -59,8 +59,8 @@ struct SessionView: View {
         controller.picture == .none ? .dark : nil
     }
 
-    init(route: SessionRoute, hasOwnWindow: Bool = true, onClose: @escaping () -> Void) {
-        _controller = StateObject(wrappedValue: SessionController(route: route))
+    init(controller: @autoclosure @escaping () -> SessionController, hasOwnWindow: Bool = true, onClose: @escaping () -> Void) {
+        _controller = StateObject(wrappedValue: controller())
         self.hasOwnWindow = hasOwnWindow
         self.onClose = onClose
     }

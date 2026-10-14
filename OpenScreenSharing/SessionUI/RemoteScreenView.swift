@@ -587,6 +587,11 @@ final class RemoteScreenUIView: UIView {
         controller.releaseAllKeys()
     }
 
+    // UIKit performs main menu key commands through this action, which then sends each command's own action.
+    static let mainMenuShortcut = NSSelectorFromString("_performMainMenuShortcutKeyCommand:")
+
+    override var keyCommands: [UIKeyCommand]? { KeyShortcuts.shared.passthroughKeyCommands(includingAssigned: false) }
+
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         let unhandled = handlePresses(presses, down: true)
         if !unhandled.isEmpty {
@@ -630,7 +635,7 @@ final class RemoteScreenUIView: UIView {
         if action == #selector(paste(_:)) {
             return canPerformAction(action, withSender: sender) ? self : nil
         }
-        return controller.isControlling ? nil : super.target(forAction: action, withSender: sender)
+        return controller.isControlling && action != Self.mainMenuShortcut ? nil : super.target(forAction: action, withSender: sender)
     }
 }
 

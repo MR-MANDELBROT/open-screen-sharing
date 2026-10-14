@@ -33,7 +33,7 @@ struct HomeView: View {
     @State private var editing: Computer?
     @State private var setup: SetupRequest?
     @State private var pendingRoute: SessionRoute?
-    @State private var activeSession: SessionRoute?
+    @State private var activeSession: SessionController?
     @State private var alert: AlertState?
     @State private var actions = HomeActions()
     @State private var isWatchingConnections = false
@@ -47,11 +47,16 @@ struct HomeView: View {
     var body: some View {
         layout
             #if os(iOS)
-            .fullScreenCover(item: $activeSession) { route in
-                SessionView(route: route, hasOwnWindow: false) {
+            .fullScreenCover(item: $activeSession) { controller in
+                SessionView(controller: controller, hasOwnWindow: false) {
                     activeSession = nil
                 }
                 .modifier(StorageNoticeAlert())
+            }
+            .background {
+                if let activeSession {
+                    Color.clear.focusedSceneValue(\.sessionController, activeSession)
+                }
             }
             #endif
             .modifier(StorageNoticeAlert())
@@ -212,7 +217,7 @@ struct HomeView: View {
         if activeSession != nil, let openSessionWindow {
             openSessionWindow(route)
         } else {
-            activeSession = route
+            activeSession = SessionController(route: route)
         }
         #else
         openSessionWindow?(route)

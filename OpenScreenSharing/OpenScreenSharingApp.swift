@@ -117,7 +117,7 @@ struct SessionWindow: View {
 
     var body: some View {
         if let route {
-            SessionView(route: WindowPasswords.receive(route)) {
+            SessionView(controller: SessionController(route: WindowPasswords.receive(route))) {
                 DispatchQueue.main.async { dismissWindow() }
             }
         } else {

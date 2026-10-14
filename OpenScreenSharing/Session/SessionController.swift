@@ -117,7 +117,7 @@ private struct KeyboardSourceRequest {
     var step: Step
 }
 
-final class SessionController: ObservableObject {
+final class SessionController: ObservableObject, Identifiable {
     let route: SessionRoute
     @Published private(set) var title: String
     @Published private(set) var phase: SessionPhase = .idle {
@@ -1953,8 +1953,9 @@ final class SessionController: ObservableObject {
         }
         var shortcut: KeyShortcut?
         if down, isControlling {
-            keyboardType = keyboardType.learning(from: usage)
             shortcut = KeyShortcut(key: key)
+            if let shortcut, KeyShortcuts.shared.action(using: shortcut) != nil { return false }
+            keyboardType = keyboardType.learning(from: usage)
             if let shortcut, let mapping = KeyShortcuts.shared.mapping(triggeredBy: shortcut, for: mappingTarget) {
                 performMapping(mapping.steps, held: heldModifiers(from: key.modifierFlags))
                 return true

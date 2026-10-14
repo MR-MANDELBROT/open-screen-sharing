@@ -371,7 +371,7 @@ final class KeyInputProxy: UIView, UITextInput {
         if action == #selector(paste(_:)) {
             return canPerformAction(action, withSender: sender) ? self : nil
         }
-        return controller?.isControlling == true ? nil : super.target(forAction: action, withSender: sender)
+        return controller?.isControlling == true && action != RemoteScreenUIView.mainMenuShortcut ? nil : super.target(forAction: action, withSender: sender)
     }
 }
 
