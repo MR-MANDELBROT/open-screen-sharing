@@ -13,6 +13,7 @@ final class UpdateManager: ObservableObject {
     private enum Key {
         static let checksAutomatically = "checksForUpdatesAutomatically"
         static let githubToken = "githubToken"
+        static let track = "updateTrack"
         static let presentedBuild = "presentedUpdateBuild"
     }
 
@@ -30,6 +31,10 @@ final class UpdateManager: ObservableObject {
         didSet { store.set(githubToken, for: Key.githubToken) }
     }
 
+    @Published var track: UpdateTrack {
+        didSet { store.set(track, for: Key.track) }
+    }
+
     @Published private(set) var isChecking = false
     @Published private(set) var phase = Phase.idle
     @Published private(set) var progress = 0.0
@@ -42,6 +47,7 @@ final class UpdateManager: ObservableObject {
     private init() {
         checksAutomatically = store.value(Bool.self, for: Key.checksAutomatically) ?? false
         githubToken = store.value(String.self, for: Key.githubToken) ?? ""
+        track = store.value(UpdateTrack.self, for: Key.track) ?? .stable
     }
 
     func checkOnLaunch() {
@@ -69,7 +75,7 @@ final class UpdateManager: ObservableObject {
         defer { isChecking = false }
         let update: AvailableUpdate?
         do {
-            update = try await UpdateChecker.check(token: githubToken)
+            update = try await UpdateChecker.check(track: track, token: githubToken)
         } catch {
             Self.logger.error("check for updates: \(error, privacy: .public)")
             if manually {
@@ -92,7 +98,7 @@ final class UpdateManager: ObservableObject {
         phase = .downloading
         progress = 0
         do {
-            let package = try await UpdateChecker.download(update, token: githubToken) { progress in
+            let package = try await UpdateChecker.download(update, track: track, token: githubToken) { progress in
                 DispatchQueue.main.async { self.progress = progress }
             }
             phase = .installing

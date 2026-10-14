@@ -11,14 +11,24 @@ Open Screen Sharing aims to develop superior servers and clients based on the pr
 Add the source to SideStore or AltStore:
 
 ```
-https://github.com/nekohasekai/open-screen-sharing/releases/download/nightly/altstore.json
+https://github.com/nekohasekai/open-screen-sharing/releases/latest/download/altstore.json
 ```
 
-Or download [OpenScreenSharing.ipa](https://github.com/nekohasekai/open-screen-sharing/releases/download/nightly/OpenScreenSharing.ipa) and sideload it.
+Or download [OpenScreenSharing.ipa](https://github.com/nekohasekai/open-screen-sharing/releases/latest/download/OpenScreenSharing.ipa) and sideload it.
 
 ### macOS
 
-Download and install [OpenScreenSharing.pkg](https://github.com/nekohasekai/open-screen-sharing/releases/download/nightly/OpenScreenSharing.pkg).
+Download and install [OpenScreenSharing.pkg](https://github.com/nekohasekai/open-screen-sharing/releases/latest/download/OpenScreenSharing.pkg).
+
+### Nightly builds
+
+You can download and install nightly builds from the [Nightly release](https://github.com/nekohasekai/open-screen-sharing/releases/tag/nightly). For AltStore or SideStore on iOS, the source URL is:
+
+```
+https://github.com/nekohasekai/open-screen-sharing/releases/download/nightly/altstore.json
+```
+
+You can also switch to the Nightly track in the App settings of the macOS app and update directly.
 
 ## Features
 

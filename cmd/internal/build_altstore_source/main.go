@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -20,7 +20,6 @@ import (
 
 const (
 	ipaPath    = "build/OpenScreenSharing.ipa"
-	iconPath   = "OpenScreenSharing/Resources/AppIcon.icon"
 	outputPath = "build/altstore"
 )
 
@@ -63,13 +62,23 @@ type permissions struct {
 var infoPlistName = regexp.MustCompile(`^Payload/[^/]+\.app/Info\.plist$`)
 
 func main() {
+	tag := flag.String("tag", "nightly", "release tag")
+	flag.Parse()
 	repository := os.Getenv("GITHUB_REPOSITORY")
 	if repository == "" {
 		repository = "nekohasekai/open-screen-sharing"
 	}
 	websiteURL := "https://github.com/" + repository
-	releaseURL := websiteURL + "/releases/download/nightly/"
+	releaseURL := websiteURL + "/releases/download/" + *tag + "/"
 	info := readInfoPlist()
+	name := "Open Screen Sharing Nightly"
+	identifier := info["CFBundleIdentifier"].(string)
+	sourceURL := releaseURL + "altstore.json"
+	if *tag != "nightly" {
+		name = "Open Screen Sharing"
+		identifier += ".stable"
+		sourceURL = websiteURL + "/releases/latest/download/altstore.json"
+	}
 	content, err := os.ReadFile(ipaPath)
 	if err != nil {
 		log.Fatal(err)
@@ -82,19 +91,14 @@ func main() {
 			privacy[key] = description
 		}
 	}
-	err = os.RemoveAll(outputPath)
-	if err != nil {
-		log.Fatal(err)
-	}
 	err = os.MkdirAll(outputPath, 0o755)
 	if err != nil {
 		log.Fatal(err)
 	}
-	renderIcon(filepath.Join(outputPath, "icon.png"))
 	appSource := source{
-		Name:       "Open Screen Sharing",
-		Identifier: info["CFBundleIdentifier"].(string),
-		SourceURL:  releaseURL + "altstore.json",
+		Name:       name,
+		Identifier: identifier,
+		SourceURL:  sourceURL,
 		IconURL:    releaseURL + "icon.png",
 		Website:    websiteURL,
 		Apps: []app{{
@@ -157,35 +161,4 @@ func readInfoPlist() map[string]any {
 		log.Fatal(err)
 	}
 	return info
-}
-
-func renderIcon(path string) {
-	developerPath, err := exec.Command("xcode-select", "-p").Output()
-	if err != nil {
-		log.Fatal(err)
-	}
-	ictool := filepath.Join(strings.TrimSpace(string(developerPath)), "../Applications/Icon Composer.app/Contents/Executables/ictool")
-	command := exec.Command(ictool, iconPath,
-		"--export-image",
-		"--output-file", path,
-		"--platform", "iOS",
-		"--rendition", "Default",
-		"--width", "568",
-		"--height", "568",
-		"--scale", "1",
-	)
-	command.Stderr = os.Stderr
-	err = command.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-	// AltStore draws icons on a white background, clipped to a circle or a height/5 corner radius
-	// (AltStore fafd76e, AltStore/Components/AppIconImageView.swift:46-65), so the transparent
-	// corners and edge highlight of the exported squircle show up as a white border.
-	command = exec.Command("sips", "--cropToHeightWidth", "512", "512", path)
-	command.Stderr = os.Stderr
-	err = command.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
 }

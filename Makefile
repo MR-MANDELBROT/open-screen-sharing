@@ -35,6 +35,14 @@ archive_ios_ipa:
 	rm -rf build/Payload
 
 altstore_source:
+	rm -rf build/altstore
+	mkdir -p build/altstore
+	"$$(xcode-select -p)/../Applications/Icon Composer.app/Contents/Executables/ictool" OpenScreenSharing/Resources/AppIcon.icon \
+		--export-image --output-file build/altstore/icon.png --platform iOS --rendition Default --width 568 --height 568 --scale 1 > /dev/null
+	# AltStore draws icons on a white background, clipped to a circle or a height/5 corner radius
+	# (AltStore fafd76e, AltStore/Components/AppIconImageView.swift:46-65), so the transparent
+	# corners and edge highlight of the exported squircle show up as a white border.
+	sips --cropToHeightWidth 512 512 build/altstore/icon.png > /dev/null
 	go run ./cmd/internal/build_altstore_source
 
 .PHONY: screenshots

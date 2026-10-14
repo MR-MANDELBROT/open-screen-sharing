@@ -59,6 +59,9 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 1
+      - name: Select Xcode
+        if: steps.library.outputs.cache-hit != 'true'
+        run: .github/select_xcode.sh
       - name: Setup Go
         if: steps.library.outputs.cache-hit != 'true'
         uses: actions/setup-go@v5
@@ -94,6 +97,8 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 1
+      - name: Select Xcode
+        run: .github/select_xcode.sh
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -189,6 +194,8 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 1
+      - name: Select Xcode
+        run: .github/select_xcode.sh
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -238,6 +245,8 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 1
+      - name: Select Xcode
+        run: .github/select_xcode.sh
       - name: Setup Apple certificates
         run: |-
           KEYCHAIN_PATH=$RUNNER_TEMP/apple-signing.keychain-db
@@ -290,11 +299,19 @@ jobs:
         run: make archive_macos export_macos build_macos_pkg notarize_macos_pkg
         env:
           XCODEBUILD_FLAGS: CURRENT_PROJECT_VERSION=${{ needs.calculate_version.outputs.build_number }} COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=${{ runner.temp }}/CompilationCache
+      - name: Write metadata
+        run: |-
+          INFO_PLIST="build/OpenScreenSharing-macOS/Screen Sharing.app/Contents/Info.plist"
+          VERSION=$(plutil -extract CFBundleShortVersionString raw "$INFO_PLIST")
+          BUILD=$(plutil -extract CFBundleVersion raw "$INFO_PLIST")
+          printf '{"version":"%s","build":%s}\n' "$VERSION" "$BUILD" > build/metadata.json
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
           name: OpenScreenSharing-macOS-PKG
-          path: build/OpenScreenSharing.pkg
+          path: |-
+            build/OpenScreenSharing.pkg
+            build/metadata.json
           if-no-files-found: error
   publish_nightly:
     name: Publish nightly
@@ -328,7 +345,6 @@ jobs:
           git push -f origin refs/tags/nightly
           ASSETS=(dist/OpenScreenSharing.ipa dist/altstore/altstore.json dist/altstore/icon.png)
           if [ -f dist/OpenScreenSharing.pkg ]; then
-            jq -n --argjson build "$BUILD_NUMBER" '{build: $build}' > dist/metadata.json
             ASSETS+=(dist/OpenScreenSharing.pkg dist/metadata.json)
           fi
           gh release create "nightly-$BUILD_NUMBER" --draft --prerelease --target "$GITHUB_SHA" --title "Nightly build" --notes "$NOTES" "${ASSETS[@]}"

@@ -10,8 +10,12 @@ struct UpdateSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("A New Build Is Available")
-                .font(.headline)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("A New Build Is Available")
+                    .font(.headline)
+                Text(verbatim: "\(update.version) (\(update.build))")
+                    .foregroundStyle(.secondary)
+            }
             if !update.notes.isEmpty {
                 ScrollView {
                     Text(notes)
@@ -30,7 +34,7 @@ struct UpdateSheet: View {
                     .progressViewStyle(.linear)
             }
             HStack {
-                Button("View Release") { openURL(UpdateChecker.releasePage) }
+                Button("View Release") { openURL(update.page) }
                 Spacer()
                 Group {
                     Button("Cancel", role: .cancel) { dismiss() }

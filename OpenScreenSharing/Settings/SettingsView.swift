@@ -137,6 +137,12 @@ private struct UpdatesSection: View {
             Toggle(isOn: $updates.checksAutomatically) {
                 Label("Check for Updates Automatically", systemImage: "clock.arrow.circlepath")
             }
+            Picker(selection: $updates.track) {
+                Text("Stable").tag(UpdateTrack.stable)
+                Text("Nightly").tag(UpdateTrack.nightly)
+            } label: {
+                Label("Update Track", systemImage: "arrow.triangle.branch")
+            }
             LabeledContentCompat {
                 Button("Set") { isEditingToken = true }
                     .sheet(isPresented: $isEditingToken) {
@@ -222,7 +228,7 @@ private struct GitHubTokenSheet: View {
             guard !trimmedToken.isEmpty else { return }
             do {
                 try await Task.sleep(for: .milliseconds(500))
-                _ = try await UpdateChecker.check(token: trimmedToken)
+                _ = try await UpdateChecker.check(track: updates.track, token: trimmedToken)
                 isUsable = true
             } catch {}
         }
