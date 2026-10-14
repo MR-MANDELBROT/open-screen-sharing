@@ -1,0 +1,48 @@
+package h264
+
+import (
+	"bytes"
+
+	E "github.com/sagernet/sing/common/exceptions"
+)
+
+const (
+	nalSlice  = 1
+	nalIDR    = 5
+	nalSPS    = 7
+	nalPPS    = 8
+	nalAUD    = 9
+	nalFiller = 12
+)
+
+var startCode = []byte{0, 0, 1}
+
+func splitAnnexB(data []byte, units [][]byte) ([][]byte, error) {
+	units = units[:0]
+	if len(bytes.Trim(data, "\x00")) == 0 {
+		return units, nil
+	}
+	start := bytes.Index(data, startCode)
+	if start < 0 || len(bytes.TrimLeft(data[:start], "\x00")) > 0 {
+		return nil, E.New("h264: bitstream does not start with a start code")
+	}
+	data = data[start+3:]
+	for {
+		end := bytes.Index(data, startCode)
+		unit := data
+		if end >= 0 {
+			unit = data[:end]
+		}
+		unit = bytes.TrimRight(unit, "\x00")
+		if len(unit) > 0 {
+			if unit[0]&0x80 != 0 {
+				return nil, E.New("h264: forbidden_zero_bit set")
+			}
+			units = append(units, unit)
+		}
+		if end < 0 {
+			return units, nil
+		}
+		data = data[end+3:]
+	}
+}

@@ -51,6 +51,14 @@ nonisolated struct VirtualDisplayMode: Hashable, Sendable {
         return max(mode.pixelWidth, mode.pixelHeight)
     }
 
+    func aligned(toWidthMultiple multiple: Int) -> VirtualDisplayMode {
+        var mode = self
+        while mode.pixelWidth % multiple != 0 {
+            mode.width -= 1
+        }
+        return mode
+    }
+
     var correction: VirtualDisplayMode? {
         let corrected = VirtualDisplayMode(
             matching: CGSize(width: width, height: height), screenScale: CGFloat(density),
@@ -62,6 +70,9 @@ nonisolated struct VirtualDisplayMode: Hashable, Sendable {
 @MainActor
 final class VirtualDisplayRequests {
     private var send: ((VirtualDisplayMode) -> Void)?
+    private var widthMultiple = 1
+    private var sizedByConnection = false
+    private var framebufferSize: CGSize?
     private var sent: VirtualDisplayMode?
     private var waiting: VirtualDisplayMode?
     private var refused: Set<VirtualDisplayMode> = []
@@ -75,10 +86,13 @@ final class VirtualDisplayRequests {
 
     private static let answerTimeout: TimeInterval = 3
 
-    func reset(sender: ((VirtualDisplayMode) -> Void)?) {
+    func reset(widthMultiple: Int = 1, sizedByConnection: Bool = false, sender: ((VirtualDisplayMode) -> Void)?) {
         answerTask?.cancel()
         answerTask = nil
         send = sender
+        self.widthMultiple = widthMultiple
+        self.sizedByConnection = sizedByConnection
+        framebufferSize = nil
         sent = nil
         waiting = nil
         refused = []
@@ -94,6 +108,10 @@ final class VirtualDisplayRequests {
     func connectionDidOpen(offersVirtualDisplay: Bool) {
         guard isOpening else { return }
         isOpening = false
+        if sizedByConnection, let sent, framebufferSize == CGSize(width: sent.pixelWidth, height: sent.pixelHeight) {
+            reportIdle()
+            return
+        }
         guard offersVirtualDisplay else {
             sent = nil
             return
@@ -103,7 +121,8 @@ final class VirtualDisplayRequests {
         }
     }
 
-    func request(_ mode: VirtualDisplayMode) {
+    func request(_ requested: VirtualDisplayMode) {
+        let mode = requested.aligned(toWidthMultiple: widthMultiple)
         if isOpening {
             guard mode != sent, let send else { return }
             sent = mode
@@ -119,6 +138,7 @@ final class VirtualDisplayRequests {
     }
 
     func framebufferDidChange(width: Int, height: Int) {
+        framebufferSize = CGSize(width: width, height: height)
         guard answerTask != nil, let sent else { return }
         guard sent.pixelWidth == width, sent.pixelHeight == height else {
             framebufferChanged = true
@@ -176,7 +196,9 @@ final class VirtualDisplayRequests {
         }
         if waiting != nil {
             sendWaiting()
-        } else if framebufferChanged, !isCorrection, let correction = sent.correction, !refused.contains(correction) {
+        } else if framebufferChanged, !isCorrection, let correction = sent.correction?.aligned(toWidthMultiple: widthMultiple),
+            correction != sent, !refused.contains(correction)
+        {
             transmit(correction, correction: true)
         }
     }

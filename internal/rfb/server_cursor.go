@@ -5,6 +5,8 @@ import (
 	"compress/zlib"
 	"encoding/binary"
 	"math"
+
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 )
 
 const (
@@ -41,12 +43,14 @@ func pointerCursor(screen ServerScreen) *Cursor {
 		}
 	}
 	return &Cursor{
-		Width:    size,
-		Height:   size,
-		HotspotX: size / 2,
-		HotspotY: size / 2,
-		Pixels:   pixels,
-		CacheID:  pointerCursorID,
+		Cursor: bgra.Cursor{
+			Width:    size,
+			Height:   size,
+			HotspotX: size / 2,
+			HotspotY: size / 2,
+			Pixels:   pixels,
+		},
+		CacheID: pointerCursorID,
 	}
 }
 

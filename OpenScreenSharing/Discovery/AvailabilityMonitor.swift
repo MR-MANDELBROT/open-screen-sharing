@@ -14,7 +14,7 @@ final class AvailabilityMonitor: ObservableObject {
     @Published private(set) var availability: [ComputerAddress: ComputerAvailability] = [:]
 
     private let nearby: NearbyBrowser
-    private var addresses: Set<ComputerAddress> = []
+    private var servers: [ComputerAddress: RemoteProtocol] = [:]
     private var probes: [ComputerAddress: Task<Void, Never>] = [:]
     private var activeClients = 0
     private var pingedServers: Set<String>
@@ -28,13 +28,13 @@ final class AvailabilityMonitor: ObservableObject {
     }
 
     func availability(of address: ComputerAddress) -> ComputerAvailability? {
-        nearby.computer(matching: address) != nil ? .available : availability[address]
+        servers[address].flatMap { nearby.computer(matching: address, remoteProtocol: $0) } != nil ? .available : availability[address]
     }
 
     func start() {
         activeClients += 1
         guard activeClients == 1 else { return }
-        for address in addresses {
+        for address in servers.keys {
             probe(address)
         }
     }
@@ -46,16 +46,17 @@ final class AvailabilityMonitor: ObservableObject {
         probes.removeAll()
     }
 
-    func update(addresses: Set<ComputerAddress>) {
-        for address in self.addresses.subtracting(addresses) {
+    func update(servers: [ComputerAddress: RemoteProtocol]) {
+        for address in self.servers.keys where servers[address] == nil {
             probes[address]?.cancel()
             probes[address] = nil
             availability[address] = nil
         }
-        let added = addresses.subtracting(self.addresses)
-        self.addresses = addresses
+        let changed = servers.keys.filter { self.servers[$0] != servers[$0] }
+        self.servers = servers
         guard activeClients > 0 else { return }
-        for address in added {
+        for address in changed {
+            availability[address] = nil
             probe(address)
         }
     }
@@ -76,7 +77,10 @@ final class AvailabilityMonitor: ObservableObject {
     }
 
     private func check(_ address: ComputerAddress) async -> ComputerAvailability {
-        if nearby.computer(matching: address) != nil {
+        if servers[address] == .rdp {
+            return await AvailabilityProbe.check(address, remoteProtocol: .rdp) == .nothing ? .unavailable : .available
+        }
+        if nearby.computer(matching: address, remoteProtocol: .vnc) != nil {
             return .available
         }
         if address.isLocal, nearby.state == .browsing, nearby.host(matching: address) == nil {
@@ -85,7 +89,7 @@ final class AvailabilityMonitor: ObservableObject {
         if pingedServers.contains(address.serverKey) {
             return await PingProbe.check(address.host) ? .available : .unavailable
         }
-        switch await AvailabilityProbe.check(address) {
+        switch await AvailabilityProbe.check(address, remoteProtocol: .vnc) {
         case .mac:
             return .available
         case .otherServer:
@@ -126,8 +130,8 @@ nonisolated enum AvailabilityProbe {
     private static let queue = DispatchQueue(label: "io.nekohasekai.screensharing.availability", qos: .utility)
     private static let timeout: TimeInterval = 3
 
-    static func check(_ address: ComputerAddress) async -> Answer {
-        let attempt = Attempt(address: address)
+    static func check(_ address: ComputerAddress, remoteProtocol: RemoteProtocol) async -> Answer {
+        let attempt = Attempt(address: address, remoteProtocol: remoteProtocol)
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 attempt.start(continuation)
@@ -145,9 +149,11 @@ nonisolated enum AvailabilityProbe {
     private final class Attempt: @unchecked Sendable {
         private let lock = NSLock()
         private let connection: NWConnection
+        private let remoteProtocol: RemoteProtocol
         private var continuation: CheckedContinuation<Answer, Never>?
 
-        init(address: ComputerAddress) {
+        init(address: ComputerAddress, remoteProtocol: RemoteProtocol) {
+            self.remoteProtocol = remoteProtocol
             let tcp = NWProtocolTCP.Options()
             tcp.connectionTimeout = Int(AvailabilityProbe.timeout)
             connection = NWConnection(
@@ -161,6 +167,8 @@ nonisolated enum AvailabilityProbe {
             lock.withLock { self.continuation = continuation }
             connection.stateUpdateHandler = { [self] state in
                 switch state {
+                case .ready where remoteProtocol == .rdp:
+                    finish(.otherServer)
                 case .ready:
                     connection.receive(minimumIncompleteLength: 12, maximumLength: 12) { [self] data, _, _, _ in
                         finish(AvailabilityProbe.answer(for: data))

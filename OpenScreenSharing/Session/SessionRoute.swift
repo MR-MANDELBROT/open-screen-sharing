@@ -9,12 +9,18 @@ nonisolated struct SessionRoute: Codable, Hashable, Identifiable, Sendable {
     var username: String?
     var password: String?
     var model: String?
-    var serverType: ServerType?
+    var remoteProtocol: RemoteProtocol
+    var usesHighPerformance: Bool?
     var deviceType: DeviceType?
     var server: ServerAuthentication?
 
     var address: ComputerAddress {
         ComputerAddress(host: host, port: port)
+    }
+
+    var knownPlatform: RemotePlatform? {
+        if remoteProtocol == .rdp { return .pc }
+        return (deviceType ?? model.flatMap(DeviceType.init(model:))).map { $0.isIOS ? .iOS : .mac }
     }
 
     init(computer: Computer) {
@@ -24,18 +30,19 @@ nonisolated struct SessionRoute: Codable, Hashable, Identifiable, Sendable {
         port = computer.port
         username = computer.username.isEmpty ? nil : computer.username
         model = computer.model.isEmpty ? nil : computer.model
-        serverType = computer.serverType
-        deviceType = computer.serverType == .apple ? computer.deviceType : nil
+        remoteProtocol = computer.remoteProtocol
+        usesHighPerformance = computer.usesHighPerformance
+        deviceType = computer.usesHighPerformance ? computer.deviceType : nil
     }
 
-    var isTouchScreen: Bool {
-        deviceType?.isTouchScreen ?? false
-    }
-
-    init(name: String, address: ComputerAddress, username: String? = nil, password: String? = nil, model: String? = nil) {
+    init(
+        name: String, address: ComputerAddress, remoteProtocol: RemoteProtocol, username: String? = nil, password: String? = nil,
+        model: String? = nil
+    ) {
         self.name = name
         host = address.host
         port = address.port
+        self.remoteProtocol = remoteProtocol
         self.username = username
         self.password = password
         self.model = model
@@ -43,7 +50,7 @@ nonisolated struct SessionRoute: Codable, Hashable, Identifiable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, computerID, name, host, port, username, model, serverType, deviceType, server
+        case id, computerID, name, host, port, username, model, remoteProtocol, usesHighPerformance, deviceType, server
     }
 }
 

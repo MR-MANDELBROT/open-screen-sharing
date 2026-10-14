@@ -13,7 +13,11 @@ nonisolated struct ComputerAddress: Hashable, Sendable, CustomStringConvertible 
     }
 
     var description: String {
-        if port == ComputerAddress.defaultPort {
+        description(defaultPort: Self.defaultPort)
+    }
+
+    func description(defaultPort: Int) -> String {
+        if port == defaultPort {
             return host
         }
         return host.contains(":") ? "[\(host)]:\(port)" : "\(host):\(port)"
@@ -63,75 +67,96 @@ nonisolated struct ComputerAddress: Hashable, Sendable, CustomStringConvertible 
 }
 
 nonisolated struct ConnectionTarget: Hashable, Sendable {
-    var address: ComputerAddress
+    var host: String
+    var port: Int?
+    var remoteProtocol: RemoteProtocol?
     var username: String?
     var password: String?
-
-    init(address: ComputerAddress, username: String? = nil, password: String? = nil) {
-        self.address = address
-        self.username = username
-        self.password = password
-    }
 
     init?(parsing text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        if trimmed.lowercased().hasPrefix("vnc://") {
-            guard let link = VNCLink(url: URL(string: trimmed)) else { return nil }
-            self = link.target
+        if trimmed.contains("://") {
+            guard let link = RemoteLink(string: trimmed) else { return nil }
+            host = link.address.host
+            port = link.address.port
+            remoteProtocol = link.remoteProtocol
+            username = link.username
+            password = link.password
             return
         }
         var rest = Substring(trimmed)
-        var username: String?
         if let at = rest.lastIndex(of: "@") {
             let name = rest[..<at]
             guard !name.isEmpty else { return nil }
             username = String(name)
             rest = rest[rest.index(after: at)...]
         }
-        guard let address = Self.address(parsing: rest) else { return nil }
-        self.init(address: address, username: username)
+        guard let endpoint = Self.endpoint(parsing: rest) else { return nil }
+        host = endpoint.host
+        port = endpoint.port
     }
 
-    static func address(parsing text: Substring) -> ComputerAddress? {
+    static func endpoint(parsing text: Substring) -> (host: String, port: Int?)? {
         if text.hasPrefix("[") {
             guard let closing = text.firstIndex(of: "]") else { return nil }
             guard let host = ComputerAddress.host(parsing: String(text[...closing])) else { return nil }
             let suffix = text[text.index(after: closing)...]
-            if suffix.isEmpty { return ComputerAddress(host: host) }
+            if suffix.isEmpty { return (host, nil) }
             guard suffix.hasPrefix(":"), let port = Int(suffix.dropFirst()), (1...65535).contains(port) else { return nil }
-            return ComputerAddress(host: host, port: port)
+            return (host, port)
         }
         let colons = text.count(where: { $0 == ":" })
         if colons == 1, let colon = text.firstIndex(of: ":") {
             guard let host = ComputerAddress.host(parsing: String(text[..<colon])),
                 let port = Int(text[text.index(after: colon)...]), (1...65535).contains(port)
             else { return nil }
-            return ComputerAddress(host: host, port: port)
+            return (host, port)
         }
         guard let host = ComputerAddress.host(parsing: String(text)) else { return nil }
-        return ComputerAddress(host: host)
+        return (host, nil)
     }
 }
 
-nonisolated struct VNCLink: Hashable, Sendable {
+nonisolated struct RemoteLink: Hashable, Sendable {
     var address: ComputerAddress
+    var remoteProtocol: RemoteProtocol
     var username: String?
     var password: String?
 
-    var target: ConnectionTarget {
-        ConnectionTarget(address: address, username: username, password: password)
-    }
-
-    init?(url: URL?) {
-        guard let url, url.scheme?.lowercased() == "vnc",
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    init?(string: String) {
+        guard let separator = string.range(of: "://"),
+            let remoteProtocol = RemoteProtocol(rawValue: string[..<separator.lowerBound].lowercased())
         else { return nil }
+        if remoteProtocol == .rdp, let attributes = Self.rdpAttributes(string[separator.upperBound...]) {
+            guard let full = attributes["full address"], let endpoint = ConnectionTarget.endpoint(parsing: Substring(full)) else { return nil }
+            address = ComputerAddress(host: endpoint.host, port: endpoint.port ?? remoteProtocol.defaultPort)
+            self.remoteProtocol = remoteProtocol
+            if let user = attributes["username"], !user.isEmpty {
+                let domain = attributes["domain"] ?? ""
+                username = user.contains("\\") || domain.isEmpty ? user : "\(domain)\\\(user)"
+            }
+            return
+        }
+        guard let components = URLComponents(string: string) else { return nil }
         let host = components.percentEncodedHost.flatMap { $0.removingPercentEncoding } ?? components.host
         guard let host, !host.isEmpty else { return nil }
         let unbracketed = host.hasPrefix("[") && host.hasSuffix("]") ? String(host.dropFirst().dropLast()) : host
-        address = ComputerAddress(host: unbracketed, port: components.port ?? ComputerAddress.defaultPort)
+        address = ComputerAddress(host: unbracketed, port: components.port ?? remoteProtocol.defaultPort)
+        self.remoteProtocol = remoteProtocol
         username = components.user.flatMap { $0.isEmpty ? nil : $0 }
         password = components.password.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    private static func rdpAttributes(_ query: Substring) -> [String: String]? {
+        var attributes: [String: String] = [:]
+        for pair in query.split(separator: "&") {
+            guard let equals = pair.firstIndex(of: "="), let colon = pair[equals...].firstIndex(of: ":"),
+                pair.distance(from: equals, to: colon) == 2,
+                let key = pair[..<equals].removingPercentEncoding, let value = pair[pair.index(after: colon)...].removingPercentEncoding
+            else { return nil }
+            attributes[key.lowercased()] = value
+        }
+        return attributes["full address"] == nil ? nil : attributes
     }
 }

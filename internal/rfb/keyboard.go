@@ -26,6 +26,8 @@ const (
 
 const keysymVoid uint32 = 0xffffff
 
+const macKeyCodeCommand uint16 = 55
+
 const (
 	pasteRestoreDelay   = time.Second
 	pasteRestoreMinimum = 150 * time.Millisecond
@@ -92,6 +94,7 @@ func (c *Client) SendKeyCode(keyCode uint16, keyboardType KeyboardType, keysym u
 	if c.observing() {
 		return E.New("rfb: key events are not sent while observing")
 	}
+	c.trackKey(keysym, down)
 	message, err := encryptedKeyMessage(c.wrapKey, keyFlagKeyCodeValid|keyFlagPreferKeyCode, appleKeysym(keysym), down, keyboardType, keyCode)
 	if err != nil {
 		return err
@@ -161,6 +164,44 @@ func (c *Client) SelectKeyboardSource(id string) error {
 	message = append(message, keyEventMessage(false, keysymVoid)...)
 	message = append(message, keyboardSourceMessage("")...)
 	return c.sendKeyboard(message)
+}
+
+func (c *Client) Paste(clipboard *Clipboard, super bool) error {
+	if c.observing() {
+		return E.New("rfb: clipboard is not pasted while observing")
+	}
+	err := c.SetClipboard(clipboard)
+	if err != nil {
+		return err
+	}
+	apple := c.info.Dialect == DialectApple
+	modifier, alternate := KeysymControlLeft, KeysymControlRight
+	if apple || super {
+		modifier, alternate = KeysymSuperLeft, KeysymSuperRight
+	}
+	c.access.Lock()
+	held := c.heldKeys[modifier] || c.heldKeys[alternate]
+	c.access.Unlock()
+	press := func(down bool) error {
+		if apple {
+			return c.SendKeyCode(macKeyCodeCommand, KeyboardANSI, modifier, down)
+		}
+		return c.SendKey(modifier, down)
+	}
+	if !held {
+		err = press(true)
+		if err != nil {
+			return err
+		}
+	}
+	err = c.SendKey('v', true)
+	if err == nil {
+		err = c.SendKey('v', false)
+	}
+	if !held {
+		err = E.Errors(err, press(false))
+	}
+	return err
 }
 
 func (c *Client) PasteText(text string) error {

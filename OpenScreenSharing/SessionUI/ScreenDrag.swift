@@ -139,7 +139,7 @@ final class ScreenDrag: NSObject, UIDragInteractionDelegate {
         takenTouch = attemptedTouch
         isOverMac = true
         droppedOnMac = false
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Drags", isDirectory: true)
+        let folder = AppDirectory.caches.appendingPathComponent("Drags", isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         session.localContext = folder
         return offer.items.enumerated().map { index, item in

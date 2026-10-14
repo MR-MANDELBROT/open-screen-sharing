@@ -68,8 +68,10 @@ struct ComputersView: View {
                 }
             }
             .alert($alert)
-            .onChangeCompat(of: store.computers.map(\.address), initial: true) { addresses in
-                availabilityMonitor.update(addresses: Set(addresses))
+            .onChangeCompat(
+                of: Dictionary(store.computers.map { ($0.address, $0.remoteProtocol) }, uniquingKeysWith: { first, _ in first }), initial: true
+            ) { servers in
+                availabilityMonitor.update(servers: servers)
             }
     }
 

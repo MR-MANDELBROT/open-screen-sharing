@@ -1,16 +1,13 @@
 package rfb
 
 import (
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Cursor struct {
-	Width    int
-	Height   int
-	HotspotX int
-	HotspotY int
-	Pixels   []byte
-	CacheID  uint32
+	bgra.Cursor
+	CacheID uint32
 }
 
 const maximumCursorSize = 1024
@@ -70,12 +67,14 @@ func (c *Client) receiveCursorImage(rectangle Rectangle) error {
 		image[i*4+3] = alpha[i]
 	}
 	cursor := &Cursor{
-		Width:    width,
-		Height:   height,
-		HotspotX: rectangle.X,
-		HotspotY: rectangle.Y,
-		Pixels:   image,
-		CacheID:  id,
+		Cursor: bgra.Cursor{
+			Width:    width,
+			Height:   height,
+			HotspotX: rectangle.X,
+			HotspotY: rectangle.Y,
+			Pixels:   image,
+		},
+		CacheID: id,
 	}
 	c.cursors[id] = cursor
 	c.handler.CursorChanged(cursor)
@@ -111,11 +110,13 @@ func (c *Client) receiveRichCursor(rectangle Rectangle) error {
 		}
 	}
 	c.handler.CursorChanged(&Cursor{
-		Width:    width,
-		Height:   height,
-		HotspotX: rectangle.X,
-		HotspotY: rectangle.Y,
-		Pixels:   image,
+		Cursor: bgra.Cursor{
+			Width:    width,
+			Height:   height,
+			HotspotX: rectangle.X,
+			HotspotY: rectangle.Y,
+			Pixels:   image,
+		},
 	})
 	return nil
 }

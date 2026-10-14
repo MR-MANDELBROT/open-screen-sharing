@@ -192,7 +192,11 @@ final class RemoteScreenNSView: NSView {
                 self.isPointerReleased = true
                 self.updatePointerLock()
             }
-            return self.capturesKey(event) && self.controller.handleKeyEvent(event) ? nil : event
+            guard self.capturesKey(event) else {
+                if event.type == .keyDown { self.controller.keyDownHandledLocally() }
+                return event
+            }
+            return self.controller.handleKeyEvent(event) ? nil : event
         }
         isOccluded = !window.occlusionState.contains(.visible)
         refreshRate = 0
@@ -1140,7 +1144,7 @@ extension RemoteScreenNSView {
         let receivers = items.compactMap { $0 as? NSFilePromiseReceiver }
         let loaded = controller.drop(files: items.compactMap { $0 as? URL }, loading: receivers.reduce(0) { $0 + $1.fileTypes.count })
         guard !receivers.isEmpty else { return true }
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Drops", isDirectory: true)
+        let folder = AppDirectory.caches.appendingPathComponent("Drops", isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for receiver in receivers {

@@ -32,8 +32,8 @@ struct DebugInfoView: View {
         let isVideo = controller.isVideo
         VStack(spacing: 0) {
             pair {
-                Text(verbatim: isVideo ? "Apple VNC" : "VNC")
-                    .foregroundStyle(isVideo ? Color.green : .orange)
+                Text(verbatim: controller.info.dialect == .rdp ? "RDP" : isVideo ? "Apple VNC" : "VNC")
+                    .foregroundStyle(controller.info.dialect != .apple ? Color.white : isVideo ? .green : .orange)
             } trailing: {
                 Text(verbatim: (isVideo ? controller.info.videoCodec : figures?.encoding) ?? "—")
             }

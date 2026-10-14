@@ -193,7 +193,7 @@ private struct ComputerThumbnail: View {
 
 extension Computer {
     var detailText: String {
-        guard let lastConnected else { return address.description }
+        guard let lastConnected else { return addressDescription }
         let date = lastConnected.formatted(.relative(presentation: .named))
         return String(localized: "Last connected \(date)")
     }

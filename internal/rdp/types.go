@@ -1,0 +1,76 @@
+package rdp
+
+import (
+	"image"
+	"log/slog"
+	"time"
+
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
+)
+
+type State int
+
+const (
+	StateConnecting State = iota
+	StateAuthenticating
+)
+
+type Options struct {
+	Address            string
+	Username           string
+	Password           string
+	Domain             string
+	ClientName         string
+	Width              int
+	Height             int
+	DesktopScaleFactor int
+	KeyboardLayout     uint32
+	Clipboard          bool
+	Audio              bool
+	VerifyCertificate  func(fingerprint string) error
+	DialTimeout        time.Duration
+	Logger             *slog.Logger
+}
+
+type AudioFormat struct {
+	Channels      int
+	SampleRate    int
+	BitsPerSample int
+}
+
+type Events interface {
+	StateChanged(State)
+	InfoChanged(Info)
+	ResizeFramebuffer(width, height int) (*bgra.Image, error)
+	FramebufferUpdated(rectangle image.Rectangle)
+	CursorChanged(*bgra.Cursor)
+	CursorMoved(x, y int)
+	ClipboardReceived(string)
+	Bell()
+	AudioFormatChanged(AudioFormat)
+	AudioPacketReceived([]byte, uint64)
+}
+
+type Info struct {
+	Width     int
+	Height    int
+	Scale     int
+	LoggedOn  bool
+	Clipboard bool
+	Resize    bool
+	Audio     bool
+	Unicode   bool
+}
+
+type Statistics struct {
+	BytesRead    uint64
+	BytesWritten uint64
+	Frames       uint64
+	Encoding     string
+}
+
+const (
+	ButtonLeft   uint8 = 1
+	ButtonMiddle uint8 = 2
+	ButtonRight  uint8 = 4
+)

@@ -46,7 +46,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case keyboard
     #endif
     case home, appSwitcher, lock, volumeUp, volumeDown
-    case missionControl, appWindows, showDesktop, launchpad, spotlight, commandTab
+    case missionControl, appWindows, showDesktop, launchpad
     case debugPanel
 
     var id: Self { self }
@@ -86,8 +86,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .newConnection, .disconnect: .file
         case .syncClipboard, .receiveClipboard, .sendClipboard: .edit
         case .noAudio, .receiveAudio, .sendAudio: .sound
-        case .observe, .pointerLock, .home, .appSwitcher, .lock, .volumeUp, .volumeDown, .missionControl, .appWindows, .showDesktop, .launchpad,
-            .spotlight, .commandTab:
+        case .observe, .pointerLock, .home, .appSwitcher, .lock, .volumeUp, .volumeDown, .missionControl, .appWindows, .showDesktop, .launchpad:
             .control
         #if os(iOS)
         case .keyboard: .control
@@ -137,8 +136,6 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .appWindows: return String(localized: SystemCommand.appWindows.title)
         case .showDesktop: return String(localized: SystemCommand.showDesktop.title)
         case .launchpad: return String(localized: SystemCommand.launchpad.title)
-        case .spotlight: return String(localized: "Spotlight")
-        case .commandTab: return String(localized: "Command-Tab")
         case .debugPanel: return String(localized: "Debug Panel")
         }
     }
@@ -157,7 +154,7 @@ struct KeyShortcut: Codable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         key = try container.decode(String.self, forKey: .key)
         modifiers = try container.decode(Int.self, forKey: .modifiers)
-        guard key.count == 1 || isSpecial else {
+        guard key.count == 1 || isNamed else {
             throw DecodingError.dataCorruptedError(forKey: .key, in: container, debugDescription: "unknown key \"\(key)\"")
         }
     }
@@ -174,7 +171,7 @@ struct KeyShortcut: Codable, Hashable {
     }
 
     #if os(iOS)
-    private static let specialKeys = [
+    private static let specialKeys: [SpecialKey] = [
         SpecialKey(name: "upArrow", equivalent: .upArrow, symbol: "↑", usage: .keyboardUpArrow),
         SpecialKey(name: "downArrow", equivalent: .downArrow, symbol: "↓", usage: .keyboardDownArrow),
         SpecialKey(name: "leftArrow", equivalent: .leftArrow, symbol: "←", usage: .keyboardLeftArrow),
@@ -188,9 +185,13 @@ struct KeyShortcut: Codable, Hashable {
         SpecialKey(name: "end", equivalent: .end, symbol: "↘", usage: .keyboardEnd),
         SpecialKey(name: "pageUp", equivalent: .pageUp, symbol: "⇞", usage: .keyboardPageUp),
         SpecialKey(name: "pageDown", equivalent: .pageDown, symbol: "⇟", usage: .keyboardPageDown),
-    ]
+    ] + (1...12).map { number in
+        SpecialKey(
+            name: "f\(number)", equivalent: functionKeyEquivalent(number), symbol: "F\(number)",
+            usage: UIKeyboardHIDUsage(rawValue: UIKeyboardHIDUsage.keyboardF1.rawValue + number - 1)!)
+    }
     #else
-    private static let specialKeys = [
+    private static let specialKeys: [SpecialKey] = [
         SpecialKey(name: "upArrow", equivalent: .upArrow, symbol: "↑", keyCode: 126),
         SpecialKey(name: "downArrow", equivalent: .downArrow, symbol: "↓", keyCode: 125),
         SpecialKey(name: "leftArrow", equivalent: .leftArrow, symbol: "←", keyCode: 123),
@@ -204,14 +205,76 @@ struct KeyShortcut: Codable, Hashable {
         SpecialKey(name: "end", equivalent: .end, symbol: "↘", keyCode: 119),
         SpecialKey(name: "pageUp", equivalent: .pageUp, symbol: "⇞", keyCode: 116),
         SpecialKey(name: "pageDown", equivalent: .pageDown, symbol: "⇟", keyCode: 121),
-    ]
+    ] + (1...12).map { number in
+        SpecialKey(name: "f\(number)", equivalent: functionKeyEquivalent(number), symbol: "F\(number)", keyCode: MacKey.function(number).keyCode!)
+    }
     #endif
 
-    private static let macKeys: [String: MacKey] = [
-        "upArrow": .up, "downArrow": .down, "leftArrow": .left, "rightArrow": .right, "return": .returnKey, "tab": .tab,
-        "space": .space, "delete": .backspace, "deleteForward": .forwardDelete, "home": .home, "end": .end,
-        "pageUp": .pageUp, "pageDown": .pageDown,
+    private static func functionKeyEquivalent(_ number: Int) -> KeyEquivalent {
+        KeyEquivalent(Character(Unicode.Scalar(0xF703 + UInt32(number))!))
+    }
+
+    private static let macKeys: [String: MacKey] = {
+        var keys: [String: MacKey] = [
+            "upArrow": .up, "downArrow": .down, "leftArrow": .left, "rightArrow": .right, "return": .returnKey, "tab": .tab,
+            "space": .space, "delete": .backspace, "deleteForward": .forwardDelete, "home": .home, "end": .end,
+            "pageUp": .pageUp, "pageDown": .pageDown,
+        ]
+        for number in 1...12 {
+            keys["f\(number)"] = .function(number)
+        }
+        return keys
+    }()
+
+    private static let pcKeysyms: [String: UInt32] = {
+        var keysyms: [String: UInt32] = [
+            "escape": Keysym.escape, "insert": Keysym.insert, "printScreen": Keysym.printScreen, "scrollLock": Keysym.scrollLock,
+            "pause": Keysym.pause, "menu": Keysym.menu, "numLock": Keysym.numLock, "capsLock": Keysym.capsLock,
+            "keypadEnter": Keysym.keypadEnter, "keypadPlus": Keysym.keypadPlus, "keypadMinus": Keysym.keypadMinus,
+            "keypadMultiply": Keysym.keypadMultiply, "keypadDivide": Keysym.keypadDivide, "keypadDecimal": Keysym.keypadDecimal,
+        ]
+        for number in 13...24 {
+            keysyms["f\(number)"] = Keysym.function(number)
+        }
+        for digit in 0...9 {
+            keysyms["keypad\(digit)"] = Keysym.keypad(digit)
+        }
+        return keysyms
+    }()
+
+    private static let pcKeyNames = [
+        "return": "Enter", "tab": "Tab", "space": "Space", "delete": "Backspace", "deleteForward": "Delete", "home": "Home", "end": "End",
+        "pageUp": "Page Up", "pageDown": "Page Down", "escape": "Esc", "insert": "Insert", "printScreen": "Print Screen",
+        "scrollLock": "Scroll Lock", "pause": "Pause", "menu": "Menu", "numLock": "Num Lock", "capsLock": "Caps Lock",
+        "keypadEnter": "Numpad Enter", "keypadPlus": "Numpad +", "keypadMinus": "Numpad -", "keypadMultiply": "Numpad *",
+        "keypadDivide": "Numpad /", "keypadDecimal": "Numpad .",
     ]
+
+    static let pcKeyGroups: [PCKeyGroup] = [
+        PCKeyGroup(title: String(localized: "Editing"), keys: ["return", "tab", "space", "delete", "deleteForward", "escape", "insert"]),
+        PCKeyGroup(title: String(localized: "Navigation"), keys: ["home", "end", "pageUp", "pageDown", "upArrow", "downArrow", "leftArrow", "rightArrow"]),
+        PCKeyGroup(title: String(localized: "Function Keys"), keys: (1...24).map { "f\($0)" }),
+        PCKeyGroup(
+            title: String(localized: "Keypad"),
+            keys: ["numLock"] + (0...9).map { "keypad\($0)" } + ["keypadPlus", "keypadMinus", "keypadMultiply", "keypadDivide", "keypadDecimal", "keypadEnter"]
+        ),
+        PCKeyGroup(title: String(localized: "System"), keys: ["printScreen", "scrollLock", "pause", "menu", "capsLock"]),
+    ]
+
+    struct PCKeyGroup: Identifiable {
+        let title: String
+        let keys: [String]
+
+        var id: String { title }
+    }
+
+    static func pcKeyLabel(_ name: String) -> String {
+        if let label = pcKeyNames[name] { return label }
+        if let special = specialKeys.first(where: { $0.name == name }) { return special.symbol }
+        if name.hasPrefix("f"), let number = Int(name.dropFirst()) { return "F\(number)" }
+        if name.hasPrefix("keypad"), let digit = Int(name.dropFirst(6)) { return "Numpad \(digit)" }
+        return name.uppercased()
+    }
 
     static let unset = KeyShortcut(key: "", modifiers: [])
 
@@ -219,16 +282,29 @@ struct KeyShortcut: Codable, Hashable {
 
     var isSpecial: Bool { Self.specialKeys.contains { $0.name == key } }
 
+    var isNamed: Bool { isSpecial || Self.pcKeysyms[key] != nil }
+
     var eventModifiers: EventModifiers { EventModifiers(rawValue: modifiers) }
 
     var chord: KeyChord? {
         guard let macKey else { return nil }
-        var modifiers: [ModifierKey] = []
-        if eventModifiers.contains(.control) { modifiers.append(.control) }
-        if eventModifiers.contains(.option) { modifiers.append(.option) }
-        if eventModifiers.contains(.shift) { modifiers.append(.shift) }
-        if eventModifiers.contains(.command) { modifiers.append(.command) }
-        return KeyChord(modifiers: modifiers, key: macKey)
+        return KeyChord(modifiers: chordModifiers, key: macKey)
+    }
+
+    var pcChord: KeyChord? {
+        guard let key = Self.pcKeysyms[key].map({ MacKey(keyCode: nil, keysym: $0) }) ?? macKey else { return nil }
+        return KeyChord(modifiers: chordModifiers, key: key)
+    }
+
+    private var chordModifiers: [ModifierKey] {
+        ModifierKey.allCases.filter { modifier in
+            switch modifier {
+            case .control: eventModifiers.contains(.control)
+            case .option: eventModifiers.contains(.option)
+            case .shift: eventModifiers.contains(.shift)
+            case .command: eventModifiers.contains(.command)
+            }
+        }
     }
 
     private var macKey: MacKey? {
@@ -251,6 +327,20 @@ struct KeyShortcut: Codable, Hashable {
             return name + (special.name == "space" ? String(localized: "Space") : special.symbol)
         }
         return name + key.uppercased()
+    }
+
+    var pcDisplayName: String {
+        var names: [String] = []
+        if eventModifiers.contains(.control) { names.append("Ctrl") }
+        if eventModifiers.contains(.option) { names.append("Alt") }
+        if eventModifiers.contains(.shift) { names.append("Shift") }
+        if eventModifiers.contains(.command) { names.append("Win") }
+        names.append(Self.pcKeyLabel(key))
+        return names.joined(separator: "+")
+    }
+
+    func displayName(for target: MappingTarget) -> String {
+        target == .pc ? pcDisplayName : displayName
     }
 
     private init?(character: String?, modifiers: EventModifiers) {
@@ -306,15 +396,29 @@ extension EventModifiers {
     #endif
 }
 
+enum MappingTarget: CaseIterable, Identifiable {
+    case apple
+    case pc
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .apple: String(localized: "Apple Key Mappings")
+        case .pc: String(localized: "PC Key Mappings")
+        }
+    }
+}
+
 struct KeyMapping: Codable, Hashable, Identifiable {
     enum Step: Codable, Hashable {
         case key(KeyShortcut)
         case text(String)
 
-        var displayName: String {
+        func displayName(for target: MappingTarget) -> String {
             switch self {
             case .key(let shortcut):
-                shortcut.displayName
+                shortcut.displayName(for: target)
             case .text(let text):
                 "“"
                     + text.map { character in
@@ -332,8 +436,8 @@ struct KeyMapping: Codable, Hashable, Identifiable {
     var trigger: KeyShortcut
     var steps: [Step]
 
-    var displayName: String {
-        steps.map(\.displayName).joined(separator: " ")
+    func displayName(for target: MappingTarget) -> String {
+        steps.map { $0.displayName(for: target) }.joined(separator: " ")
     }
 }
 
@@ -341,10 +445,16 @@ final class KeyShortcuts: ObservableObject {
     static let shared = KeyShortcuts()
 
     private static let key = "keyboardShortcuts"
-    private static let mappingsKey = "keyboardMappings"
+
+    private static func mappingsKey(_ target: MappingTarget) -> String {
+        switch target {
+        case .apple: "keyboardMappings"
+        case .pc: "pcKeyboardMappings"
+        }
+    }
 
     @Published private var assigned: [String: KeyShortcut]
-    @Published private(set) var mappings: [KeyMapping]
+    @Published private var mappings: [MappingTarget: [KeyMapping]]
     @Published var isRecording = false
 
     #if os(macOS)
@@ -359,7 +469,9 @@ final class KeyShortcuts: ObservableObject {
     init(store: PreferenceStore = .shared) {
         self.store = store
         assigned = store.value([String: KeyShortcut].self, for: Self.key) ?? [:]
-        mappings = store.value([KeyMapping].self, for: Self.mappingsKey) ?? []
+        mappings = Dictionary(uniqueKeysWithValues: MappingTarget.allCases.map { target in
+            (target, store.value([KeyMapping].self, for: Self.mappingsKey(target)) ?? [])
+        })
         #if os(macOS)
         pointerRelease = store.value(UInt.self, for: Self.pointerReleaseKey).map(NSEvent.ModifierFlags.init(rawValue:)) ?? Self.defaultPointerRelease
         #endif
@@ -369,7 +481,7 @@ final class KeyShortcuts: ObservableObject {
         #if os(macOS)
         if pointerRelease != Self.defaultPointerRelease { return true }
         #endif
-        return !assigned.isEmpty || !mappings.isEmpty
+        return !assigned.isEmpty || mappings.values.contains { !$0.isEmpty }
     }
 
     func shortcut(for action: ShortcutAction) -> KeyShortcut? {
@@ -385,31 +497,45 @@ final class KeyShortcuts: ObservableObject {
         store.set(assigned, for: Self.key)
     }
 
-    func mapping(triggeredBy shortcut: KeyShortcut) -> KeyMapping? {
-        mappings.first { $0.trigger == shortcut }
+    func mappings(for target: MappingTarget) -> [KeyMapping] {
+        mappings[target] ?? []
     }
 
-    func add(_ mapping: KeyMapping) {
-        mappings.append(mapping)
-        store.set(mappings, for: Self.mappingsKey)
+    func mapping(triggeredBy shortcut: KeyShortcut, for target: MappingTarget) -> KeyMapping? {
+        mappings(for: target).first { $0.trigger == shortcut }
     }
 
-    func update(_ mapping: KeyMapping) {
-        guard let index = mappings.firstIndex(where: { $0.id == mapping.id }) else { return }
-        mappings[index] = mapping
-        store.set(mappings, for: Self.mappingsKey)
+    func add(_ mapping: KeyMapping, to target: MappingTarget) {
+        var list = mappings(for: target)
+        list.append(mapping)
+        setMappings(list, for: target)
     }
 
-    func removeMapping(_ id: UUID) {
-        mappings.removeAll { $0.id == id }
-        store.set(mappings, for: Self.mappingsKey)
+    func update(_ mapping: KeyMapping, in target: MappingTarget) {
+        var list = mappings(for: target)
+        guard let index = list.firstIndex(where: { $0.id == mapping.id }) else { return }
+        list[index] = mapping
+        setMappings(list, for: target)
+    }
+
+    func removeMapping(_ id: UUID, from target: MappingTarget) {
+        var list = mappings(for: target)
+        list.removeAll { $0.id == id }
+        setMappings(list, for: target)
+    }
+
+    private func setMappings(_ list: [KeyMapping], for target: MappingTarget) {
+        mappings[target] = list
+        store.set(list, for: Self.mappingsKey(target))
     }
 
     func restoreDefaults() {
         assigned = [:]
-        mappings = []
         store.remove(Self.key)
-        store.remove(Self.mappingsKey)
+        for target in MappingTarget.allCases {
+            mappings[target] = []
+            store.remove(Self.mappingsKey(target))
+        }
         #if os(macOS)
         pointerRelease = Self.defaultPointerRelease
         store.remove(Self.pointerReleaseKey)

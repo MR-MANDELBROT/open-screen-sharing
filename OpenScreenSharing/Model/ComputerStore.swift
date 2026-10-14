@@ -8,9 +8,10 @@ struct StoredComputer {
     var memory: SessionMemory
     var networkConfiguration: NetworkConfiguration
     var device: DeviceInfo?
-    var serverType: ServerType
+    var usesHighPerformance: Bool
     var deviceType: DeviceType?
     var keyboardSources: [String]
+    var trustedFingerprint: String
 }
 
 enum PasswordUpdate {
@@ -31,7 +32,8 @@ struct ConnectionRecord {
     var username: String
     var password: PasswordUpdate
     var supportsHighPerformance: Bool
-    var serverType: ServerType
+    var remoteProtocol: RemoteProtocol
+    var usesHighPerformance: Bool
     var memory: SessionMemory
     var device: DeviceInfo?
 }
@@ -71,23 +73,28 @@ final class ComputerStore: ObservableObject {
             memory: computer.memory,
             networkConfiguration: computer.networkConfiguration,
             device: computer.model.isEmpty ? nil : DeviceInfo(model: computer.model, enclosureColor: computer.enclosureColor),
-            serverType: computer.serverType,
-            deviceType: computer.serverType == .apple ? computer.deviceType : nil,
-            keyboardSources: computer.keyboardSources
+            usesHighPerformance: computer.usesHighPerformance,
+            deviceType: computer.usesHighPerformance ? computer.deviceType : nil,
+            keyboardSources: computer.keyboardSources,
+            trustedFingerprint: computer.trustedFingerprint
         )
     }
 
-    func computer(at address: ComputerAddress, username: String?) -> Computer? {
+    func computer(at address: ComputerAddress, remoteProtocol: RemoteProtocol, username: String?) -> Computer? {
         do {
-            return try database.read { try Self.computer(in: $0, at: address, username: username) }
+            return try database.read { try Self.computer(in: $0, at: address, remoteProtocol: remoteProtocol, username: username) }
         } catch {
             StorageNotice.shared.report("Couldn’t Load Connections", error: error)
             return nil
         }
     }
 
-    private static func computer(in db: Database, at address: ComputerAddress, username: String?) throws -> Computer? {
-        let computers = try Computer.order(Column("createdAt")).fetchAll(db).filter { $0.address.matches(address) }
+    private static func computer(in db: Database, at address: ComputerAddress, remoteProtocol: RemoteProtocol, username: String?) throws
+        -> Computer?
+    {
+        let computers = try Computer.order(Column("createdAt")).fetchAll(db).filter {
+            $0.remoteProtocol == remoteProtocol && $0.address.matches(address)
+        }
         guard let username else { return computers.first }
         return computers.first { $0.username == username } ?? computers.first { $0.username.isEmpty }
     }
@@ -111,10 +118,12 @@ final class ComputerStore: ObservableObject {
             var computer: Computer
             if let id = connection.computerID, let saved = try Computer.fetchOne(db, key: id) {
                 computer = saved
-            } else if let saved = try Self.computer(in: db, at: connection.address, username: username) {
+            } else if let saved = try Self.computer(
+                in: db, at: connection.address, remoteProtocol: connection.remoteProtocol, username: username)
+            {
                 computer = saved
             } else {
-                computer = Computer(name: connection.name, address: connection.address)
+                computer = Computer(name: connection.name, address: connection.address, remoteProtocol: connection.remoteProtocol)
                 computer.remember(connection.memory)
             }
             if let username, computer.username != username {
@@ -134,7 +143,8 @@ final class ComputerStore: ObservableObject {
             }
             computer.lastConnected = Date()
             computer.supportsHighPerformance = connection.supportsHighPerformance
-            computer.serverType = connection.serverType
+            computer.remoteProtocol = connection.remoteProtocol
+            computer.usesHighPerformance = connection.usesHighPerformance
             if let device = connection.device {
                 computer.apply(device)
             }
@@ -153,6 +163,10 @@ final class ComputerStore: ObservableObject {
 
     func setKeyboardSources(_ sources: [String], for id: UUID) throws {
         try update(id) { $0.keyboardSources = sources }
+    }
+
+    func setTrustedFingerprint(_ fingerprint: String, for id: UUID) throws {
+        try update(id) { $0.trustedFingerprint = fingerprint }
     }
 
     func setThumbnail(_ thumbnail: Data, for id: UUID) throws {

@@ -5,7 +5,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
     case audio
     case observe = "control"
     case pointerLock, keyboard, functionKeys, moreKeys
-    case missionControl, appWindows, showDesktop, launchpad, spotlight, commandTab
+    case missionControl, appWindows, showDesktop, launchpad
     case home, appSwitcher, lock, volumeUp, volumeDown
     case clipboard
     case debugInfo
@@ -27,8 +27,6 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .functionKeys: "Function Keys"
         case .moreKeys: "More Keys"
         case .missionControl, .appWindows, .showDesktop, .launchpad: systemCommand!.title
-        case .spotlight: "Spotlight"
-        case .commandTab: "Command-Tab"
         case .home: "Home Screen"
         case .appSwitcher: "App Switcher"
         case .lock: "Lock"
@@ -54,8 +52,6 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .functionKeys: "fn"
         case .moreKeys: if #available(iOS 16, *) { "arrow.up.and.down.text.horizontal" } else { "ellipsis" }
         case .missionControl, .appWindows, .showDesktop, .launchpad: systemCommand!.systemImage
-        case .spotlight: "magnifyingglass"
-        case .commandTab: "command"
         case .home: "house"
         case .appSwitcher: if #available(iOS 18, *) { "iphone.app.switcher" } else { "square.stack" }
         case .lock: "lock"
@@ -71,7 +67,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .zoomMode, .scale, .displays, .quality, .resolution, .hdr: .view
         case .audio: .sound
         case .observe, .pointerLock, .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows, .showDesktop,
-            .launchpad, .spotlight, .commandTab, .home, .appSwitcher, .lock, .volumeUp, .volumeDown:
+            .launchpad, .home, .appSwitcher, .lock, .volumeUp, .volumeDown:
             .control
         case .clipboard: .clipboard
         case .debugInfo: .debug
@@ -88,38 +84,39 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         }
     }
 
-    func applies(toTouchScreen touchScreen: Bool) -> Bool {
+    func applies(to platform: RemotePlatform) -> Bool {
         switch self {
-        case .home, .appSwitcher, .lock, .volumeUp, .volumeDown: touchScreen
-        case .displays, .quality, .resolution, .hdr, .missionControl, .appWindows, .showDesktop, .launchpad, .commandTab:
-            !touchScreen
-        case .zoomMode, .scale, .audio, .observe, .pointerLock, .spotlight, .clipboard, .debugInfo: true
+        case .home, .appSwitcher, .lock, .volumeUp, .volumeDown: platform == .iOS
+        case .displays, .quality, .resolution, .hdr: platform != .iOS
+        case .missionControl, .appWindows, .showDesktop, .launchpad: platform == .mac
+        case .zoomMode, .scale, .audio, .observe, .pointerLock, .clipboard, .debugInfo: true
         #if os(iOS)
         case .keyboard: true
         case .functionKeys, .moreKeys: false
         #else
         case .keyboard: false
-        case .functionKeys, .moreKeys: !touchScreen
+        case .functionKeys, .moreKeys: platform != .iOS
         #endif
         }
     }
 
     func isOffered(by controller: SessionController) -> Bool {
-        guard applies(toTouchScreen: controller.isTouchScreen) else { return false }
+        guard applies(to: controller.platform) else { return false }
         let capabilities = controller.capabilities
         let known = !capabilities.isEmpty
         func offers(_ capability: SessionCapabilities) -> Bool { !known || capabilities.contains(capability) }
         switch self {
         case .zoomMode, .debugInfo: return true
         case .scale: return !controller.pictureMatchesWindow
-        case .quality: return !controller.usesHighPerformance
-        case .audio: return controller.usesHighPerformance
+        case .quality: return !controller.usesHighPerformance && offers(.quality)
+        case .audio: return controller.usesHighPerformance || capabilities.contains(.audio)
         case .displays: return controller.showsDisplayPicker
         case .resolution: return controller.offersResolution
         case .hdr:
             return controller.usesHighPerformance && controller.displaySupportsHDR && offers(.highPerformance)
                 && controller.networkSupportsHDR
-        case .observe, .spotlight, .commandTab, .lock, .volumeUp, .volumeDown, .functionKeys, .moreKeys: return offers(.control)
+        case .observe: return offers(.control) && offers(.observe)
+        case .lock, .volumeUp, .volumeDown, .functionKeys, .moreKeys: return offers(.control)
         case .keyboard: return offers(.control)
         #if os(iOS)
         case .pointerLock: return offers(.control) && PointerLock.hasMouse
@@ -143,8 +140,8 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .hdr: return controller.canUseHDR
         case .observe: return controller.capabilities.contains(.control)
         case .pointerLock: return controller.canLockPointer
-        case .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows, .showDesktop, .launchpad, .spotlight, .commandTab, .home,
-            .appSwitcher, .lock, .volumeUp, .volumeDown:
+        case .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows, .showDesktop, .launchpad, .home, .appSwitcher, .lock,
+            .volumeUp, .volumeDown:
             return controller.isControlling
         }
     }
@@ -186,12 +183,12 @@ extension SessionController {
     }
 
     var offersResolution: Bool {
-        !isTouchScreen && (usesHighPerformance || usesDynamicResolution)
+        platform != .iOS && (usesHighPerformance || usesDynamicResolution)
             && (capabilities.isEmpty || capabilities.contains(.virtualDisplay))
     }
 
     var audioOptions: [RemoteAudio] {
-        isTouchScreen ? [.off, .fromMac] : RemoteAudio.allCases
+        platform == .iOS || capabilities.contains(.audio) ? [.off, .fromMac] : RemoteAudio.allCases
     }
 }
 
@@ -264,10 +261,6 @@ struct SessionCommandView: View {
             Button {
                 controller.perform(systemCommand)
             } label: { label }
-        case .spotlight:
-            Button { controller.sendChord(.spotlight) } label: { label }
-        case .commandTab:
-            Button { controller.sendChord(.commandTab) } label: { label }
         case .home:
             Button { controller.perform(.showDesktop) } label: { label }
         case .appSwitcher:

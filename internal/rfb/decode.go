@@ -2,7 +2,9 @@ package rfb
 
 import (
 	"encoding/binary"
+	"image"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/mvs"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -45,7 +47,7 @@ func (d *decoders) readPayload(input *stream) ([]byte, error) {
 	return payload, input.readFull(payload)
 }
 
-func (d *decoders) decode(input *stream, framebuffer *Framebuffer, rectangle Rectangle) error {
+func (d *decoders) decode(input *stream, framebuffer *bgra.Image, rectangle Rectangle) error {
 	x, y, width, height := rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height
 	switch rectangle.Encoding {
 	case EncodingRaw:
@@ -55,7 +57,7 @@ func (d *decoders) decode(input *stream, framebuffer *Framebuffer, rectangle Rec
 		if err != nil {
 			return err
 		}
-		framebuffer.copyRectangle(int(source>>16), int(source&0xffff), x, y, width, height)
+		framebuffer.Copy(image.Pt(x, y), framebuffer, image.Rect(int(source>>16), int(source&0xffff), int(source>>16)+width, int(source&0xffff)+height))
 		return nil
 	case EncodingHextile:
 		return d.decodeHextile(input, framebuffer, x, y, width, height)
@@ -119,8 +121,8 @@ func (d *decoders) decode(input *stream, framebuffer *Framebuffer, rectangle Rec
 	}
 }
 
-func decodeRaw(input *stream, framebuffer *Framebuffer, x, y, width, height int) error {
-	if framebuffer.contains(x, y, width, height) {
+func decodeRaw(input *stream, framebuffer *bgra.Image, x, y, width, height int) error {
+	if image.Rect(x, y, x+width, y+height).In(framebuffer.Bounds()) {
 		for line := 0; line < height; line++ {
 			offset := (y+line)*framebuffer.Stride + x*4
 			row := framebuffer.Pix[offset : offset+width*4]
@@ -142,8 +144,9 @@ func decodeRaw(input *stream, framebuffer *Framebuffer, x, y, width, height int)
 	return nil
 }
 
-func blitPixels(framebuffer *Framebuffer, x, y, width, height int, data []byte) {
-	clippedX, clippedY, clippedWidth, clippedHeight := framebuffer.clip(x, y, width, height)
+func blitPixels(framebuffer *bgra.Image, x, y, width, height int, data []byte) {
+	clipped := image.Rect(x, y, x+width, y+height).Intersect(framebuffer.Bounds())
+	clippedX, clippedY, clippedWidth, clippedHeight := clipped.Min.X, clipped.Min.Y, clipped.Dx(), clipped.Dy()
 	for line := 0; line < clippedHeight; line++ {
 		sourceOffset := ((clippedY-y+line)*width + clippedX - x) * 4
 		source := data[sourceOffset : sourceOffset+clippedWidth*4]
@@ -156,7 +159,7 @@ func blitPixels(framebuffer *Framebuffer, x, y, width, height int, data []byte) 
 	}
 }
 
-func setPixel(framebuffer *Framebuffer, x, y int, pixel uint32) {
+func setPixel(framebuffer *bgra.Image, x, y int, pixel uint32) {
 	if x < 0 || y < 0 || x >= framebuffer.Width || y >= framebuffer.Height {
 		return
 	}
@@ -167,7 +170,7 @@ func grayPixel(value uint32) uint32 {
 	return 0xff000000 | value<<16 | value<<8 | value
 }
 
-func blitHalftone(framebuffer *Framebuffer, x, y, width, height int, data []byte, rowBytes int) {
+func blitHalftone(framebuffer *bgra.Image, x, y, width, height int, data []byte, rowBytes int) {
 	for line := 0; line < height; line++ {
 		row := data[line*rowBytes:]
 		for column := 0; column < width; column++ {
@@ -180,7 +183,7 @@ func blitHalftone(framebuffer *Framebuffer, x, y, width, height int, data []byte
 	}
 }
 
-func blitGray(framebuffer *Framebuffer, x, y, width, height int, data []byte, rowBytes int) {
+func blitGray(framebuffer *bgra.Image, x, y, width, height int, data []byte, rowBytes int) {
 	for line := 0; line < height; line++ {
 		row := data[line*rowBytes:]
 		for column := 0; column < width; column++ {
@@ -201,7 +204,7 @@ func expandFive(value uint32) uint32 {
 	return value<<3 | value>>2
 }
 
-func blitThousands(framebuffer *Framebuffer, x, y, width, height int, data []byte) {
+func blitThousands(framebuffer *bgra.Image, x, y, width, height int, data []byte) {
 	for line := 0; line < height; line++ {
 		for column := 0; column < width; column++ {
 			value := uint32(binary.BigEndian.Uint16(data[(line*width+column)*2:]))
@@ -221,7 +224,7 @@ const (
 	hextileSubrectsColoured    = 16
 )
 
-func (d *decoders) decodeHextile(input *stream, framebuffer *Framebuffer, x, y, width, height int) error {
+func (d *decoders) decodeHextile(input *stream, framebuffer *bgra.Image, x, y, width, height int) error {
 	var background, foreground uint32
 	for tileY := y; tileY < y+height; tileY += 16 {
 		tileHeight := min(16, y+height-tileY)
@@ -250,7 +253,7 @@ func (d *decoders) decodeHextile(input *stream, framebuffer *Framebuffer, x, y, 
 				}
 				background = pixelFromWire(background)
 			}
-			framebuffer.fill(tileX, tileY, tileWidth, tileHeight, background)
+			framebuffer.Fill(image.Rect(tileX, tileY, tileX+tileWidth, tileY+tileHeight), background)
 			if subencoding&hextileForegroundSpecified != 0 {
 				foreground, err = input.u32()
 				if err != nil {
@@ -282,7 +285,7 @@ func (d *decoders) decodeHextile(input *stream, framebuffer *Framebuffer, x, y, 
 				}
 				subX, subY := int(geometry>>12), int(geometry>>8&0x0f)
 				subWidth, subHeight := int(geometry>>4&0x0f)+1, int(geometry&0x0f)+1
-				framebuffer.fill(tileX+subX, tileY+subY, min(subWidth, tileWidth-subX), min(subHeight, tileHeight-subY), color)
+				framebuffer.Fill(image.Rectangle{Min: image.Pt(tileX+subX, tileY+subY), Max: image.Pt(tileX+min(subX+subWidth, tileWidth), tileY+min(subY+subHeight, tileHeight))}, color)
 			}
 		}
 	}
@@ -293,7 +296,7 @@ func pixelFromWire(value uint32) uint32 {
 	return (value>>24 | value>>8&0xff00 | value<<8&0xff0000) | 0xff000000
 }
 
-func (d *decoders) decodeZRLE(framebuffer *Framebuffer, x, y, width, height int, data []byte) error {
+func (d *decoders) decodeZRLE(framebuffer *bgra.Image, x, y, width, height int, data []byte) error {
 	position := 0
 	take := func(length int) ([]byte, error) {
 		if position+length > len(data) {
@@ -329,7 +332,7 @@ func (d *decoders) decodeZRLE(framebuffer *Framebuffer, x, y, width, height int,
 				}
 			}
 			if !rle && paletteSize == 1 {
-				framebuffer.fill(tileX, tileY, tileWidth, tileHeight, palette[0])
+				framebuffer.Fill(image.Rect(tileX, tileY, tileX+tileWidth, tileY+tileHeight), palette[0])
 				continue
 			}
 			count := tileWidth * tileHeight
@@ -439,8 +442,9 @@ func zrleRunLength(take func(int) ([]byte, error)) (int, error) {
 	}
 }
 
-func blitPixelsWithAlpha(framebuffer *Framebuffer, x, y, width, height int, data []byte) {
-	clippedX, clippedY, clippedWidth, clippedHeight := framebuffer.clip(x, y, width, height)
+func blitPixelsWithAlpha(framebuffer *bgra.Image, x, y, width, height int, data []byte) {
+	clipped := image.Rect(x, y, x+width, y+height).Intersect(framebuffer.Bounds())
+	clippedX, clippedY, clippedWidth, clippedHeight := clipped.Min.X, clipped.Min.Y, clipped.Dx(), clipped.Dy()
 	for line := 0; line < clippedHeight; line++ {
 		sourceOffset := ((clippedY-y+line)*width + clippedX - x) * 4
 		targetOffset := (clippedY+line)*framebuffer.Stride + clippedX*4

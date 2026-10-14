@@ -6,12 +6,42 @@ import AppKit
 struct SettingsView: View {
     private static let sourceCode = URL(string: "https://github.com/nekohasekai/open-screen-sharing")!
 
+    var body: some View {
+        Form {
+            Section {
+                NavigationLink {
+                    AppSettingsView()
+                } label: {
+                    Label("App", systemImage: "app")
+                }
+                NavigationLink {
+                    KeyboardView()
+                } label: {
+                    Label("Keyboard", systemImage: "keyboard")
+                }
+            }
+            Section("About") {
+                Link(destination: Self.sourceCode) {
+                    Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+            }
+        }
+        #if os(macOS)
+        .formStyle(.grouped)
+        .unboundedFormWidth()
+        #endif
+        .navigationTitle("Settings")
+    }
+}
+
+private struct AppSettingsView: View {
     @State private var language = AppLanguage.selected
+    @State private var cacheSize: Int64?
     @State private var alert: AlertState?
 
     var body: some View {
         Form {
-            Section("App") {
+            Section {
                 Picker(selection: $language) {
                     Text(verbatim: AppLanguage.systemDefaultName(in: language)).tag(String?.none)
                     ForEach(AppLanguage.available, id: \.self) { code in
@@ -36,27 +66,49 @@ struct SettingsView: View {
                         actions: actions
                     )
                 }
-                NavigationLink {
-                    KeyboardShortcutsView()
+            }
+            Section {
+                LabeledContentCompat {
+                    if let cacheSize {
+                        Text(cacheSize.formatted(.byteCount(style: .file)))
+                    }
                 } label: {
-                    Label("Keyboard Shortcuts", systemImage: "keyboard")
+                    Label("Cache Size", systemImage: "internaldrive")
+                }
+                if let cacheSize, cacheSize > 0 {
+                    Button(role: .destructive) {
+                        Task { await clearCache() }
+                    } label: {
+                        Label("Clear Cache", systemImage: "trash")
+                    }
+                    .formRowButtonStyleCompat()
                 }
             }
             #if os(macOS)
             UpdatesSection()
             #endif
-            Section("About") {
-                Link(destination: Self.sourceCode) {
-                    Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-            }
         }
         #if os(macOS)
         .formStyle(.grouped)
         .unboundedFormWidth()
+        #else
+        .navigationBarTitleDisplayMode(.inline)
         #endif
-        .navigationTitle("Settings")
+        .navigationTitle("App")
         .alert($alert)
+        .task {
+            cacheSize = await Task.detached(priority: .utility) { AppDirectory.cacheSize() }.value
+        }
+    }
+
+    private func clearCache() async {
+        cacheSize = nil
+        do {
+            try await Task.detached(priority: .userInitiated) { try AppDirectory.clearCaches() }.value
+        } catch {
+            alert = AlertState(String(localized: "Couldn’t Clear the Cache"), error: error)
+        }
+        cacheSize = await Task.detached(priority: .utility) { AppDirectory.cacheSize() }.value
     }
 
     #if os(macOS)

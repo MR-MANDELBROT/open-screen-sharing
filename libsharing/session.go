@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"net"
 	"strconv"
 	"sync"
@@ -11,6 +12,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
+	"github.com/nekohasekai/open-screen-sharing/internal/rdp"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
 	"github.com/sagernet/sing/common"
@@ -20,6 +23,7 @@ import (
 type SessionHandler interface {
 	OnStateChanged(state int32, errorCode int32, message string)
 	OnServerInfo(info *ServerInfo)
+	OnServerCertificate(fingerprint string)
 
 	OnFramebufferResize(width int32, height int32)
 
@@ -58,11 +62,11 @@ type Session struct {
 	handler SessionHandler
 
 	access     sync.Mutex
-	client     *rfb.Client
+	remote     remote
 	cancel     context.CancelFunc
 	started    bool
 	resizing   bool
-	attached   *rfb.Framebuffer
+	attached   *bgra.Image
 	prompts    map[int64]chan int32
 	nextPrompt int64
 	ending     atomic.Bool
@@ -73,8 +77,6 @@ type Session struct {
 	resizeHeight int
 
 	pictureEncoding atomic.Int64
-
-	updateRate int32
 }
 
 func NewSession(options *SessionOptions, handler SessionHandler) (*Session, error) {
@@ -87,16 +89,139 @@ func NewSession(options *SessionOptions, handler SessionHandler) (*Session, erro
 	if options.Port <= 0 || options.Port > 65535 {
 		return nil, E.New("invalid port ", options.Port, "; it must be 1 to 65535")
 	}
+	if options.Protocol != ProtocolRFB && options.Protocol != ProtocolRDP {
+		return nil, E.New("unknown protocol ", options.Protocol)
+	}
+	if options.Platform < PlatformUnknown || options.Platform > PlatformPC {
+		return nil, E.New("unknown platform ", options.Platform)
+	}
 	if options.UpdateRate < 0 {
 		return nil, E.New("invalid update rate ", options.UpdateRate, "; it must not be negative")
 	}
-	return &Session{options: *options, handler: handler, prompts: make(map[int64]chan int32), updateRate: options.UpdateRate}, nil
+	return &Session{options: *options, handler: handler, prompts: make(map[int64]chan int32)}, nil
+}
+
+type remote interface {
+	Run() error
+	Close() error
+	serverInfo() *ServerInfo
+	statistics(statistics *Statistics)
+	apply(setup sessionSetup)
+	setVisible(visible bool) error
+
+	SetFramebuffer(framebuffer *bgra.Image) error
+	SetVirtualDisplay(width, height int, density float64, maximumWidth, maximumHeight int) error
+	RequestRefresh() error
+
+	SendPointer(x, y int, buttons uint8) error
+	SendScroll(x, y int, deltaX, deltaY float64) error
+	SendKey(keysym uint32, down bool) error
+	SendKeyCode(keyCode uint16, keyboardType int32, keysym uint32, down bool) error
+	SendText(text string) error
+
+	SetClipboard(clipboard *Clipboard) error
+	PasteClipboard(clipboard *Clipboard) error
+	SetSharedClipboard(enabled bool) error
+	RequestClipboard() error
+}
+
+type rfbRemote struct {
+	*rfb.Client
+	session *Session
+}
+
+func (r rfbRemote) serverInfo() *ServerInfo {
+	return newServerInfo(r.Info(), r.session.options.Platform)
+}
+
+func (r rfbRemote) apply(setup sessionSetup) {
+	info := r.serverInfo()
+	if display := setup.display; display != nil && info.SupportsVirtualDisplay {
+		err := r.Client.SetVirtualDisplay(int(display.width), int(display.height), display.density, int(display.maximumWidth), int(display.maximumHeight))
+		if err != nil {
+			r.Logger().Warn("apply the virtual display requested before connecting", "error", err)
+		}
+	}
+	if setup.hdr != nil && info.SupportsVirtualDisplay {
+		err := r.SetHDR(*setup.hdr)
+		if err != nil {
+			r.Logger().Warn("apply the HDR setting made before connecting", "error", err)
+		}
+	}
+	if setup.quality != nil {
+		err := r.SetQuality(*setup.quality)
+		if err != nil {
+			r.Logger().Warn("apply the quality chosen before connecting", "error", err)
+		}
+	}
+	if setup.highPerformance != nil && info.SupportsHighPerformance && r.MediaStream() == nil {
+		err := r.StartMediaStream(*setup.highPerformance, &mediaEvents{session: r.session})
+		if err != nil {
+			r.session.handler.OnMediaStopped(classifyMediaError(err), err.Error())
+		}
+	}
+	if setup.updateRate != nil {
+		err := r.SetUpdateInterval(updateInterval(*setup.updateRate))
+		if err != nil {
+			r.Logger().Warn("apply the update rate set before connecting", "error", err)
+		}
+	}
+}
+
+func (r rfbRemote) setVisible(bool) error {
+	return nil
+}
+
+func (r rfbRemote) SendKeyCode(keyCode uint16, keyboardType int32, keysym uint32, down bool) error {
+	return r.Client.SendKeyCode(keyCode, rfb.KeyboardType(keyboardType), keysym, down)
+}
+
+func (r rfbRemote) SetClipboard(clipboard *Clipboard) error {
+	return r.Client.SetClipboard(clipboard.toRFB())
+}
+
+func (r rfbRemote) PasteClipboard(clipboard *Clipboard) error {
+	return r.Paste(clipboard.toRFB(), r.serverInfo().Platform == PlatformMac)
 }
 
 func (s *Session) Connect() error {
-	options, err := rfbOptions(&s.options)
-	if err != nil {
-		return err
+	var dial func(ctx context.Context) (remote, error)
+	switch s.options.Protocol {
+	case ProtocolRDP:
+		options, err := rdpOptions(&s.options, s.handler.OnServerCertificate)
+		if err != nil {
+			return err
+		}
+		dial = func(ctx context.Context) (remote, error) {
+			setup := s.takeSetup()
+			if display := setup.display; display != nil {
+				options.Width, options.Height, options.DesktopScaleFactor = rdpLayout(int(display.width), int(display.height), display.density)
+				setup.display = nil
+			}
+			client, err := rdp.Dial(ctx, options, &rdpSessionEvents{session: s})
+			if err != nil {
+				return nil, err
+			}
+			connected := &rdpRemote{Client: client, logger: options.Logger}
+			connected.apply(setup)
+			return connected, nil
+		}
+	default:
+		options, err := rfbOptions(&s.options)
+		if err != nil {
+			return err
+		}
+		options.Prepare = func(client *rfb.Client) error {
+			rfbRemote{Client: client, session: s}.apply(s.takeSetup())
+			return nil
+		}
+		dial = func(ctx context.Context) (remote, error) {
+			client, err := rfb.Dial(ctx, options, &sessionEvents{session: s})
+			if err != nil {
+				return nil, err
+			}
+			return rfbRemote{Client: client, session: s}, nil
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.access.Lock()
@@ -108,7 +233,7 @@ func (s *Session) Connect() error {
 	s.started = true
 	s.cancel = cancel
 	s.access.Unlock()
-	go s.run(ctx, options)
+	go s.run(ctx, dial)
 	return nil
 }
 
@@ -159,15 +284,13 @@ func rfbOptions(o *SessionOptions) (rfb.Options, error) {
 	return options, nil
 }
 
-func (s *Session) run(ctx context.Context, options rfb.Options) {
+func (s *Session) run(ctx context.Context, dial func(ctx context.Context) (remote, error)) {
 	err := checkOwnScreen(ctx, s.options.Host, s.options.Port)
 	if err != nil {
 		s.finish(err)
 		return
 	}
-	events := &sessionEvents{session: s}
-	options.Prepare = s.prepare
-	client, err := rfb.Dial(ctx, options, events)
+	connected, err := dial(ctx)
 	if err != nil {
 		s.finish(err)
 		return
@@ -175,27 +298,24 @@ func (s *Session) run(ctx context.Context, options rfb.Options) {
 	s.access.Lock()
 	cancelled := ctx.Err() != nil
 	if !cancelled {
-		s.client = client
+		s.remote = connected
 	}
-	interval := updateInterval(s.updateRate)
 	late := s.setup
 	s.setup = sessionSetup{}
 	s.access.Unlock()
 	if cancelled {
-		client.Close()
+		_ = connected.Close()
 		s.finish(context.Canceled)
 		return
 	}
-
-	if interval != options.UpdateInterval {
-		client.SetUpdateInterval(interval)
-	}
-	s.apply(client, late)
-	s.handler.OnServerInfo(newServerInfo(client.Info()))
+	connected.apply(late)
+	s.handler.OnServerInfo(connected.serverInfo())
 	s.handler.OnStateChanged(StateConnected, ErrorNone, "")
-	err = client.Run()
-	if err == nil && ctx.Err() != nil {
-		err = context.Canceled
+	err = connected.Run()
+	if ctx.Err() != nil {
+		if code, _ := classifyError(err); code == ErrorNone || code == ErrorNetwork || code == ErrorProtocol {
+			err = context.Canceled
+		}
 	}
 	s.finish(err)
 }
@@ -205,6 +325,8 @@ type sessionSetup struct {
 	quality         *rfb.Quality
 	display         *virtualDisplay
 	highPerformance *media.OfferOptions
+	updateRate      *int32
+	visible         *bool
 }
 
 type virtualDisplay struct {
@@ -215,64 +337,35 @@ type virtualDisplay struct {
 	maximumHeight int32
 }
 
-func (s *Session) pending(keep func(*sessionSetup)) (*rfb.Client, bool) {
+func (s *Session) pending(keep func(*sessionSetup)) (remote, bool) {
 	s.access.Lock()
 	defer s.access.Unlock()
-	if s.client == nil && !s.finished {
+	if s.remote == nil && !s.finished {
 		keep(&s.setup)
 		return nil, true
 	}
-	return s.client, false
+	return s.remote, false
 }
 
-func (s *Session) prepare(client *rfb.Client) error {
+func (s *Session) takeSetup() sessionSetup {
 	s.access.Lock()
+	defer s.access.Unlock()
 	setup := s.setup
 	s.setup = sessionSetup{}
-	s.access.Unlock()
-	s.apply(client, setup)
-	return nil
-}
-
-func (s *Session) apply(client *rfb.Client, setup sessionSetup) {
-	info := newServerInfo(client.Info())
-	if setup.hdr != nil && info.SupportsVirtualDisplay {
-		err := client.SetHDR(*setup.hdr)
-		if err != nil {
-			client.Logger().Warn("apply the HDR setting made before connecting", "error", err)
-		}
-	}
-	if setup.quality != nil {
-		err := client.SetQuality(*setup.quality)
-		if err != nil {
-			client.Logger().Warn("apply the quality chosen before connecting", "error", err)
-		}
-	}
-	if display := setup.display; display != nil && info.SupportsVirtualDisplay {
-		err := client.SetVirtualDisplay(int(display.width), int(display.height), display.density, int(display.maximumWidth), int(display.maximumHeight))
-		if err != nil {
-			client.Logger().Warn("apply the virtual display requested before connecting", "error", err)
-		}
-	}
-	if setup.highPerformance != nil && info.SupportsHighPerformance && client.MediaStream() == nil {
-		err := client.StartMediaStream(*setup.highPerformance, &mediaEvents{session: s})
-		if err != nil {
-			s.handler.OnMediaStopped(classifyMediaError(err), err.Error())
-		}
-	}
+	return setup
 }
 
 func (s *Session) finish(err error) {
 	s.access.Lock()
 	s.finished = true
 	s.setup = sessionSetup{}
-	s.client = nil
+	s.remote = nil
 	s.attached = nil
 	s.cancelPromptsLocked()
 	s.access.Unlock()
 	code, message := classifyError(err)
 	if s.ending.Load() && (code == ErrorNetwork || code == ErrorProtocol) {
-		code = ErrorSessionEnded
+		code, message = ErrorSessionEnded, ""
 	}
 	s.handler.OnStateChanged(StateDisconnected, code, message)
 }
@@ -284,14 +377,18 @@ func classifyError(err error) (int32, string) {
 		return ErrorNone, ""
 	case E.IsMulti(err, context.Canceled, rfb.ErrSessionCancelled):
 		return ErrorCancelled, err.Error()
-	case errors.Is(err, rfb.ErrAuthenticationFailed):
+	case E.IsMulti(err, rfb.ErrAuthenticationFailed, rdp.ErrAuthenticationFailed):
 		return ErrorAuthentication, err.Error()
-	case errors.Is(err, rfb.ErrPermissionDenied):
+	case E.IsMulti(err, rfb.ErrPermissionDenied, rdp.ErrRemoteLogonDenied):
 		return ErrorPermissionDenied, err.Error()
-	case errors.Is(err, rfb.ErrUnsupportedServer):
+	case E.IsMulti(err, rfb.ErrUnsupportedServer, rdp.ErrNotRDP, rdp.ErrNLAUnavailable):
 		return ErrorUnsupportedServer, err.Error()
 	case errors.Is(err, rfb.ErrUnverifiedServer):
 		return ErrorUnverifiedServer, err.Error()
+	case errors.Is(err, rdp.ErrCertificateChanged):
+		return ErrorCertificateChanged, err.Error()
+	case E.IsMulti(err, rdp.ErrSessionEnded, rdp.ErrSessionReplaced):
+		return ErrorSessionEnded, err.Error()
 	case errors.As(err, &ownScreen):
 		return ErrorOwnScreen, err.Error()
 	case E.IsMulti(err, io.EOF, io.ErrUnexpectedEOF):
@@ -318,14 +415,14 @@ func (s *Session) cancelPromptsLocked() {
 
 func (s *Session) Disconnect() {
 	s.access.Lock()
-	cancel, client := s.cancel, s.client
+	cancel, connected := s.cancel, s.remote
 	s.cancelPromptsLocked()
 	s.access.Unlock()
 	if cancel != nil {
 		cancel()
 	}
-	if client != nil {
-		go client.Close()
+	if connected != nil {
+		go connected.Close()
 	}
 }
 
@@ -339,7 +436,7 @@ func (s *Session) AttachFramebuffer(address int64, width int32, height int32, by
 	length := int(bytesPerRow) * int(height)
 
 	base := *(*unsafe.Pointer)(unsafe.Pointer(&address))
-	framebuffer := &rfb.Framebuffer{
+	framebuffer := &bgra.Image{
 		Pix:    unsafe.Slice((*byte)(base), length),
 		Stride: int(bytesPerRow),
 		Width:  int(width),
@@ -355,25 +452,43 @@ func (s *Session) AttachFramebuffer(address int64, width int32, height int32, by
 		s.access.Unlock()
 		return nil
 	}
-	client := s.client
+	connected := s.remote
 	s.access.Unlock()
-	if client == nil {
+	if connected == nil {
 		return E.New("not connected")
 	}
-	return client.SetFramebuffer(framebuffer)
+	return connected.SetFramebuffer(framebuffer)
+}
+
+func (s *Session) connectedRemote() (remote, error) {
+	s.access.Lock()
+	defer s.access.Unlock()
+	if s.remote == nil {
+		return nil, E.New("not connected")
+	}
+	return s.remote, nil
 }
 
 func (s *Session) connected() (*rfb.Client, error) {
 	s.access.Lock()
-	defer s.access.Unlock()
-	if s.client == nil {
+	connected := s.remote
+	s.access.Unlock()
+	return rfbClient(connected)
+}
+
+func rfbClient(connected remote) (*rfb.Client, error) {
+	if connected == nil {
 		return nil, E.New("not connected")
 	}
-	return s.client, nil
+	client, isRFB := connected.(rfbRemote)
+	if !isRFB {
+		return nil, E.New("not supported over RDP")
+	}
+	return client.Client, nil
 }
 
 func (s *Session) SendPointer(x int32, y int32, buttons int32) error {
-	client, err := s.connected()
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
@@ -381,7 +496,7 @@ func (s *Session) SendPointer(x int32, y int32, buttons int32) error {
 }
 
 func (s *Session) SendScroll(x int32, y int32, deltaX float64, deltaY float64) error {
-	client, err := s.connected()
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
@@ -389,7 +504,7 @@ func (s *Session) SendScroll(x int32, y int32, deltaX float64, deltaY float64) e
 }
 
 func (s *Session) SendKey(keysym int32, down bool) error {
-	client, err := s.connected()
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
@@ -397,15 +512,15 @@ func (s *Session) SendKey(keysym int32, down bool) error {
 }
 
 func (s *Session) SendKeyCode(keyCode int32, keyboardType int32, keysym int32, down bool) error {
-	client, err := s.connected()
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
-	return client.SendKeyCode(uint16(keyCode), rfb.KeyboardType(keyboardType), uint32(keysym), down)
+	return client.SendKeyCode(uint16(keyCode), keyboardType, uint32(keysym), down)
 }
 
 func (s *Session) SendText(text string) error {
-	client, err := s.connected()
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
@@ -420,19 +535,30 @@ func (s *Session) PasteText(text string) error {
 	return client.PasteText(text)
 }
 
-func (s *Session) SetClipboard(clipboard *Clipboard) error {
-	client, err := s.connected()
+func (s *Session) PasteClipboard(clipboard *Clipboard) error {
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
 	if clipboard == nil {
 		clipboard = NewClipboard()
 	}
-	return client.SetClipboard(clipboard.toRFB())
+	return client.PasteClipboard(clipboard)
+}
+
+func (s *Session) SetClipboard(clipboard *Clipboard) error {
+	client, err := s.connectedRemote()
+	if err != nil {
+		return err
+	}
+	if clipboard == nil {
+		clipboard = NewClipboard()
+	}
+	return client.SetClipboard(clipboard)
 }
 
 func (s *Session) SetSharedClipboard(enabled bool) error {
-	client, err := s.connected()
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
@@ -440,7 +566,7 @@ func (s *Session) SetSharedClipboard(enabled bool) error {
 }
 
 func (s *Session) RequestClipboard() error {
-	client, err := s.connected()
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
@@ -470,15 +596,19 @@ func (s *Session) SetQuality(quality int32) error {
 	if rfb.Quality(quality) < rfb.QualityAdaptive || rfb.Quality(quality) > rfb.QualityLow {
 		return E.New("unknown quality ", quality, "; it must be ", QualityAdaptive, " to ", QualityLow)
 	}
+	if s.options.Protocol != ProtocolRFB {
+		return E.New("the quality is not adjustable over RDP")
+	}
 	value := rfb.Quality(quality)
-	client, kept := s.pending(func(setup *sessionSetup) {
+	connected, kept := s.pending(func(setup *sessionSetup) {
 		setup.quality = &value
 	})
 	if kept {
 		return nil
 	}
-	if client == nil {
-		return E.New("not connected")
+	client, err := rfbClient(connected)
+	if err != nil {
+		return err
 	}
 	return client.SetQuality(value)
 }
@@ -487,12 +617,18 @@ func (s *Session) SetUpdateRate(rate int32) error {
 	if rate < 0 {
 		return E.New("invalid update rate ", rate, "; it must not be negative")
 	}
-	s.access.Lock()
-	s.updateRate = rate
-	client := s.client
-	s.access.Unlock()
-	if client == nil {
+	if s.options.Protocol != ProtocolRFB {
+		return E.New("the update rate is not adjustable over RDP")
+	}
+	connected, kept := s.pending(func(setup *sessionSetup) {
+		setup.updateRate = &rate
+	})
+	if kept {
 		return nil
+	}
+	client, err := rfbClient(connected)
+	if err != nil {
+		return err
 	}
 	return client.SetUpdateInterval(updateInterval(rate))
 }
@@ -513,7 +649,15 @@ func (s *Session) SetScale(factor float64) error {
 }
 
 func (s *Session) SetVirtualDisplay(width int32, height int32, density float64, maximumWidth int32, maximumHeight int32) error {
-	err := rfb.CheckVirtualDisplay(int(width), int(height), density)
+	var err error
+	switch s.options.Protocol {
+	case ProtocolRDP:
+		if width <= 0 || height <= 0 || !(density > 0) || math.IsInf(density, 1) {
+			err = E.New("rdp: display of ", width, "x", height, " points at density ", density)
+		}
+	default:
+		err = rfb.CheckVirtualDisplay(int(width), int(height), density)
+	}
 	if err != nil {
 		return err
 	}
@@ -529,6 +673,26 @@ func (s *Session) SetVirtualDisplay(width int32, height int32, density float64, 
 	return client.SetVirtualDisplay(int(width), int(height), density, int(maximumWidth), int(maximumHeight))
 }
 
+func (s *Session) DisplayWidthMultiple() int32 {
+	if s.options.Protocol == ProtocolRDP {
+		return rdp.DisplayWidthMultiple
+	}
+	return 1
+}
+
+func (s *Session) SetVisible(visible bool) error {
+	connected, kept := s.pending(func(setup *sessionSetup) {
+		setup.visible = &visible
+	})
+	if kept {
+		return nil
+	}
+	if connected == nil {
+		return E.New("not connected")
+	}
+	return connected.setVisible(visible)
+}
+
 func (s *Session) SelectKeyboardSource(sourceID string) error {
 	client, err := s.connected()
 	if err != nil {
@@ -538,7 +702,7 @@ func (s *Session) SelectKeyboardSource(sourceID string) error {
 }
 
 func (s *Session) RequestRefresh() error {
-	client, err := s.connected()
+	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
@@ -574,8 +738,11 @@ func (e *sessionEvents) StateChanged(state rfb.State) {
 	}
 }
 
-func (e *sessionEvents) ResizeFramebuffer(width, height int) (*rfb.Framebuffer, error) {
-	s := e.session
+func (e *sessionEvents) ResizeFramebuffer(width, height int) (*bgra.Image, error) {
+	return e.session.resizeFramebuffer(width, height)
+}
+
+func (s *Session) resizeFramebuffer(width, height int) (*bgra.Image, error) {
 	s.access.Lock()
 	s.resizing = true
 	s.resizeWidth, s.resizeHeight = width, height
@@ -606,13 +773,17 @@ func (e *sessionEvents) FramebufferUpdated(update rfb.Update) {
 }
 
 func (e *sessionEvents) CursorChanged(cursor *rfb.Cursor) {
-	e.session.handler.OnCursorImage(&CursorImage{
+	e.session.handler.OnCursorImage(newCursorImage(&cursor.Cursor))
+}
+
+func newCursorImage(cursor *bgra.Cursor) *CursorImage {
+	return &CursorImage{
 		Width:    int32(cursor.Width),
 		Height:   int32(cursor.Height),
 		HotspotX: int32(cursor.HotspotX),
 		HotspotY: int32(cursor.HotspotY),
 		Pixels:   cursor.Pixels,
-	})
+	}
 }
 
 func (e *sessionEvents) CursorMoved(x, y int) {

@@ -36,18 +36,23 @@ func (s *Session) Statistics() *Statistics {
 	if encoding := s.pictureEncoding.Load(); encoding != 0 {
 		statistics.Encoding = encodingName(rfb.Encoding(encoding - 1))
 	}
-	client, err := s.connected()
+	connected, err := s.connectedRemote()
 	if err != nil {
 		return statistics
 	}
-	info, known := client.ConnectionInfo()
+	connected.statistics(statistics)
+	return statistics
+}
+
+func (r rfbRemote) statistics(statistics *Statistics) {
+	info, known := r.ConnectionInfo()
 	if known {
 		statistics.RoundTripMilliseconds = float64(info.RoundTrip.Microseconds()) / 1000
 		statistics.ReceivedBytes = int64(info.ReceivedBytes)
 	}
-	stream := client.MediaStream()
+	stream := r.MediaStream()
 	if stream == nil {
-		return statistics
+		return
 	}
 	streamStatistics := stream.Stats()
 	statistics.ReceivedBytes += int64(streamStatistics.VideoBytes + streamStatistics.AudioBytes)
@@ -62,7 +67,6 @@ func (s *Session) Statistics() *Statistics {
 	statistics.QueueDelayMilliseconds = float64(streamStatistics.OneWayDelay.Microseconds()) / 1000
 	statistics.PlayoutDelayMilliseconds = float64(streamStatistics.VideoPlayoutDelay.Microseconds()) / 1000
 	statistics.LateVideoPackets = int64(streamStatistics.VideoLatePackets)
-	return statistics
 }
 
 func encodingName(encoding rfb.Encoding) string {

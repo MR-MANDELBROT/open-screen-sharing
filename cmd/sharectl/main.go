@@ -238,22 +238,6 @@ func parseMode(value string) (rfb.Mode, error) {
 	return 0, E.New("unknown mode ", strconv.Quote(value))
 }
 
-func parseNumbers[T any](value string, count int, parse func(string) (T, error)) ([]T, error) {
-	parts := strings.Split(value, ",")
-	if len(parts) < count {
-		return nil, E.New(strconv.Quote(value), " needs ", count, " numbers")
-	}
-	numbers := make([]T, len(parts))
-	for i, part := range parts {
-		number, err := parse(strings.TrimSpace(part))
-		if err != nil {
-			return nil, err
-		}
-		numbers[i] = number
-	}
-	return numbers, nil
-}
-
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "sharectl:", err)
 	os.Exit(1)

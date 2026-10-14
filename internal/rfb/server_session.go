@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/outbox"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -33,8 +34,8 @@ type ServerSession struct {
 	conn   net.Conn
 	logger *slog.Logger
 	stream *stream
-	outbox *outbox
-	writer *writer
+	outbox *outbox.Outbox
+	writer *outbox.Writer
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -77,8 +78,8 @@ func newServerSession(server *Server, conn net.Conn, id uint64) *ServerSession {
 		conn:       conn,
 		logger:     server.logger.With("viewer", conn.RemoteAddr().String(), "session", id),
 		stream:     newStream(conn),
-		outbox:     newOutbox(),
-		writer:     &writer{conn: conn},
+		outbox:     outbox.New(),
+		writer:     outbox.NewWriter(conn),
 		ctx:        ctx,
 		cancel:     cancel,
 		writerDone: make(chan struct{}),
@@ -183,7 +184,7 @@ func hungUp(err error) bool {
 }
 
 func (s *ServerSession) stopWriter() {
-	s.outbox.close(nil)
+	s.outbox.Close(nil)
 	if s.writerStarted {
 		<-s.writerDone
 	}
@@ -352,10 +353,10 @@ func (s *ServerSession) startWriter() error {
 	if err != nil {
 		return err
 	}
-	s.writer.encoder = encoder
+	s.writer.SetEncoder(encoder.encode)
 	s.writerStarted = true
 	go func() {
-		err := s.writer.run(s.outbox)
+		err := s.writer.Run(s.outbox)
 		if err != nil {
 			s.conn.Close()
 		}
@@ -365,7 +366,7 @@ func (s *ServerSession) startWriter() error {
 }
 
 func (s *ServerSession) send(message []byte) {
-	err := s.outbox.push(message, false)
+	err := s.outbox.Push(message, false)
 	if err != nil {
 		s.logger.Debug("send", "error", err)
 	}
@@ -393,7 +394,7 @@ func (s *ServerSession) dispatch(message []byte) error {
 		s.setEncodings(parseEncodings(message))
 	case clientUpdateRequest:
 		if message[1] == 0 {
-			err := s.outbox.pushWait(framebufferUpdate())
+			err := s.outbox.PushWait(framebufferUpdate())
 			if err != nil {
 				s.logger.Debug("send", "error", err)
 			}
@@ -591,7 +592,7 @@ func (s *ServerSession) startMedia() {
 	config.OpenVideo = s.server.handler.OpenVideo
 	config.OpenAudio = s.server.handler.OpenAudio
 	config.Send = func(payload []byte) error {
-		return s.outbox.push(mediaStreamUpdate(payload), false)
+		return s.outbox.Push(mediaStreamUpdate(payload), false)
 	}
 	if address, isTCP := s.conn.RemoteAddr().(*net.TCPAddr); isTCP {
 		config.InitialTarget = address.AddrPort().Addr()
@@ -753,7 +754,7 @@ func (s *ServerSession) answerPasteboard(echo uint32) {
 	s.access.Lock()
 	s.viewerClipboard = clipboard
 	s.access.Unlock()
-	err = s.outbox.pushWait(message)
+	err = s.outbox.PushWait(message)
 	if err != nil {
 		s.logger.Debug("send the pasteboard", "error", err)
 	}

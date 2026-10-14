@@ -5,56 +5,56 @@ import SwiftUI
 final class ToolbarLayout: ObservableObject {
     #if os(iOS)
     static let mac = ToolbarLayout(
-        touchScreen: false, key: "SessionToolbar.v1",
-        defaultBar: [.keyboard, .displays, .resolution, .audio, .pointerLock, .clipboard, .missionControl, .spotlight])
-    static let touchScreen = ToolbarLayout(
-        touchScreen: true, key: "SessionToolbar.TouchScreen.v1", defaultBar: [.keyboard, .audio, .pointerLock, .clipboard, .home, .appSwitcher])
+        platform: .mac, key: "SessionToolbar",
+        defaultBar: [.keyboard, .displays, .resolution, .audio, .pointerLock, .clipboard, .missionControl])
+    static let iOS = ToolbarLayout(
+        platform: .iOS, key: "SessionToolbar.iOS", defaultBar: [.keyboard, .audio, .pointerLock, .clipboard, .home, .appSwitcher])
+    static let pc = ToolbarLayout(
+        platform: .pc, key: "SessionToolbar.PC", defaultBar: [.keyboard, .displays, .resolution, .audio, .pointerLock, .clipboard])
     #else
     static let mac = ToolbarLayout(
-        touchScreen: false, key: "SessionToolbar.v1", defaultBar: [.displays, .resolution, .audio, .pointerLock, .clipboard, .missionControl, .spotlight])
-    static let touchScreen = ToolbarLayout(
-        touchScreen: true, key: "SessionToolbar.TouchScreen.v1", defaultBar: [.audio, .pointerLock, .clipboard, .home, .appSwitcher])
+        platform: .mac, key: "SessionToolbar", defaultBar: [.displays, .resolution, .audio, .pointerLock, .clipboard, .missionControl])
+    static let iOS = ToolbarLayout(
+        platform: .iOS, key: "SessionToolbar.iOS", defaultBar: [.audio, .pointerLock, .clipboard, .home, .appSwitcher])
+    static let pc = ToolbarLayout(
+        platform: .pc, key: "SessionToolbar.PC", defaultBar: [.displays, .resolution, .audio, .pointerLock, .clipboard])
     #endif
 
     static func layout(for controller: SessionController) -> ToolbarLayout {
-        controller.isTouchScreen ? touchScreen : mac
+        switch controller.platform {
+        case .mac: mac
+        case .iOS: iOS
+        case .pc: pc
+        }
     }
 
     static let maximumSlots = 8
 
     let defaultBar: [SessionCommand]
-    private let forTouchScreen: Bool
+    private let platform: RemotePlatform
     private let key: String
 
     @Published private(set) var bar: [SessionCommand]
     @Published private(set) var isCustomized: Bool
-    private var known: Set<String>
     private let store: PreferenceStore
 
-    private struct Stored: Codable {
-        var bar: [String]
-        var known: [String]
-    }
-
-    private init(touchScreen: Bool, key: String, defaultBar: [SessionCommand], store: PreferenceStore = .shared) {
-        forTouchScreen = touchScreen
+    private init(platform: RemotePlatform, key: String, defaultBar: [SessionCommand], store: PreferenceStore = .shared) {
+        self.platform = platform
         self.key = key
         self.defaultBar = defaultBar
         self.store = store
-        guard let stored = store.value(Stored.self, for: key) else {
+        if let stored = store.value([String].self, for: key) {
+            var seen = Set<SessionCommand>()
+            bar = stored.compactMap(SessionCommand.init(rawValue:)).filter { seen.insert($0).inserted }
+            isCustomized = true
+        } else {
             bar = defaultBar
             isCustomized = false
-            known = []
-            return
         }
-        let known = Set(stored.known)
-        bar = Self.merge(stored: stored.bar, known: known, defaultBar: defaultBar)
-        isCustomized = true
-        self.known = known
     }
 
     func otherCommands(in category: SessionCommandCategory) -> [SessionCommand] {
-        category.commands.filter { !bar.contains($0) && $0.applies(toTouchScreen: forTouchScreen) }
+        category.commands.filter { !bar.contains($0) && $0.applies(to: platform) }
     }
 
     var isDefault: Bool { bar == defaultBar }
@@ -91,7 +91,6 @@ final class ToolbarLayout: ObservableObject {
     func reset() {
         bar = defaultBar
         isCustomized = false
-        known = []
         store.remove(key)
     }
 
@@ -102,26 +101,9 @@ final class ToolbarLayout: ObservableObject {
     }
 
     private func save() {
-        known.formUnion(defaultBar.map(\.rawValue))
         isCustomized = true
-        store.set(Stored(bar: bar.map(\.rawValue), known: known.sorted()), for: key)
+        store.set(bar.map(\.rawValue), for: key)
     }
-
-    static func merge(stored ids: [String], known: Set<String>, defaultBar: [SessionCommand]) -> [SessionCommand] {
-        var bar: [SessionCommand] = []
-        for id in ids {
-            if let command = SessionCommand(rawValue: id), !bar.contains(command) {
-                bar.append(command)
-            }
-        }
-        for (index, command) in defaultBar.enumerated() where !known.contains(command.rawValue) && !bar.contains(command) {
-            let neighbour = defaultBar[..<index].reversed().first { bar.contains($0) }
-            let position = neighbour.flatMap { bar.firstIndex(of: $0) }.map { $0 + 1 } ?? 0
-            bar.insert(command, at: position)
-        }
-        return bar
-    }
-
 
     static func capsuleSlots(width: CGFloat, itemWidth: CGFloat) -> Int {
         let fixed = 2 * itemWidth + 2 * capsuleGroupSpacing + 2 * capsuleGroupPadding + 2 * capsuleMargin

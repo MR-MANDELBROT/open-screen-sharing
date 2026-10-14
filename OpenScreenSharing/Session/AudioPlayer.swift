@@ -46,18 +46,24 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
 
     init(format: AudioFormat, failed: @escaping @Sendable (any Error) -> Void) throws {
         self.failed = failed
+        let pcm = format.formatID == kAudioFormatLinearPCM
         var description = AudioStreamBasicDescription(
             mSampleRate: format.sampleRate, mFormatID: kAudioFormatMPEG4AAC_ELD, mFormatFlags: 0, mBytesPerPacket: 0,
             mFramesPerPacket: format.framesPerPacket, mBytesPerFrame: 0, mChannelsPerFrame: format.channels, mBitsPerChannel: 0, mReserved: 0
         )
-        let name = "\(Int(format.sampleRate)) Hz \(format.channels)-channel AAC-ELD"
-        guard let inputFormat = AVAudioFormat(streamDescription: &description),
+        let name = "\(Int(format.sampleRate)) Hz \(format.channels)-channel \(pcm ? "16-bit PCM" : "AAC-ELD")"
+        guard
+            let inputFormat = pcm
+                ? AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: format.sampleRate, channels: format.channels, interleaved: true)
+                : AVAudioFormat(streamDescription: &description),
             let outputFormat = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: format.channels)
         else { throw MessageError("AVAudioFormat rejected \(name)") }
         guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
             throw MessageError("AVAudioConverter can't decode \(name)")
         }
-        converter.magicCookie = format.magicCookie
+        if !pcm {
+            converter.magicCookie = format.magicCookie
+        }
         self.inputFormat = inputFormat
         self.outputFormat = outputFormat
         self.converter = converter
@@ -289,14 +295,29 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
     }
 
     private func decode(_ data: Data) -> AVAudioPCMBuffer? {
-        let compressed = AVAudioCompressedBuffer(format: inputFormat, packetCapacity: 1, maximumPacketSize: max(data.count, 1))
-        data.withUnsafeBytes { raw in
-            compressed.data.copyMemory(from: raw.baseAddress!, byteCount: data.count)
+        guard !data.isEmpty else { return nil }
+        let input: AVAudioBuffer
+        if inputFormat.commonFormat == .pcmFormatInt16 {
+            let frames = AVAudioFrameCount(data.count / Int(inputFormat.streamDescription.pointee.mBytesPerFrame))
+            guard let samples = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: frames), let destination = samples.int16ChannelData
+            else { return nil }
+            data.withUnsafeBytes { raw in
+                UnsafeMutableRawPointer(destination[0]).copyMemory(from: raw.baseAddress!, byteCount: data.count)
+            }
+            samples.frameLength = frames
+            input = samples
+        } else {
+            let compressed = AVAudioCompressedBuffer(format: inputFormat, packetCapacity: 1, maximumPacketSize: data.count)
+            data.withUnsafeBytes { raw in
+                compressed.data.copyMemory(from: raw.baseAddress!, byteCount: data.count)
+            }
+            compressed.byteLength = UInt32(data.count)
+            compressed.packetCount = 1
+            compressed.packetDescriptions?.pointee = AudioStreamPacketDescription(
+                mStartOffset: 0, mVariableFramesInPacket: 0, mDataByteSize: UInt32(data.count))
+            input = compressed
         }
-        compressed.byteLength = UInt32(data.count)
-        compressed.packetCount = 1
-        compressed.packetDescriptions?.pointee = AudioStreamPacketDescription(mStartOffset: 0, mVariableFramesInPacket: 0, mDataByteSize: UInt32(data.count))
-        guard let pcm = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: inputFormat.streamDescription.pointee.mFramesPerPacket) else { return nil }
+        guard let pcm = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: AVAudioFrameCount(packetFrames)) else { return nil }
         var consumed = false
         var error: NSError?
         let status = converter.convert(to: pcm, error: &error) { _, outStatus in
@@ -306,7 +327,7 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
             }
             consumed = true
             outStatus.pointee = .haveData
-            return compressed
+            return input
         }
         guard status != .error, pcm.frameLength > 0 else { return nil }
         return pcm

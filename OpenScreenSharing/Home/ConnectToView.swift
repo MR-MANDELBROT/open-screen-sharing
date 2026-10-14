@@ -27,7 +27,9 @@ struct ConnectToView: View {
             guard found.name != ServerController.shared.advertisedName else { return false }
             #endif
             return !store.computers.contains { saved in
-                found.address.map(saved.address.matches) == true || nearby.computer(matching: saved.address)?.id == found.id
+                saved.remoteProtocol == found.remoteProtocol
+                    && (found.address.map(saved.address.matches) == true
+                        || nearby.computer(matching: saved.address, remoteProtocol: saved.remoteProtocol)?.id == found.id)
             }
         }
     }
@@ -63,7 +65,8 @@ struct ConnectToView: View {
                     } label: {
                         HStack {
                             ComputerRow(
-                                name: computer.name, detail: computer.address?.description,
+                                name: computer.name,
+                                detail: computer.address?.description(defaultPort: computer.remoteProtocol.defaultPort),
                                 device: DeviceAppearance(model: computer.model ?? ""), availability: .available)
                             if checkedID == computer.id {
                                 ProgressView()
@@ -136,8 +139,8 @@ struct ConnectToView: View {
         nearbyProblem = nil
         checkedID = computer.id
         task = Task {
-            let problem = await check(address) { server in
-                NewComputer(name: computer.name, address: address, model: computer.model, server: server)
+            let problem = await check(host: address.host, port: address.port, remoteProtocol: computer.remoteProtocol) { server in
+                NewComputer(name: computer.name, model: computer.model, server: server)
             }
             guard !Task.isCancelled else { return }
             task = nil
@@ -155,11 +158,10 @@ struct ConnectToView: View {
         problem = nil
         nearbyProblem = nil
         task = Task {
-            let problem = await check(target.address) { server in
-                let found = nearby.computer(matching: target.address)
+            let problem = await check(host: target.host, port: target.port, remoteProtocol: target.remoteProtocol) { server in
+                let found = nearby.computer(matching: server.address, remoteProtocol: server.remoteProtocol)
                 return NewComputer(
-                    name: found?.name ?? target.address.bonjourServiceName ?? target.address.host,
-                    address: target.address,
+                    name: found?.name ?? server.address.bonjourServiceName ?? server.address.host,
                     model: found?.model,
                     username: target.username ?? "",
                     password: target.password ?? "",
@@ -176,31 +178,31 @@ struct ConnectToView: View {
     }
 
     private func check(
-        _ address: ComputerAddress, making makeComputer: (ServerAuthentication) -> NewComputer
+        host: String, port: Int?, remoteProtocol: RemoteProtocol?, making makeComputer: (ProbedServer) -> NewComputer
     ) async -> SetupProblem? {
-        let server: ServerAuthentication
-        switch await ServerProber.probe(address) {
+        let server: ProbedServer
+        switch await ServerProber.probe(host: host, port: port, remoteProtocol: remoteProtocol) {
         case .success(let found):
             server = found
         case .failure(let failure):
-            return SetupProblem(failure, host: address.host, asksForUsername: true)
+            return SetupProblem(failure, host: host, asksForUsername: true)
         }
         guard !Task.isCancelled else { return nil }
         let computer = makeComputer(server)
-        guard let credentials = server.openCredentials else {
-            guard server.account || server.vncPassword else {
+        guard let credentials = server.authentication.openCredentials else {
+            guard server.authentication.account || server.authentication.vncPassword else {
                 return SetupProblem(summary: String(localized: "“\(computer.name)” offers no sign-in method this app supports."))
             }
             signIn(computer)
             return nil
         }
-        switch await ServerProber.checkLogin(address, credentials: credentials) {
+        switch await ServerProber.checkLogin(server, credentials: credentials) {
         case .success(let supportsHighPerformance):
             guard !Task.isCancelled else { return nil }
             signedIn(computer.signedIn(credentials, supportsHighPerformance: supportsHighPerformance))
             return nil
         case .failure(let failure):
-            return SetupProblem(failure, host: address.host, asksForUsername: false)
+            return SetupProblem(failure, host: host, asksForUsername: false)
         }
     }
 }

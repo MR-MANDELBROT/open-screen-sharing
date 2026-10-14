@@ -8,6 +8,17 @@ import (
 )
 
 const (
+	ProtocolRFB int32 = 0
+	ProtocolRDP int32 = 1
+)
+
+const (
+	PlatformUnknown int32 = 0
+	PlatformMac     int32 = 1
+	PlatformPC      int32 = 2
+)
+
+const (
 	LoginAccount int32 = 0
 
 	LoginRequestControl int32 = 1
@@ -37,6 +48,7 @@ const (
 	DialectAutomatic int32 = 0
 	DialectApple     int32 = 1
 	DialectStandard  int32 = 2
+	DialectRDP       int32 = 3
 )
 
 const (
@@ -71,6 +83,8 @@ const (
 	ErrorHostNotFound int32 = 9
 
 	ErrorOwnScreen int32 = 10
+
+	ErrorCertificateChanged int32 = 11
 )
 
 const (
@@ -120,10 +134,18 @@ const (
 const AllDisplays int64 = 0
 
 type SessionOptions struct {
+	Protocol int32
+
 	Host     string
 	Port     int32
 	Username string
 	Password string
+
+	TrustedFingerprint string
+
+	KeyboardLayout int32
+
+	Audio bool
 
 	LoginType int32
 
@@ -138,6 +160,8 @@ type SessionOptions struct {
 	ClientName string
 
 	Dialect int32
+
+	Platform int32
 
 	AllowUnverifiedLogin bool
 
@@ -164,7 +188,10 @@ type ServerInfo struct {
 	Width  int32
 	Height int32
 
-	IsMac bool
+	Dialect  int32
+	Platform int32
+
+	CursorPixelsPerPoint float64
 
 	ObserveOnly bool
 
@@ -174,7 +201,12 @@ type ServerInfo struct {
 	SupportsVirtualDisplay   bool
 	SupportsHighPerformance  bool
 	SupportsClipboard        bool
+	SupportsClipboardRequest bool
 	SupportsKeyboardSource   bool
+	SupportsQuality          bool
+	SupportsObserve          bool
+	SupportsAudio            bool
+	SupportsUnicodeText      bool
 
 	SupportsKeyCodes    bool
 	SupportsScrollWheel bool
@@ -200,12 +232,20 @@ type ServerInfo struct {
 	info                          rfb.ServerInfo
 }
 
-func newServerInfo(info rfb.ServerInfo) *ServerInfo {
+func newServerInfo(info rfb.ServerInfo, platform int32) *ServerInfo {
 	apple := info.Dialect == rfb.DialectApple
+	dialect := DialectStandard
+	if apple {
+		dialect, platform = DialectApple, PlatformMac
+	} else if platform == PlatformUnknown {
+		platform = PlatformPC
+	}
 	return &ServerInfo{
 		Width:                         int32(info.Width),
 		Height:                        int32(info.Height),
-		IsMac:                         apple,
+		Dialect:                       dialect,
+		Platform:                      platform,
+		CursorPixelsPerPoint:          1,
 		ObserveOnly:                   info.Flags&rfb.ServerFlagObserveOnly != 0,
 		CaptureNotPermitted:           info.Flags&rfb.ServerFlagCaptureNotPermitted != 0,
 		SupportsDisplaySelection:      info.Accepts(0x0d),
@@ -213,6 +253,9 @@ func newServerInfo(info rfb.ServerInfo) *ServerInfo {
 		SupportsVirtualDisplay:        info.Accepts(0x1d),
 		SupportsHighPerformance:       info.Accepts(0x1c) && info.Accepts(0x1d),
 		SupportsClipboard:             !apple || info.Accepts(0x15),
+		SupportsClipboardRequest:      apple,
+		SupportsQuality:               true,
+		SupportsObserve:               true,
 		SupportsKeyboardSource:        info.Accepts(0x1a),
 		SupportsKeyCodes:              info.Accepts(0x10),
 		SupportsScrollWheel:           info.Accepts(0x17),
@@ -336,13 +379,24 @@ func (c *Clipboard) AddItem(item *ClipboardItem) {
 }
 
 func (c *Clipboard) Text() string {
-	text, _ := c.toRFB().Text()
+	text, _ := c.text()
 	return text
 }
 
 func (c *Clipboard) HasText() bool {
-	_, found := c.toRFB().Text()
+	_, found := c.text()
 	return found
+}
+
+func (c *Clipboard) text() (string, bool) {
+	for _, item := range c.items {
+		for _, flavor := range item.flavors {
+			if flavor.Type == rfb.TypeUTF8PlainText && !flavor.Promise {
+				return string(flavor.Data), true
+			}
+		}
+	}
+	return "", false
 }
 
 type ClipboardItem struct {

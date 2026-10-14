@@ -37,7 +37,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
 
     private var pointerTouches: Set<UITouch> = []
     private var lockedButtons: PointerButtons = []
-    private var pressesToolbarHandle = false
     private var handleTouch: UITouch?
     private var toolbarTouches: Set<UITouch> = []
     private let systemPointerHover = UIHoverGestureRecognizer()
@@ -752,13 +751,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         PointerLock.isLocked(view.window?.windowScene)
     }
 
-    private var pointerIsOnToolbarHandle: Bool {
-        guard let handle = controller.toolbarHandleFrame else { return false }
-        let point = view.convert(view.viewPoint(for: controller.pointerPosition), to: nil)
-        let pictureTop = view.convert(view.imageRect, to: nil).minY
-        return point.x >= handle.minX && point.x < handle.maxX && point.y < max(handle.maxY, pictureTop + view.displayScale)
-    }
-
     func lockedMouseMoved(by counts: CGPoint) {
         guard isPointerLocked, counts.x.isFinite, counts.y.isFinite else { return }
         let delta = CGPoint(x: counts.x / Self.mouseCountsPerPoint, y: counts.y / Self.mouseCountsPerPoint)
@@ -767,7 +759,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         lastLockedMoveTime = now
         lockedMouseSpeed += (hypot(delta.x, delta.y) / interval - lockedMouseSpeed) * min(1, interval / 0.05)
         movePointer(by: delta, speed: lockedMouseSpeed)
-        updateToolbarHandleHighlight()
     }
 
     func lockedMouseButton(_ button: PointerButtons, pressed: Bool) {
@@ -775,24 +766,10 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         if pressed {
             controller.stopScrollMomentum()
             view.takeKeyFocus()
-            if button == .primary, lockedButtons.isEmpty, pointerIsOnToolbarHandle {
-                pressesToolbarHandle = true
-                return
-            }
             lockedButtons.insert(button)
             controller.press(button)
-        } else if button == .primary, pressesToolbarHandle {
-            pressesToolbarHandle = false
-            if pointerIsOnToolbarHandle { controller.toggleToolbar() }
         } else if lockedButtons.remove(button) != nil {
             controller.release(button)
-        }
-    }
-
-    private func updateToolbarHandleHighlight() {
-        let highlighted = isPointerLocked && pointerIsOnToolbarHandle
-        if controller.isToolbarHandleHighlighted != highlighted {
-            controller.isToolbarHandleHighlighted = highlighted
         }
     }
 
@@ -801,7 +778,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             scene === view.window?.windowScene
         else { return }
         lockedMouseSpeed = 0
-        pressesToolbarHandle = false
         if controller.isPointerLocked != isPointerLocked {
             controller.isPointerLocked = isPointerLocked
         }
@@ -819,7 +795,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             view.keepPointerVisible()
         }
         pointerInteraction.invalidate()
-        updateToolbarHandleHighlight()
     }
 
     @objc private func trackSystemPointer(_ gesture: UIHoverGestureRecognizer) {

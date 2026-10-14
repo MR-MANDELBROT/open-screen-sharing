@@ -4,14 +4,19 @@ import GameController
 #endif
 import SwiftUI
 
-struct KeyboardShortcutsView: View {
+struct KeyboardView: View {
     @ObservedObject private var shortcuts = KeyShortcuts.shared
     #if os(iOS)
     @ObservedObject private var keyboard = ConnectedKeyboard.shared
     #endif
-    @State private var recording: Recording?
-    @State private var alert: AlertState?
-    @State private var editing: KeyMapping?
+    @State private var editing: Editing?
+
+    private struct Editing: Identifiable {
+        let mapping: KeyMapping
+        let target: MappingTarget
+
+        var id: UUID { mapping.id }
+    }
 
     var body: some View {
         Group {
@@ -32,12 +37,11 @@ struct KeyboardShortcutsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .navigationTitle("Keyboard Shortcuts")
+        .navigationTitle("Keyboard")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button(role: .destructive) {
-                        recording = nil
                         shortcuts.restoreDefaults()
                     } label: {
                         Label("Restore Defaults", systemImage: "eraser.fill")
@@ -48,69 +52,63 @@ struct KeyboardShortcutsView: View {
                 }
             }
         }
-        .alert($alert)
-        .sheet(item: $editing) { mapping in
-            KeyMappingEditor(mapping: mapping, isNew: !shortcuts.mappings.contains { $0.id == mapping.id })
+        .sheet(item: $editing) { editing in
+            KeyMappingEditor(
+                mapping: editing.mapping, target: editing.target,
+                isNew: !shortcuts.mappings(for: editing.target).contains { $0.id == editing.mapping.id }
+            )
         }
-        #if os(macOS)
-        .modifier(ShortcutRecorder(recording: $recording, modifierChord: .pointerRelease, onPress: record))
-        #else
-        .modifier(ShortcutRecorder(recording: $recording, onPress: record))
-        #endif
     }
 
     private var form: some View {
         Form {
-            Section("Key Mappings") {
-                ForEach(shortcuts.mappings) { mapping in
-                    HStack {
-                        Button {
-                            editing = mapping
-                        } label: {
-                            HStack {
-                                Text(verbatim: mapping.trigger.displayName)
-                                Image(systemName: "arrow.right")
-                                    .foregroundStyle(.secondary)
-                                Text(verbatim: mapping.displayName)
-                                    .lineLimit(1)
-                                Spacer()
+            ForEach(MappingTarget.allCases) { target in
+                Section(target.title) {
+                    ForEach(shortcuts.mappings(for: target)) { mapping in
+                        HStack {
+                            Button {
+                                editing = Editing(mapping: mapping, target: target)
+                            } label: {
+                                HStack {
+                                    Text(verbatim: mapping.trigger.displayName)
+                                    Image(systemName: "arrow.right")
+                                        .foregroundStyle(.secondary)
+                                    Text(verbatim: mapping.displayName(for: target))
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                                .contentShape(Rectangle())
                             }
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            Button {
+                                shortcuts.removeMapping(mapping.id, from: target)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel(Text("Delete Mapping"))
                         }
-                        .buttonStyle(.plain)
-                        Button {
-                            shortcuts.removeMapping(mapping.id)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
+                    }
+                    .onDelete { offsets in
+                        for mapping in offsets.map({ shortcuts.mappings(for: target)[$0] }) {
+                            shortcuts.removeMapping(mapping.id, from: target)
                         }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel(Text("Delete Mapping"))
                     }
-                }
-                .onDelete { offsets in
-                    for mapping in offsets.map({ shortcuts.mappings[$0] }) {
-                        shortcuts.removeMapping(mapping.id)
+                    Button {
+                        editing = Editing(mapping: KeyMapping(id: UUID(), trigger: .unset, steps: []), target: target)
+                    } label: {
+                        Label("Add Mapping", systemImage: "plus")
                     }
+                    .formRowButtonStyleCompat()
                 }
-                Button {
-                    editing = KeyMapping(id: UUID(), trigger: .unset, steps: [])
-                } label: {
-                    Label("Add Mapping", systemImage: "plus")
-                }
-                .formRowButtonStyleCompat()
             }
-            ForEach(ShortcutGroup.allCases) { group in
-                Section(group.title) {
-                    ForEach(group.actions) { action in
-                        row(.action(action), title: action.title, shortcut: shortcuts.shortcut(for: action)?.displayName) {
-                            shortcuts.set(nil, for: action)
-                        }
-                        #if os(macOS)
-                        if action == .pointerLock {
-                            row(.pointerRelease, title: String(localized: "Release Pointer"), shortcut: EventModifiers(shortcuts.pointerRelease).symbols, clear: nil)
-                        }
-                        #endif
+            Section("Shortcuts") {
+                ForEach(ShortcutGroup.allCases) { group in
+                    NavigationLink {
+                        ShortcutGroupView(group: group)
+                    } label: {
+                        Text(verbatim: group.title)
                     }
                 }
             }
@@ -118,6 +116,44 @@ struct KeyboardShortcutsView: View {
         #if os(macOS)
         .formStyle(.grouped)
         .unboundedFormWidth()
+        #endif
+    }
+}
+
+private struct ShortcutGroupView: View {
+    let group: ShortcutGroup
+
+    @ObservedObject private var shortcuts = KeyShortcuts.shared
+    @State private var recording: Recording?
+    @State private var alert: AlertState?
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(group.actions) { action in
+                    row(.action(action), title: action.title, shortcut: shortcuts.shortcut(for: action)?.displayName) {
+                        shortcuts.set(nil, for: action)
+                    }
+                    #if os(macOS)
+                    if action == .pointerLock {
+                        row(.pointerRelease, title: String(localized: "Release Pointer"), shortcut: EventModifiers(shortcuts.pointerRelease).symbols, clear: nil)
+                    }
+                    #endif
+                }
+            }
+        }
+        #if os(macOS)
+        .formStyle(.grouped)
+        .unboundedFormWidth()
+        #else
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .navigationTitle(group.title)
+        .alert($alert)
+        #if os(macOS)
+        .modifier(ShortcutRecorder(recording: $recording, modifierChord: .pointerRelease, onPress: record))
+        #else
+        .modifier(ShortcutRecorder(recording: $recording, onPress: record))
         #endif
     }
 
@@ -180,21 +216,31 @@ struct KeyboardShortcutsView: View {
                     },
                 ]
             )
-        } else if let other = shortcuts.mapping(triggeredBy: shortcut) {
+            return
+        }
+        let conflicts = MappingTarget.allCases.compactMap { target in
+            shortcuts.mapping(triggeredBy: shortcut, for: target).map { (target: target, mapping: $0) }
+        }
+        if !conflicts.isEmpty {
+            let names = conflicts.map { $0.mapping.displayName(for: $0.target) }.formatted(.list(type: .and))
             alert = AlertState(
                 title: String(localized: "“\(shortcut.displayName)” Is Already in Use"),
-                message: String(localized: "It’s mapped to \(other.displayName). Replacing it removes that mapping."),
+                message: conflicts.count == 1
+                    ? String(localized: "It’s mapped to \(names). Replacing it removes that mapping.")
+                    : String(localized: "It’s mapped to \(names). Replacing it removes those mappings."),
                 actions: [
                     AlertState.Action(label: String(localized: "Cancel"), role: .cancel) {},
                     AlertState.Action(label: String(localized: "Replace"), role: nil, isDefault: true) {
-                        shortcuts.removeMapping(other.id)
+                        for conflict in conflicts {
+                            shortcuts.removeMapping(conflict.mapping.id, from: conflict.target)
+                        }
                         shortcuts.set(shortcut, for: action)
                     },
                 ]
             )
-        } else {
-            shortcuts.set(shortcut, for: action)
+            return
         }
+        shortcuts.set(shortcut, for: action)
     }
 }
 
@@ -207,14 +253,7 @@ struct ShortcutButton: View {
 
     var body: some View {
         Button(action: action) {
-            if isRecording {
-                Text(prompt)
-            } else if let shortcut {
-                Text(verbatim: shortcut)
-            } else {
-                Text("None")
-                    .foregroundStyle(.secondary)
-            }
+            ShortcutButtonLabel(isRecording: isRecording, shortcut: shortcut, prompt: prompt)
         }
         .buttonStyle(.bordered)
         .tint(isRecording ? .accentColor : nil)
@@ -224,8 +263,26 @@ struct ShortcutButton: View {
     }
 }
 
+private struct ShortcutButtonLabel: View {
+    let isRecording: Bool
+    let shortcut: String?
+    let prompt: LocalizedStringKey
+
+    var body: some View {
+        if isRecording {
+            Text(prompt)
+        } else if let shortcut {
+            Text(verbatim: shortcut)
+        } else {
+            Text("None")
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 private struct KeyMappingEditor: View {
     let id: UUID
+    let target: MappingTarget
     let isNew: Bool
 
     @ObservedObject private var shortcuts = KeyShortcuts.shared
@@ -235,8 +292,9 @@ private struct KeyMappingEditor: View {
     @State private var alert: AlertState?
     @Environment(\.dismiss) private var dismiss
 
-    init(mapping: KeyMapping, isNew: Bool) {
+    init(mapping: KeyMapping, target: MappingTarget, isNew: Bool) {
         id = mapping.id
+        self.target = target
         self.isNew = isNew
         _trigger = State(initialValue: mapping.trigger)
         _steps = State(initialValue: mapping.steps.map(Step.init))
@@ -266,7 +324,7 @@ private struct KeyMappingEditor: View {
         }
 
         var isComplete: Bool {
-            sendsText ? !text.isEmpty : !shortcut.isUnset && (shortcut.hasCommandModifier || shortcut.isSpecial)
+            sendsText ? !text.isEmpty : !shortcut.isUnset && (shortcut.hasCommandModifier || shortcut.isNamed)
         }
     }
 
@@ -275,12 +333,23 @@ private struct KeyMappingEditor: View {
         case key(UUID)
     }
 
-    private static let modifiers: [(flag: EventModifiers, symbol: String, title: String)] = [
+    private static let appleModifiers: [(flag: EventModifiers, label: String, title: String)] = [
         (.control, "⌃", String(localized: "Control Key", defaultValue: "Control")),
         (.option, "⌥", String(localized: "Option Key", defaultValue: "Option")),
         (.shift, "⇧", String(localized: "Shift Key", defaultValue: "Shift")),
         (.command, "⌘", String(localized: "Command Key", defaultValue: "Command")),
     ]
+
+    private static let pcModifiers: [(flag: EventModifiers, label: String, title: String)] = [
+        (.control, "Ctrl", String(localized: "Ctrl Key")),
+        (.option, "Alt", String(localized: "Alt Key")),
+        (.shift, "Shift", String(localized: "Shift Key", defaultValue: "Shift")),
+        (.command, "Win", String(localized: "Windows Key")),
+    ]
+
+    private var modifiers: [(flag: EventModifiers, label: String, title: String)] {
+        target == .pc ? Self.pcModifiers : Self.appleModifiers
+    }
 
     private var mapping: KeyMapping {
         KeyMapping(id: id, trigger: trigger, steps: steps.map(\.value))
@@ -326,7 +395,7 @@ private struct KeyMappingEditor: View {
                                     TextField("Text", text: $step.text)
                                 }
                             } else {
-                                ForEach(Self.modifiers, id: \.symbol) { modifier in
+                                ForEach(modifiers, id: \.label) { modifier in
                                     Toggle(isOn: Binding(
                                         get: { step.shortcut.eventModifiers.contains(modifier.flag) },
                                         set: { on in
@@ -335,17 +404,12 @@ private struct KeyMappingEditor: View {
                                             step.shortcut = KeyShortcut(key: step.shortcut.key, modifiers: flags)
                                         }
                                     )) {
-                                        Text(verbatim: modifier.symbol)
+                                        Text(verbatim: modifier.label)
                                     }
                                     .toggleStyle(.button)
                                     .accessibilityLabel(Text(verbatim: modifier.title))
                                 }
-                                ShortcutButton(
-                                    isRecording: recording == .key(step.id), title: String(localized: "Key"),
-                                    shortcut: step.shortcut.isUnset ? nil : KeyShortcut(key: step.shortcut.key, modifiers: []).displayName, prompt: "Type Key"
-                                ) {
-                                    recording = recording == .key(step.id) ? nil : .key(step.id)
-                                }
+                                keyControl($step)
                                 Spacer(minLength: 0)
                             }
                             #if os(macOS)
@@ -433,6 +497,45 @@ private struct KeyMappingEditor: View {
         #endif
     }
 
+    @ViewBuilder
+    private func keyControl(_ step: Binding<Step>) -> some View {
+        let shortcut = step.wrappedValue.shortcut
+        let key = shortcut.isUnset ? nil : KeyShortcut(key: shortcut.key, modifiers: []).displayName(for: target)
+        let isRecording = recording == .key(step.id)
+        if target == .pc {
+            Menu {
+                Button {
+                    recording = .key(step.id)
+                } label: {
+                    Label("Type Key", systemImage: "keyboard")
+                }
+                ForEach(KeyShortcut.pcKeyGroups) { group in
+                    Menu(group.title) {
+                        ForEach(group.keys, id: \.self) { name in
+                            Button {
+                                recording = nil
+                                step.wrappedValue.shortcut = KeyShortcut(key: name, modifiers: shortcut.eventModifiers)
+                            } label: {
+                                Text(verbatim: KeyShortcut.pcKeyLabel(name))
+                            }
+                        }
+                    }
+                }
+            } label: {
+                ShortcutButtonLabel(isRecording: isRecording, shortcut: key, prompt: "Type Key")
+            }
+            .buttonStyle(.bordered)
+            .tint(isRecording ? .accentColor : nil)
+            .id(isRecording)
+            .accessibilityLabel(Text("Key"))
+            .accessibilityValue(isRecording ? Text("Type Key") : key.map { Text(verbatim: $0) } ?? Text("None"))
+        } else {
+            ShortcutButton(isRecording: isRecording, title: String(localized: "Key"), shortcut: key, prompt: "Type Key") {
+                recording = isRecording ? nil : .key(step.id)
+            }
+        }
+    }
+
     private func record(_ field: Field, _ press: ShortcutPress) -> Bool {
         switch press {
         case .cancel:
@@ -480,14 +583,14 @@ private struct KeyMappingEditor: View {
                     },
                 ]
             )
-        } else if let other = shortcuts.mapping(triggeredBy: shortcut), other.id != id {
+        } else if let other = shortcuts.mapping(triggeredBy: shortcut, for: target), other.id != id {
             alert = AlertState(
                 title: String(localized: "“\(shortcut.displayName)” Is Already in Use"),
-                message: String(localized: "It’s mapped to \(other.displayName). Replacing it removes that mapping."),
+                message: String(localized: "It’s mapped to \(other.displayName(for: target)). Replacing it removes that mapping."),
                 actions: [
                     AlertState.Action(label: String(localized: "Cancel"), role: .cancel) {},
                     AlertState.Action(label: String(localized: "Replace"), role: nil, isDefault: true) {
-                        shortcuts.removeMapping(other.id)
+                        shortcuts.removeMapping(other.id, from: target)
                         commit()
                     },
                 ]
@@ -499,9 +602,9 @@ private struct KeyMappingEditor: View {
 
     private func commit() {
         if isNew {
-            shortcuts.add(mapping)
+            shortcuts.add(mapping, to: target)
         } else {
-            shortcuts.update(mapping)
+            shortcuts.update(mapping, in: target)
         }
         dismiss()
     }

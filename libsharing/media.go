@@ -175,6 +175,7 @@ type AudioFormat struct {
 	FormatID            int64
 	SampleRate          int32
 	Channels            int32
+	BitsPerSample       int32
 	FramesPerPacket     int32
 	AudioSpecificConfig []byte
 	MagicCookie         []byte
@@ -189,18 +190,22 @@ type AudioPacket struct {
 }
 
 func (s *Session) StartHighPerformance(options *HighPerformanceOptions) error {
+	if s.options.Protocol != ProtocolRFB {
+		return E.New("High Performance is not supported over RDP")
+	}
 	offer, err := offerOptions(options)
 	if err != nil {
 		return err
 	}
-	client, kept := s.pending(func(setup *sessionSetup) {
+	connected, kept := s.pending(func(setup *sessionSetup) {
 		setup.highPerformance = &offer
 	})
 	if kept {
 		return nil
 	}
-	if client == nil {
-		return E.New("not connected")
+	client, err := rfbClient(connected)
+	if err != nil {
+		return err
 	}
 	return client.StartMediaStream(offer, &mediaEvents{session: s})
 }
@@ -263,14 +268,18 @@ func (s *Session) RestartHighPerformance(options *HighPerformanceOptions) error 
 }
 
 func (s *Session) SetHDR(enabled bool) error {
-	client, kept := s.pending(func(setup *sessionSetup) {
+	if s.options.Protocol != ProtocolRFB {
+		return E.New("HDR is not supported over RDP")
+	}
+	connected, kept := s.pending(func(setup *sessionSetup) {
 		setup.hdr = &enabled
 	})
 	if kept {
 		return nil
 	}
-	if client == nil {
-		return E.New("not connected")
+	client, err := rfbClient(connected)
+	if err != nil {
+		return err
 	}
 	return client.SetHDR(enabled)
 }

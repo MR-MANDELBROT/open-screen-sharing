@@ -127,11 +127,11 @@ final class SessionController: ObservableObject {
     @Published private(set) var displays: [RemoteDisplay] = []
     @Published private(set) var displaySelection: DisplaySelection = .display(1)
     @Published private(set) var capabilities: SessionCapabilities = []
-    @Published private(set) var serverType: ServerType?
+    @Published private(set) var highPerformance: Bool?
     @Published private(set) var quality: SessionQuality = .adaptive
     @Published private var networkConfiguration = NetworkConfiguration()
     @Published private(set) var clipboardSharing = true
-    @Published private(set) var info = SessionInfo()
+    @Published private(set) var info: SessionInfo
     @Published private(set) var keyboardSources: [MacInputSource] = []
     @Published private(set) var imageSize: CGSize = .zero
     @Published private(set) var picture = ScreenPicture.none
@@ -146,7 +146,6 @@ final class SessionController: ObservableObject {
     @Published var isFullScreen = false
     @Published var isToolbarVisible = false
     @Published var isToolbarDocked = false
-    @Published var isToolbarHandleHighlighted = false
     @Published var letterbox: Letterbox?
     @Published private(set) var isPointerLockOn = false
     @Published private(set) var isZoomModeOn = false
@@ -204,6 +203,8 @@ final class SessionController: ObservableObject {
     private var holdsPointer = false
     private var credentials: SessionCredentials?
     private var pressedKeys: [Int: MacKey] = [:]
+    private var sentModifiers: [ModifierKey: MacKey] = [:]
+    private var commandTapPending = false
     private var repeatTask: Task<Void, Never>?
     private var capsLockEngaged = false
     private var capsLockPressedAt: TimeInterval?
@@ -263,30 +264,36 @@ final class SessionController: ObservableObject {
     private var isRestoring = false
     private var server: ServerAuthentication?
     private var probeTask: Task<Void, Never>?
+    private var trustedFingerprint = ""
     private var passwordUpdate = PasswordUpdate.keep
     private var usedSavedPassword = false
     private var device: DeviceInfo?
     private var deviceType: DeviceType? {
         didSet {
-            isTouchScreen = deviceType?.isTouchScreen ?? false
+            isIOS = deviceType?.isIOS ?? false
             isPhone = deviceType == .iPhone
-            if isTouchScreen {
+            if isIOS {
                 virtualDisplayRequests.stopWaiting()
             }
         }
     }
-    @Published private(set) var isTouchScreen = false
+    @Published private var isIOS = false
     @Published private var isPhone = false
+
+    var platform: RemotePlatform {
+        isIOS ? .iOS : info.platform
+    }
 
     init(route: SessionRoute) {
         self.route = route
         title = route.name
+        info = SessionInfo(remoteProtocol: route.remoteProtocol, platform: route.knownPlatform)
         computerID = route.computerID
         server = route.server
         device = route.model.map { DeviceInfo(model: $0, enclosureColor: "") }
-        serverType = route.serverType
+        highPerformance = route.remoteProtocol == .vnc ? route.usesHighPerformance : false
         deviceType = route.deviceType ?? route.model.flatMap(DeviceType.init(model:))
-        isTouchScreen = deviceType?.isTouchScreen ?? false
+        isIOS = deviceType?.isIOS ?? false
         isPhone = deviceType == .iPhone
         windowSize = route.computerID.flatMap { store.stored($0) }?.memory.windowSize
         virtualDisplayRequests.onIdle = { [weak self] in self?.virtualDisplayDidSettle() }
@@ -310,9 +317,10 @@ final class SessionController: ObservableObject {
         if let stored {
             restore(stored.memory)
             device = device ?? stored.device
-            serverType = stored.serverType
+            highPerformance = stored.usesHighPerformance
             deviceType = stored.deviceType
             keyboardSources = stored.keyboardSources.map(MacInputSource.init(id:))
+            trustedFingerprint = stored.trustedFingerprint
         }
         if !decidedClipboardSharing {
             decidedClipboardSharing = true
@@ -339,15 +347,15 @@ final class SessionController: ObservableObject {
             presentCredentialPrompt(for: server, username: username, failure: failure)
             return
         }
-        probeTask = Task { [weak self, address = route.address] in
-            let result = await ServerProber.probe(address)
+        probeTask = Task { [weak self, route] in
+            let result = await ServerProber.probe(host: route.host, port: route.port, remoteProtocol: route.remoteProtocol)
             guard let self, !Task.isCancelled else { return }
             probeTask = nil
             guard phase == .connecting else { return }
             switch result {
             case .success(let server):
-                self.server = server
-                presentCredentialPrompt(for: server, username: username, failure: failure)
+                self.server = server.authentication
+                presentCredentialPrompt(for: server.authentication, username: username, failure: failure)
             case .failure(let failure):
                 phase = .failed(failure)
             }
@@ -435,7 +443,8 @@ final class SessionController: ObservableObject {
                     username: credentials.loginType == .account ? credentials.username : "",
                     password: passwordUpdate,
                     supportsHighPerformance: capabilities.contains(.highPerformance),
-                    serverType: serverType ?? .vnc,
+                    remoteProtocol: route.remoteProtocol,
+                    usesHighPerformance: highPerformance ?? false,
                     memory: memory,
                     device: device
                 ))
@@ -457,17 +466,15 @@ final class SessionController: ObservableObject {
         return decoder.supportsHEVC || decoder.supportsH264
     }
 
-    var usesHighPerformance: Bool { serverType == .apple }
+    var usesHighPerformance: Bool { highPerformance == true }
 
-    private var mayUseHighPerformance: Bool { usesHighPerformance || (serverType == nil && canDecodeVideo) }
+    private var mayUseHighPerformance: Bool { highPerformance ?? canDecodeVideo }
 
-    private func settleServerType() {
-        guard serverType == nil else { return }
-        if info.isMac, capabilities.contains(.highPerformance), canDecodeVideo {
-            serverType = .apple
+    private func settleHighPerformance() {
+        guard highPerformance == nil else { return }
+        highPerformance = capabilities.contains(.highPerformance) && canDecodeVideo
+        if highPerformance == true {
             highPerformanceStartPending = true
-        } else {
-            serverType = .vnc
         }
     }
 
@@ -487,12 +494,12 @@ final class SessionController: ObservableObject {
     }
 
     private var touchScreenDensity: Double? {
-        guard isTouchScreen else { return nil }
+        guard isIOS else { return nil }
         return isPhone && min(info.framebufferWidth, info.framebufferHeight) >= 1000 ? 3 : 2
     }
 
     var cursorPixelsPerPoint: Double {
-        guard let density = touchScreenDensity else { return 1 }
+        guard let density = touchScreenDensity else { return info.cursorPixelsPerPoint }
         return density / info.framebufferPixelsPerCursorPixel
     }
 
@@ -509,8 +516,12 @@ final class SessionController: ObservableObject {
         pipeline.setSchedulesPresentation(networkConfiguration.schedulesPresentation)
         let configuration = SessionConfiguration(
             address: route.address,
+            remoteProtocol: route.remoteProtocol,
+            platform: route.knownPlatform,
+            trustedFingerprint: trustedFingerprint,
+            keyboardLayout: WindowsKeyboardLayout.current,
             displayName: route.name,
-            clientName: credentials.username.isEmpty ? Self.deviceName : credentials.username,
+            clientName: route.remoteProtocol == .rdp || credentials.username.isEmpty ? Self.deviceName : credentials.username,
             credentials: credentials,
             quality: quality,
             startsInObserveMode: mode == .observe,
@@ -522,12 +533,14 @@ final class SessionController: ObservableObject {
         let session = LibsharingRemoteSession(configuration: configuration)
         let sink = SessionEventSink(controller: self, pipeline: pipeline)
         sink.session = session
+        session.prepare(delegate: sink)
         if sceneInBackground {
             sink.setSceneInBackground(true)
         }
         self.session = session
         self.sink = sink
-        virtualDisplayRequests.reset { [weak self, weak session] mode in
+        virtualDisplayRequests.reset(widthMultiple: session.displayWidthMultiple, sizedByConnection: route.remoteProtocol == .rdp) {
+            [weak self, weak session] mode in
             guard let self else { return }
             session?.setVirtualDisplay(
                 mode, largestSide: VirtualDisplayMode.largestSide(onScreen: screenSize, screenScale: displayScale))
@@ -536,7 +549,6 @@ final class SessionController: ObservableObject {
         awaitsResolutionChange = false
         pipeline.holdPicture()
         phase = .connecting
-        session.start(delegate: sink)
         // ScreenSharing configures virtual displays before SetEncodings (ScreenSharing 776.27, macOS 27.0.1 26A434,
         // UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50, -[SSSession stConfigureSession] 0x1cc060514..0x1cc060590).
         if hdrEnabled {
@@ -549,6 +561,7 @@ final class SessionController: ObservableObject {
         if !wantsVirtualDisplay {
             startHighPerformanceWithConnection()
         }
+        session.connect()
     }
 
     private func startHighPerformanceWithConnection() {
@@ -568,6 +581,14 @@ final class SessionController: ObservableObject {
     func close() {
         disconnect()
         onClose()
+    }
+
+    func trustCertificate(_ fingerprint: String) {
+        trustedFingerprint = fingerprint
+        if let computerID {
+            save { try $0.setTrustedFingerprint(fingerprint, for: computerID) }
+        }
+        retry()
     }
 
     func retry() {
@@ -781,8 +802,8 @@ final class SessionController: ObservableObject {
         switch newPhase {
         case .connected:
             reconnectAttempts = 0
-            settleServerType()
-            if !info.isMac {
+            settleHighPerformance()
+            if info.dialect != .apple {
                 deviceType = nil
             } else if deviceType == nil {
                 deviceType = .mac
@@ -791,6 +812,10 @@ final class SessionController: ObservableObject {
                 hasConnected = true
                 recordConnection()
             }
+            if info.fingerprint != trustedFingerprint, let computerID {
+                save { try $0.setTrustedFingerprint(info.fingerprint, for: computerID) }
+            }
+            trustedFingerprint = info.fingerprint
             pipeline.setExpectsVideo(usesHighPerformance)
             let sendsClipboard = sendChangedClipboard { [weak self] sent in
                 guard let self, !sent else { return }
@@ -904,7 +929,14 @@ final class SessionController: ObservableObject {
     }
 
     fileprivate func handle(capabilities: SessionCapabilities) {
+        let gained = capabilities.subtracting(self.capabilities)
         self.capabilities = capabilities
+        if mode == .observe, !capabilities.contains(.observe) {
+            mode = .control
+        }
+        if gained.contains(.virtualDisplay), phase == .connected {
+            requestVirtualDisplay()
+        }
     }
 
     fileprivate func handle(info: SessionInfo) {
@@ -1116,7 +1148,7 @@ final class SessionController: ObservableObject {
 
     func drop(_ providers: [NSItemProvider]) {
         let loaded = drop(files: [], loading: providers.count)
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Drops", isDirectory: true)
+        let folder = AppDirectory.caches.appendingPathComponent("Drops", isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for provider in providers {
@@ -1458,7 +1490,7 @@ final class SessionController: ObservableObject {
         let changed = audio != remoteAudio
         remoteAudio = audio
         rememberState()
-        if changed, isVideo, needsReconnectToRestartStream {
+        if changed, capabilities.contains(.audio) ? phase == .connected : isVideo && needsReconnectToRestartStream {
             reconnectToRestartStream()
             return
         }
@@ -1571,7 +1603,7 @@ final class SessionController: ObservableObject {
     }
 
     var wantsVirtualDisplay: Bool {
-        !isTouchScreen && usesDynamicResolution
+        !isIOS && usesDynamicResolution
     }
 
     var pictureMatchesWindow: Bool {
@@ -1636,20 +1668,18 @@ final class SessionController: ObservableObject {
     }
 
     func pasteFromDevice() {
+        guard isControlling else { return }
+        commandTapPending = false
         let content = Self.localClipboard()
-        guard !content.isEmpty, sendClipboard(content) else { return }
+        guard !content.isEmpty, sendClipboard(content, pasting: true) else { return }
         textCursorMayHaveMoved()
-        let commandHeld =
-            lockedModifiers.contains(.command) || pressedModifiers.contains(.command)
-            || pressedKeys.values.contains { $0.keysym == Keysym.commandLeft || $0.keysym == Keysym.commandRight }
-        tap(MacKey(keysym: Keysym.character("v")), modifiers: commandHeld ? [] : [.command])
     }
 
     @discardableResult
-    private func sendClipboard(_ content: ClipboardContent, changeCount: Int = ClipboardAccess.changeCount) -> Bool {
+    private func sendClipboard(_ content: ClipboardContent, changeCount: Int = ClipboardAccess.changeCount, pasting: Bool = false) -> Bool {
         do {
             guard let session else { throw MessageError("not connected") }
-            try session.sendClipboard(content)
+            try session.sendClipboard(content, pasting: pasting)
             syncedClipboardChangeCount = changeCount
             lastRemoteClipboard = content
             return true
@@ -1674,7 +1704,7 @@ final class SessionController: ObservableObject {
     }
 
     fileprivate func audioFailed(_ error: any Error) {
-        showError(String(localized: "Can’t Play the Mac’s Sound"), error: error)
+        showError(platform != .pc ? String(localized: "Can’t Play the Mac’s Sound") : String(localized: "Can’t Play the Computer’s Sound"), error: error)
     }
 
     func sendChord(_ chord: KeyChord) {
@@ -1759,11 +1789,11 @@ final class SessionController: ObservableObject {
     }
 
     var touchesDirectly: Bool {
-        isTouchScreen && isControlling
+        isIOS && isControlling
     }
 
     var hidesPointerForTouch: Bool {
-        isTouchScreen && !pointerMovedSinceTouch
+        isIOS && !pointerMovedSinceTouch
     }
 
     func moveTouch(to point: CGPoint) {
@@ -1812,6 +1842,13 @@ final class SessionController: ObservableObject {
     func press(_ button: PointerButtons) {
         if isControlling { textCursorMayHaveMoved() }
         if pointerButtons.isEmpty, isControlling {
+            if platform == .pc, pressedKeys.values.contains(where: { ModifierKey(keysym: $0.keysym) == .command }) {
+                commandTapPending = false
+                var modifiers = Set(pressedKeys.values.compactMap { ModifierKey(keysym: $0.keysym) })
+                modifiers.remove(.command)
+                modifiers.insert(.control)
+                setSentModifiers(modifiers)
+            }
             pointerModifiers = stickyModifiers.subtracting(lockedModifiers).subtracting(pressedModifiers)
             stickyModifiers.removeAll()
             for modifier in ModifierKey.allCases where pointerModifiers.contains(modifier) { send(modifier.macKey, down: true) }
@@ -1879,7 +1916,7 @@ final class SessionController: ObservableObject {
     }
 
     func canPerform(_ command: SystemCommand) -> Bool {
-        capabilities.contains(command.capability) || command.fallbackChord != nil
+        capabilities.contains(command.capability) || platform != .pc && command.fallbackChord != nil
     }
 
     func perform(_ command: SystemCommand) {
@@ -1887,7 +1924,7 @@ final class SessionController: ObservableObject {
         textCursorMayHaveMoved()
         if capabilities.contains(command.capability) {
             session?.sendSystemCommand(command)
-        } else if let chord = command.fallbackChord {
+        } else if platform != .pc, let chord = command.fallbackChord {
             sendChord(chord)
         }
     }
@@ -1914,14 +1951,18 @@ final class SessionController: ObservableObject {
             if down { capsLockPressed() } else { capsLockReleased() }
             return true
         }
+        var shortcut: KeyShortcut?
         if down, isControlling {
             keyboardType = keyboardType.learning(from: usage)
-            if let shortcut = KeyShortcut(key: key), let mapping = KeyShortcuts.shared.mapping(triggeredBy: shortcut) {
+            shortcut = KeyShortcut(key: key)
+            if let shortcut, let mapping = KeyShortcuts.shared.mapping(triggeredBy: shortcut, for: mappingTarget) {
                 performMapping(mapping.steps, held: heldModifiers(from: key.modifierFlags))
                 return true
             }
         }
-        return handleKey(id: usage.rawValue, down: down, held: heldModifiers(from: key.modifierFlags), repeats: true) { macKey(for: key) }
+        return handleKey(id: usage.rawValue, down: down, held: heldModifiers(from: key.modifierFlags), shortcut: shortcut, repeats: true) {
+            macKey(for: key)
+        }
     }
     #else
     func handleKeyEvent(_ event: NSEvent) -> Bool {
@@ -1938,7 +1979,7 @@ final class SessionController: ObservableObject {
             let flags = event.modifierFlags
             let down = flags.rawValue & Self.deviceModifierMask == 0 ? flags.contains(key.flag) : flags.rawValue & key.deviceMask != 0
             inferredModifierKeys.remove(id)
-            let handled = handleKey(id: id, down: down, held: [], repeats: false) {
+            let handled = handleKey(id: id, down: down, held: [], shortcut: nil, repeats: false) {
                 MacKey(keyCode: event.keyCode, keysym: Keysym.special(forKeyCode: event.keyCode) ?? 0)
             }
             syncModifiers(flags)
@@ -1952,16 +1993,21 @@ final class SessionController: ObservableObject {
                 keyboardType = .current
             }
             syncModifiers(event.modifierFlags)
-            if event.type == .keyDown, isControlling, let shortcut = KeyShortcut(event: event), let mapping = KeyShortcuts.shared.mapping(triggeredBy: shortcut) {
+            let shortcut = event.type == .keyDown && isControlling ? KeyShortcut(event: event) : nil
+            if let shortcut, let mapping = KeyShortcuts.shared.mapping(triggeredBy: shortcut, for: mappingTarget) {
                 performMapping(mapping.steps, held: heldModifiers(from: event.modifierFlags))
                 return true
             }
-            return handleKey(id: id, down: event.type == .keyDown, held: heldModifiers(from: event.modifierFlags), repeats: false) {
+            return handleKey(id: id, down: event.type == .keyDown, held: heldModifiers(from: event.modifierFlags), shortcut: shortcut, repeats: false) {
                 MacKey(keyCode: event.keyCode, keysym: keysym(for: event) ?? 0)
             }
         default:
             return false
         }
+    }
+
+    func keyDownHandledLocally() {
+        commandTapPending = false
     }
 
     func syncCapsLock(_ engaged: Bool) {
@@ -1981,13 +2027,12 @@ final class SessionController: ObservableObject {
                 for id in sent where inferredModifierKeys.contains(id) {
                     inferredModifierKeys.remove(id)
                     if let key = pressedKeys.removeValue(forKey: id) {
-                        send(key, down: false)
+                        release(key)
                     }
                 }
             } else if sent.isEmpty, let keyCode = modifier.macKey.keyCode {
-                pressedKeys[Int(keyCode)] = modifier.macKey
                 inferredModifierKeys.insert(Int(keyCode))
-                send(modifier.macKey, down: true)
+                pressModifier(modifier.macKey, id: Int(keyCode), tappable: false)
             }
         }
     }
@@ -2003,12 +2048,12 @@ final class SessionController: ObservableObject {
     ]
     #endif
 
-    private func handleKey(id: Int, down: Bool, held: Set<ModifierKey>, repeats: Bool, mapping: () -> MacKey?) -> Bool {
+    private func handleKey(id: Int, down: Bool, held: Set<ModifierKey>, shortcut: KeyShortcut?, repeats: Bool, mapping: () -> MacKey?) -> Bool {
         if !down {
             guard let pressed = pressedKeys.removeValue(forKey: id) else {
                 return isControlling && mapping() != nil
             }
-            send(pressed, down: false)
+            release(pressed)
             return true
         }
         guard isControlling, let mapped = mapping() else { return false }
@@ -2021,20 +2066,79 @@ final class SessionController: ObservableObject {
             return true
         }
         if let previous = pressedKeys.removeValue(forKey: id) {
-            send(previous, down: false)
+            release(previous)
         }
-        let sticky = mapped.isModifier ? [] : stickyModifiers.subtracting(held)
-        if !sticky.isEmpty {
-            stickyModifiers.removeAll()
-            tap(mapped, modifiers: sticky)
+        if mapped.isModifier {
+            pressModifier(mapped, id: id, tappable: true)
             return true
         }
-        pressedKeys[id] = mapped
-        send(mapped, down: true)
-        if !mapped.isModifier, repeats {
-            startRepeat(mapped, id: id)
+        var key = mapped
+        if platform == .pc {
+            commandTapPending = false
+            var modifiers = held
+            if let shortcut, let output = KeyTranslations.output(for: shortcut), let chord = output.chord {
+                modifiers = Set(chord.modifiers)
+                if output.key != shortcut.key { key = chord.key }
+            }
+            setSentModifiers(modifiers)
+        }
+        let sticky = stickyModifiers.subtracting(held)
+        if !sticky.isEmpty {
+            stickyModifiers.removeAll()
+            tap(key, modifiers: sticky)
+            return true
+        }
+        pressedKeys[id] = key
+        send(key, down: true)
+        if repeats {
+            startRepeat(key, id: id)
         }
         return true
+    }
+
+    private var mappingTarget: MappingTarget {
+        platform == .pc ? .pc : .apple
+    }
+
+    private func pressModifier(_ key: MacKey, id: Int, tappable: Bool) {
+        pressedKeys[id] = key
+        guard platform == .pc, let modifier = ModifierKey(keysym: key.keysym) else {
+            send(key, down: true)
+            return
+        }
+        commandTapPending = tappable && modifier == .command
+        guard modifier != .command, sentModifiers[modifier] == nil else { return }
+        sentModifiers[modifier] = key
+        send(key, down: true)
+    }
+
+    private func release(_ key: MacKey) {
+        guard platform == .pc, let modifier = ModifierKey(keysym: key.keysym) else {
+            send(key, down: false)
+            return
+        }
+        if modifier == .command, commandTapPending {
+            send(key, down: true)
+            send(key, down: false)
+        }
+        commandTapPending = false
+        let held = Set(pressedKeys.values.compactMap { ModifierKey(keysym: $0.keysym) })
+        for (kind, sent) in sentModifiers where held.isEmpty || kind == modifier && !held.contains(kind) {
+            sentModifiers[kind] = nil
+            send(sent, down: false)
+        }
+    }
+
+    private func setSentModifiers(_ modifiers: Set<ModifierKey>) {
+        for modifier in ModifierKey.allCases where modifiers.contains(modifier) && sentModifiers[modifier] == nil {
+            let key = pressedKeys.values.first { ModifierKey(keysym: $0.keysym) == modifier } ?? modifier.macKey
+            sentModifiers[modifier] = key
+            send(key, down: true)
+        }
+        for (modifier, key) in sentModifiers where !modifiers.contains(modifier) {
+            sentModifiers[modifier] = nil
+            send(key, down: false)
+        }
     }
 
     func replaceText(deleting count: Int, with text: String) -> Bool {
@@ -2083,7 +2187,7 @@ final class SessionController: ObservableObject {
         guard !text.isEmpty else { return true }
         if info.secureInput {
             let typed = text.filter(\.isASCII)
-            if !typed.isEmpty { session?.sendText(typed) }
+            if !typed.isEmpty { try? session?.sendText(typed) }
             guard typed.count == text.count else {
                 showSecureInputNotice()
                 return false
@@ -2095,17 +2199,23 @@ final class SessionController: ObservableObject {
         // UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3, sub_100035ba0 0x100035c7c..0x100035c8c,
         // sub_100027410 0x100027890..0x100027898).
         let inBasicPlane = text.unicodeScalars.allSatisfy { $0.value <= 0xffff }
-        guard info.isMac else {
-            let typed = String(String.UnicodeScalarView(text.unicodeScalars.filter { $0.value <= 0xffff }))
-            if !typed.isEmpty { session?.sendText(typed) }
-            if !inBasicPlane {
+        guard info.dialect == .apple else {
+            let typable = capabilities.contains(.unicodeText) || inBasicPlane
+            let typed = typable ? text : String(String.UnicodeScalarView(text.unicodeScalars.filter { $0.value <= 0xffff }))
+            do {
+                if !typed.isEmpty { try session?.sendText(typed) }
+            } catch {
+                showError(String(localized: "Some Characters Can’t Be Typed on “\(title)”"), error: error)
+                return false
+            }
+            if !typable {
                 alert = AlertState(title: String(localized: "Some Characters Can’t Be Typed on “\(title)”"))
             }
-            return inBasicPlane
+            return typable
         }
         let macComposes = keyboardSource?.isInputMethod ?? capabilities.contains(.keyboardSource)
         if inBasicPlane, !macComposes {
-            session?.sendText(text)
+            try? session?.sendText(text)
         } else {
             do {
                 try session?.pasteText(text)
@@ -2175,14 +2285,21 @@ final class SessionController: ObservableObject {
 
     private func performMapping(_ steps: [KeyMapping.Step], held: Set<ModifierKey>) {
         textCursorMayHaveMoved()
-        var latched = held.union(lockedModifiers).union(pressedModifiers)
-        var down = Set(pressedKeys.values.filter { ModifierKey(keysym: $0.keysym) != nil })
+        var latched = lockedModifiers.union(pressedModifiers)
+        var down = Set<MacKey>()
+        if platform == .pc {
+            commandTapPending = false
+            setSentModifiers([])
+        } else {
+            latched.formUnion(held)
+            down = Set(pressedKeys.values.filter { ModifierKey(keysym: $0.keysym) != nil })
+        }
         for modifier in lockedModifiers.union(pressedModifiers) { down.insert(modifier.macKey) }
         var released: [MacKey] = []
         for step in steps {
             let chord: KeyChord? =
                 switch step {
-                case .key(let shortcut): shortcut.chord
+                case .key(let shortcut): platform == .pc ? shortcut.pcChord : shortcut.chord
                 case .text: nil
                 }
             let wanted = Set(chord?.modifiers ?? [])
@@ -2203,10 +2320,11 @@ final class SessionController: ObservableObject {
     }
 
     private func tap(_ key: MacKey, modifiers: Set<ModifierKey>) {
-        for modifier in ModifierKey.allCases where modifiers.contains(modifier) { send(modifier.macKey, down: true) }
+        let held = ModifierKey.allCases.filter { modifiers.contains($0) }.map(\.macKey)
+        for modifier in held { send(modifier, down: true) }
         send(key, down: true)
         send(key, down: false)
-        for modifier in ModifierKey.allCases.reversed() where modifiers.contains(modifier) { send(modifier.macKey, down: false) }
+        for modifier in held.reversed() { send(modifier, down: false) }
     }
 
     private func setCapsLock(_ engaged: Bool) {
@@ -2374,9 +2492,14 @@ final class SessionController: ObservableObject {
         stopRepeat()
         let keys = pressedKeys.values.sorted { lhs, rhs in !lhs.isModifier && rhs.isModifier }
         pressedKeys.removeAll()
-        for key in keys {
+        for key in keys where platform != .pc || ModifierKey(keysym: key.keysym) == nil {
             send(key, down: false)
         }
+        for key in sentModifiers.values {
+            send(key, down: false)
+        }
+        sentModifiers.removeAll()
+        commandTapPending = false
         if capsLockEngaged {
             capsLockEngaged = false
             send(.capsLock, down: false)
@@ -2572,6 +2695,7 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
     }
 
     func setSceneInBackground(_ background: Bool) {
+        session?.setVisible(!background)
         decoder.setSuspended(background)
         lock.lock()
         sceneInBackground = background

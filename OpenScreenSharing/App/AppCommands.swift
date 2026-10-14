@@ -52,7 +52,6 @@ struct AppCommands: Commands {
     private var homeEnabled: Bool { home != nil && session == nil }
     private var connected: Bool { session?.phase == .connected }
     private var controlling: Bool { session?.isControlling ?? false }
-    private var touchScreen: Bool { session?.isTouchScreen ?? false }
 
     private func deviceButton(_ command: SessionCommand, shortcut: ShortcutAction, action: @escaping (SessionController) -> Void) -> some View {
         Button(String(localized: command.title)) {
@@ -163,7 +162,7 @@ struct AppCommands: Commands {
                     }
                     .disabled(session.phase != .connected)
                 }
-                if session?.usesHighPerformance != true {
+                if session.map({ SessionCommand.quality.isOffered(by: $0) }) ?? true {
                     Section {
                         ForEach(SessionQuality.allCases) { quality in
                             Toggle(isOn: Binding(get: { session?.quality == quality }, set: { _ in session?.setQuality(quality) })) {
@@ -206,7 +205,7 @@ struct AppCommands: Commands {
                     }
                     .modifier(ActionShortcut(action: ShortcutAction.audio(audio)))
                 }
-                .disabled(!(session?.usesHighPerformance ?? false))
+                .disabled(session.map { !SessionCommand.audio.isOffered(by: $0) } ?? true)
             }
         }
 
@@ -215,7 +214,7 @@ struct AppCommands: Commands {
                 Section {
                     Toggle("Observe Mode", isOn: Binding(get: { session?.mode == .observe }, set: { session?.setMode($0 ? .observe : .control) }))
                         .modifier(ActionShortcut(action: .observe))
-                        .disabled(!(session?.capabilities.contains(.control) ?? false))
+                        .disabled(session.map { !SessionCommand.observe.isOffered(by: $0) || !SessionCommand.observe.isEnabled(in: $0) } ?? true)
                     Toggle("Pointer Lock", isOn: Binding(get: { session?.isPointerLockOn ?? false }, set: { session?.setPointerLock($0) }))
                         .modifier(ActionShortcut(action: .pointerLock))
                         .disabled(session.map { !SessionCommand.pointerLock.isOffered(by: $0) || !$0.canLockPointer } ?? true)
@@ -225,7 +224,7 @@ struct AppCommands: Commands {
                         .disabled(!controlling)
                     #endif
                 }
-                if touchScreen {
+                if session?.platform == .iOS {
                     Section {
                         deviceButton(.home, shortcut: .home) { $0.perform(.showDesktop) }
                         deviceButton(.appSwitcher, shortcut: .appSwitcher) { $0.perform(.missionControl) }
@@ -235,27 +234,23 @@ struct AppCommands: Commands {
                         deviceButton(.volumeUp, shortcut: .volumeUp) { $0.sendChord(.volumeUp) }
                         deviceButton(.volumeDown, shortcut: .volumeDown) { $0.sendChord(.volumeDown) }
                     }
-                } else {
+                } else if session?.platform != .pc {
                     Section {
                         ForEach(SystemCommand.allCases) { command in
                             Button(String(localized: command.title)) { session?.perform(command) }
                                 .modifier(ActionShortcut(action: ShortcutAction.system(command)))
                                 .disabled(!controlling || !(session?.canPerform(command) ?? false))
                         }
-                        Button("Spotlight") { session?.sendChord(.spotlight) }
-                            .modifier(ActionShortcut(action: .spotlight))
-                            .disabled(!controlling)
-                        Button("Command-Tab") { session?.sendChord(.commandTab) }
-                            .modifier(ActionShortcut(action: .commandTab))
-                            .disabled(!controlling)
                     }
-                    #if os(macOS)
+                }
+                #if os(macOS)
+                if session?.platform != .iOS {
                     Section {
                         keyMenu(.functionKeys) { FunctionKeyItems(controller: $0) }
                         keyMenu(.moreKeys) { MoreKeyItems(controller: $0) }
                     }
-                    #endif
                 }
+                #endif
             }
         }
 

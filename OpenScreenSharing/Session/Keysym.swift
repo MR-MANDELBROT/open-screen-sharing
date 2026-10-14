@@ -21,6 +21,15 @@ nonisolated enum Keysym {
     static let menu: UInt32 = 0xff67
     static let help: UInt32 = 0xff6a
     static let numLock: UInt32 = 0xff7f
+    static let scrollLock: UInt32 = 0xff14
+    static let pause: UInt32 = 0xff13
+    static let printScreen: UInt32 = 0xff61
+    static let keypadEnter: UInt32 = 0xff8d
+    static let keypadMultiply: UInt32 = 0xffaa
+    static let keypadPlus: UInt32 = 0xffab
+    static let keypadMinus: UInt32 = 0xffad
+    static let keypadDecimal: UInt32 = 0xffae
+    static let keypadDivide: UInt32 = 0xffaf
     static let space: UInt32 = 0x20
 
     static let shiftLeft: UInt32 = 0xffe1
@@ -39,6 +48,10 @@ nonisolated enum Keysym {
 
     static func function(_ number: Int) -> UInt32 {
         0xffbe + UInt32(max(1, min(number, 35)) - 1)
+    }
+
+    static func keypad(_ digit: Int) -> UInt32 {
+        0xffb0 + UInt32(max(0, min(digit, 9)))
     }
 
     static func character(_ scalar: Unicode.Scalar) -> UInt32 {
@@ -85,12 +98,12 @@ nonisolated enum Keysym {
         case .keyboardHelp: help
         case .keyboardMenu, .keyboardApplication: menu
         case .keypadNumLock: numLock
-        case .keypadEnter: 0xff8d
-        case .keypadAsterisk: 0xffaa
-        case .keypadPlus: 0xffab
-        case .keypadHyphen: 0xffad
-        case .keypadPeriod: 0xffae
-        case .keypadSlash: 0xffaf
+        case .keypadEnter: keypadEnter
+        case .keypadAsterisk: keypadMultiply
+        case .keypadPlus: keypadPlus
+        case .keypadHyphen: keypadMinus
+        case .keypadPeriod: keypadDecimal
+        case .keypadSlash: keypadDivide
         case .keypadEqualSign: 0xffbd
         case .keypad0: 0xffb0
         case .keypad1: 0xffb1
@@ -133,7 +146,7 @@ nonisolated enum Keysym {
         var table: [UInt16: UInt32] = [
             36: returnKey, 53: escape, 51: backSpace, 48: tab, 49: space, 117: forwardDelete, 115: home, 119: end,
             116: pageUp, 121: pageDown, 123: left, 124: right, 126: up, 125: down, 114: help, 110: menu, 71: numLock,
-            76: 0xff8d, 67: 0xffaa, 69: 0xffab, 78: 0xffad, 65: 0xffae, 75: 0xffaf, 81: 0xffbd,
+            76: keypadEnter, 67: keypadMultiply, 69: keypadPlus, 78: keypadMinus, 65: keypadDecimal, 75: keypadDivide, 81: 0xffbd,
             82: 0xffb0, 83: 0xffb1, 84: 0xffb2, 85: 0xffb3, 86: 0xffb4, 87: 0xffb5, 88: 0xffb6, 89: 0xffb7, 91: 0xffb8, 92: 0xffb9,
             56: shiftLeft, 60: shiftRight, 59: controlLeft, 62: controlRight, 58: optionLeft, 61: optionRight,
             55: commandLeft, 54: commandRight,
@@ -153,6 +166,8 @@ nonisolated enum ModifierKey: CaseIterable, Hashable, Sendable {
     case option
     case shift
     case command
+
+    static let pcOrder: [ModifierKey] = [.control, .command, .option, .shift]
 
     init?(keysym: UInt32) {
         switch keysym {
@@ -199,6 +214,15 @@ nonisolated enum ModifierKey: CaseIterable, Hashable, Sendable {
         case .command: "Command Key"
         }
     }
+
+    var pcLabel: (text: String, title: String.LocalizationValue)? {
+        switch self {
+        case .control: ("ctrl", "Ctrl Key")
+        case .option: ("alt", "Alt Key")
+        case .shift: nil
+        case .command: ("win", "Windows Key")
+        }
+    }
 }
 
 nonisolated struct KeyChord: Hashable, Sendable {
@@ -216,8 +240,6 @@ nonisolated struct KeyChord: Hashable, Sendable {
 }
 
 extension KeyChord {
-    static let spotlight = KeyChord(modifiers: [.command], key: .space)
-    static let commandTab = KeyChord(modifiers: [.command], key: .tab)
     static let previousInputSource = KeyChord(modifiers: [.control], key: .space)
 
     static let sideButton = KeyChord(modifiers: [], key: MacKey(keyCode: nil, keysym: Keysym.powerOff))

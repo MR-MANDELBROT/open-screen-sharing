@@ -2,20 +2,22 @@ import SwiftUI
 
 struct NewComputer: Hashable {
     var name: String
-    var address: ComputerAddress
     var model: String?
     var username = ""
     var password = ""
-    var server: ServerAuthentication
+    var server: ProbedServer
 
     func signedIn(_ credentials: SessionCredentials, supportsHighPerformance: Bool) -> SignedInComputer {
-        var saved = Computer(name: name, address: address, username: credentials.loginType == .account ? credentials.username : "")
+        let decoder = DecoderCapabilities.current
+        var saved = Computer(
+            name: name, address: server.address, remoteProtocol: server.remoteProtocol,
+            username: credentials.loginType == .account ? credentials.username : "")
         saved.authenticates = credentials.loginType == .account
         saved.model = model ?? ""
-        let decoder = DecoderCapabilities.current
-        saved.serverType = supportsHighPerformance && (decoder.supportsHEVC || decoder.supportsH264) ? .apple : .vnc
+        saved.trustedFingerprint = server.fingerprint
         saved.supportsHighPerformance = supportsHighPerformance
-        return SignedInComputer(computer: saved, password: credentials.password, server: server)
+        saved.usesHighPerformance = supportsHighPerformance && (decoder.supportsHEVC || decoder.supportsH264)
+        return SignedInComputer(computer: saved, password: credentials.password, server: server.authentication)
     }
 }
 
@@ -115,7 +117,7 @@ struct SetupSignInView: View {
     }
 
     private var asksForUsername: Bool {
-        computer.server.account
+        computer.server.authentication.account
     }
 
     private var trimmedUsername: String {
@@ -192,14 +194,14 @@ struct SetupSignInView: View {
         problem = nil
         let attempt = credentials
         task = Task {
-            let result = await ServerProber.checkLogin(computer.address, credentials: attempt)
+            let result = await ServerProber.checkLogin(computer.server, credentials: attempt)
             guard !Task.isCancelled else { return }
             task = nil
             switch result {
             case .success(let supportsHighPerformance):
                 next(computer.signedIn(attempt, supportsHighPerformance: supportsHighPerformance))
             case .failure(let failure):
-                problem = SetupProblem(failure, host: computer.address.host, asksForUsername: asksForUsername)
+                problem = SetupProblem(failure, host: computer.server.address.host, asksForUsername: asksForUsername)
                 focusedField = failure.kind == .authenticationFailed ? .password : nil
             }
         }

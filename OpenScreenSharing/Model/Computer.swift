@@ -17,9 +17,11 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var thumbnail: Data?
     var createdAt = Date()
     var supportsHighPerformance = false
+    var usesHighPerformance = false
     var networkQuality = NetworkQuality.localNetwork
     var internetMaximumFrameRate = MaximumFrameRate.sixty
-    var serverType = ServerType.vnc
+    var remoteProtocol = RemoteProtocol.vnc
+    var trustedFingerprint = ""
 
     var quality = SessionQuality.adaptive
     var observes = false
@@ -33,10 +35,11 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var windowWidth: Double = 0
     var windowHeight: Double = 0
 
-    init(name: String, address: ComputerAddress, username: String = "") {
+    init(name: String, address: ComputerAddress, remoteProtocol: RemoteProtocol = .vnc, username: String = "") {
         self.name = name
         host = address.host
         port = address.port
+        self.remoteProtocol = remoteProtocol
         self.username = username
     }
 
@@ -77,8 +80,12 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
         }
     }
 
+    var addressDescription: String {
+        address.description(defaultPort: remoteProtocol.defaultPort)
+    }
+
     var displayName: String {
-        name.isEmpty ? address.description : name
+        name.isEmpty ? addressDescription : name
     }
 
     var device: DeviceAppearance {
@@ -127,11 +134,18 @@ nonisolated enum LoginType: String, Codable, Sendable {
     case none
 }
 
-nonisolated enum ServerType: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum RemoteProtocol: String, Codable, CaseIterable, Identifiable, Sendable {
     case vnc
-    case apple
+    case rdp
 
     var id: Self { self }
+
+    var defaultPort: Int {
+        switch self {
+        case .vnc: 5900
+        case .rdp: 3389
+        }
+    }
 }
 
 nonisolated enum DeviceType: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -154,7 +168,7 @@ nonisolated enum DeviceType: String, Codable, CaseIterable, Identifiable, Sendab
         }
     }
 
-    var isTouchScreen: Bool { self != .mac }
+    var isIOS: Bool { self != .mac }
 }
 
 nonisolated enum SessionQuality: String, Codable, CaseIterable, Identifiable, Sendable {

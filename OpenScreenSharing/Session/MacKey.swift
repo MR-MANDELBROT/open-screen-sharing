@@ -37,6 +37,9 @@ nonisolated struct MacKey: Hashable, Sendable {
     static let shift = MacKey(keyCode: 56, keysym: Keysym.shiftLeft)
     static let option = MacKey(keyCode: 58, keysym: Keysym.optionLeft)
     static let control = MacKey(keyCode: 59, keysym: Keysym.controlLeft)
+    static let insert = MacKey(keyCode: nil, keysym: Keysym.insert)
+    static let printScreen = MacKey(keyCode: nil, keysym: Keysym.printScreen)
+    static let menu = MacKey(keyCode: nil, keysym: Keysym.menu)
     // ScreensharingAgent sets the Caps Lock flag on key-down and clears it on key-up
     // (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
     // sub_1000350fc 0x1000351a4..0x10003529c, keyCode 0x39 jump table entry 0x1000352b8;
@@ -181,6 +184,34 @@ nonisolated enum MacKeyboardType: Sendable {
         default: .ansi
         }
     }
+    #endif
+}
+
+nonisolated enum WindowsKeyboardLayout {
+    #if os(iOS)
+    static var current: Int { 0 }
+    #else
+    static var current: Int {
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+            let id = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
+        else { return 0 }
+        let name = (Unmanaged<CFString>.fromOpaque(id).takeUnretainedValue() as String).replacingOccurrences(of: "com.apple.keylayout.", with: "")
+        return identifiers[name] ?? 0
+    }
+
+    private static let identifiers: [String: Int] = [
+        "British": 0x0809, "British-PC": 0x0809, "Irish": 0x1809,
+        "German": 0x0407, "Austrian": 0x0407, "Swiss German": 0x0807, "Swiss French": 0x100C,
+        "French": 0x040C, "French-PC": 0x040C, "French-numerical": 0x040C, "Belgian": 0x080C, "Canadian-CSA": 0x1009,
+        "Spanish": 0x040A, "Spanish-ISO": 0x040A, "Italian": 0x0410, "Italian-Pro": 0x0410,
+        "Portuguese": 0x0816, "Brazilian": 0x0416, "Brazilian-ABNT2": 0x0416, "Brazilian-Pro": 0x0416,
+        "Dutch": 0x0413, "Danish": 0x0406, "Norwegian": 0x0414, "Swedish": 0x041D, "Swedish-Pro": 0x041D, "Finnish": 0x040B,
+        "Icelandic": 0x040F, "Polish": 0x0415, "PolishPro": 0x0415, "Czech": 0x0405, "Czech-QWERTY": 0x0405, "Slovak": 0x041B,
+        "Slovak-QWERTY": 0x041B, "Hungarian": 0x040E, "Romanian": 0x0418, "Croatian": 0x041A, "Slovenian": 0x0424,
+        "Estonian": 0x0425, "Latvian": 0x0426, "Lithuanian": 0x0427, "Turkish": 0x041F, "Turkish-QWERTY-PC": 0x041F,
+        "Russian": 0x0419, "RussianWin": 0x0419, "Russian-Phonetic": 0x0419, "Ukrainian": 0x0422, "Ukrainian-PC": 0x0422,
+        "Greek": 0x0408, "Hebrew": 0x040D, "Arabic": 0x0401, "Thai": 0x041E,
+    ]
     #endif
 }
 

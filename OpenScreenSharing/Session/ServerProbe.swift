@@ -19,48 +19,59 @@ nonisolated struct ServerAuthentication: Codable, Hashable, Sendable {
     }
 }
 
-nonisolated enum ServerProber {
-    private static let timeout: Double = 15
+nonisolated struct ProbedServer: Hashable, Sendable {
+    var address: ComputerAddress
+    var remoteProtocol: RemoteProtocol
+    var authentication: ServerAuthentication
+    var fingerprint: String
+}
 
-    static func probe(_ address: ComputerAddress) async -> Result<ServerAuthentication, SessionFailure> {
+nonisolated enum ServerProber {
+    static let timeout: Double = 15
+
+    static func probe(
+        host: String, port: Int?, remoteProtocol: RemoteProtocol?, timeout: Double = ServerProber.timeout
+    ) async -> Result<ProbedServer, SessionFailure> {
         await Task.detached(priority: .userInitiated) {
             LibsharingLog.installed
-            guard let probe = LibsharingProbeServer(address.host, Int32(address.port), timeout) else {
+            let probe =
+                switch remoteProtocol {
+                case .vnc: LibsharingProbeServer(host, Int32(port ?? RemoteProtocol.vnc.defaultPort), timeout)
+                case .rdp: LibsharingProbeRDPServer(host, Int32(port ?? RemoteProtocol.rdp.defaultPort), timeout)
+                case nil: LibsharingProbeProtocol(host, Int32(port ?? 0), timeout)
+                }
+            guard let probe else {
                 return .failure(SessionFailure(.other, message: "libsharing returned no probe result"))
             }
-            let message = probe.errorMessage
-            switch probe.errorCode {
-            case LibsharingErrorNone:
-                return .success(
-                    ServerAuthentication(
+            guard probe.errorCode == LibsharingErrorNone else {
+                return .failure(failure(code: probe.errorCode, message: probe.errorMessage, fingerprint: probe.fingerprint))
+            }
+            return .success(
+                ProbedServer(
+                    address: ComputerAddress(host: host, port: Int(probe.port)),
+                    remoteProtocol: probe.protocol == LibsharingProtocolRDP ? .rdp : .vnc,
+                    authentication: ServerAuthentication(
                         account: probe.supportsAccount,
                         requestPermission: probe.supportsRequestControl || probe.supportsRequestObserve,
                         vncPassword: probe.supportsVNCPassword,
                         noPassword: probe.supportsNoPassword,
                         grantsRequests: probe.grantsRequests
-                    ))
-            case LibsharingErrorHostNotFound:
-                return .failure(SessionFailure(.hostNotFound, message: message))
-            case LibsharingErrorOwnScreen:
-                return .failure(SessionFailure(.ownScreen, message: message))
-            case LibsharingErrorNetwork:
-                return .failure(SessionFailure(.unreachable, message: message))
-            case LibsharingErrorUnsupportedServer:
-                return .failure(SessionFailure(.unsupported, message: message))
-            default:
-                return .failure(SessionFailure(.other, message: message))
-            }
+                    ),
+                    fingerprint: probe.fingerprint
+                ))
         }.value
     }
 
-    static func checkLogin(_ address: ComputerAddress, credentials: SessionCredentials) async -> Result<Bool, SessionFailure> {
+    static func checkLogin(_ server: ProbedServer, credentials: SessionCredentials) async -> Result<Bool, SessionFailure> {
         await Task.detached(priority: .userInitiated) {
             LibsharingLog.installed
             guard let options = LibsharingNewSessionOptions() else {
                 return .failure(SessionFailure(.other, message: "libsharing returned no session options"))
             }
-            options.host = address.host
-            options.port = Int32(address.port)
+            options.protocol = server.remoteProtocol == .rdp ? LibsharingProtocolRDP : LibsharingProtocolRFB
+            options.host = server.address.host
+            options.port = Int32(server.address.port)
+            options.trustedFingerprint = server.fingerprint
             options.username = credentials.username
             options.password = credentials.password
             switch credentials.loginType {
@@ -76,23 +87,23 @@ nonisolated enum ServerProber {
             guard let check = LibsharingCheckLogin(options, timeout) else {
                 return .failure(SessionFailure(.other, message: "libsharing returned no login result"))
             }
-            let message = check.errorMessage
-            switch check.errorCode {
-            case LibsharingErrorNone:
-                return .success(check.supportsHighPerformance)
-            case LibsharingErrorAuthentication:
-                return .failure(SessionFailure(.authenticationFailed, message: message))
-            case LibsharingErrorHostNotFound:
-                return .failure(SessionFailure(.hostNotFound, message: message))
-            case LibsharingErrorOwnScreen:
-                return .failure(SessionFailure(.ownScreen, message: message))
-            case LibsharingErrorNetwork:
-                return .failure(SessionFailure(.unreachable, message: message))
-            case LibsharingErrorUnsupportedServer:
-                return .failure(SessionFailure(.unsupported, message: message))
-            default:
-                return .failure(SessionFailure(.other, message: message))
+            guard check.errorCode == LibsharingErrorNone else {
+                return .failure(failure(code: check.errorCode, message: check.errorMessage, fingerprint: check.fingerprint))
             }
+            return .success(check.supportsHighPerformance)
         }.value
+    }
+
+    private static func failure(code: Int32, message: String, fingerprint: String) -> SessionFailure {
+        switch code {
+        case LibsharingErrorAuthentication: SessionFailure(.authenticationFailed, message: message)
+        case LibsharingErrorPermissionDenied: SessionFailure(.permissionDenied, message: message)
+        case LibsharingErrorHostNotFound: SessionFailure(.hostNotFound, message: message)
+        case LibsharingErrorOwnScreen: SessionFailure(.ownScreen, message: message)
+        case LibsharingErrorNetwork: SessionFailure(.unreachable, message: message)
+        case LibsharingErrorUnsupportedServer: SessionFailure(.unsupported, message: message)
+        case LibsharingErrorCertificateChanged: SessionFailure(.certificateChanged(fingerprint: fingerprint), message: message)
+        default: SessionFailure(.other, message: message)
+        }
     }
 }

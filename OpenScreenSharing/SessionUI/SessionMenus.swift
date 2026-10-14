@@ -89,7 +89,7 @@ struct ResolutionOptions: View {
     var body: some View {
         Section("Display") {
             Toggle(
-                "Hardware Display",
+                controller.info.dialect == .apple ? "Hardware Display" : "Fixed Resolution",
                 isOn: Binding(get: { !controller.usesDynamicResolution }, set: { _ in controller.setUsesDynamicResolution(false) }))
             Toggle(
                 "Dynamic Resolution",
@@ -121,7 +121,7 @@ struct ResolutionPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Picker("Display", selection: Binding(get: { controller.usesDynamicResolution }, set: { controller.setUsesDynamicResolution($0) })) {
-                Text("Hardware Display").tag(false)
+                Text(controller.info.dialect == .apple ? "Hardware Display" : "Fixed Resolution").tag(false)
                 Text("Dynamic Resolution").tag(true)
             }
             .pickerStyle(.segmented)
@@ -187,7 +187,7 @@ struct ClipboardMenuItems: View {
         Toggle(isOn: Binding(get: { controller.clipboardSharing }, set: { controller.setClipboardSharing($0) })) { Label("Sync Clipboard", systemImage: "arrow.up.arrow.down") }
         Section {
             Button { controller.getClipboardFromMac() } label: { Label("Receive Clipboard", systemImage: "doc.on.clipboard") }
-                .disabled(!controller.info.isMac)
+                .disabled(!controller.capabilities.contains(.clipboardRequest))
             Button { controller.sendClipboardToMac() } label: { Label("Send Clipboard", systemImage: "arrow.up.doc.on.clipboard") }
         }
         .disabled(controller.clipboardSharing)
@@ -210,14 +210,37 @@ struct MoreKeyItems: View {
     @ObservedObject var controller: SessionController
 
     var body: some View {
-        Section {
-            Button { controller.typeKey(.home) } label: { Label("Home", systemImage: "arrow.up.to.line") }
-            Button { controller.typeKey(.end) } label: { Label("End", systemImage: "arrow.down.to.line") }
-            Button { controller.typeKey(.pageUp) } label: { Label("Page Up", systemImage: "arrow.up.to.line.compact") }
-            Button { controller.typeKey(.pageDown) } label: { Label("Page Down", systemImage: "arrow.down.to.line.compact") }
+        if controller.platform == .pc {
+            Section {
+                pcKey("Insert", systemImage: "text.insert", key: .insert)
+                pcKey("Delete", systemImage: "delete.right", key: .forwardDelete)
+            }
+            Section {
+                pcKey("Home", systemImage: "arrow.up.to.line", key: .home)
+                pcKey("End", systemImage: "arrow.down.to.line", key: .end)
+                pcKey("Page Up", systemImage: "arrow.up.to.line.compact", key: .pageUp)
+                pcKey("Page Down", systemImage: "arrow.down.to.line.compact", key: .pageDown)
+            }
+            Section {
+                pcKey("Print Screen", systemImage: "camera.viewfinder", key: .printScreen)
+                pcKey("Menu", systemImage: "contextualmenu.and.cursorarrow", key: .menu)
+            }
+        } else {
+            Section {
+                Button { controller.typeKey(.home) } label: { Label("Home", systemImage: "arrow.up.to.line") }
+                Button { controller.typeKey(.end) } label: { Label("End", systemImage: "arrow.down.to.line") }
+                Button { controller.typeKey(.pageUp) } label: { Label("Page Up", systemImage: "arrow.up.to.line.compact") }
+                Button { controller.typeKey(.pageDown) } label: { Label("Page Down", systemImage: "arrow.down.to.line.compact") }
+            }
+            Section {
+                Button { controller.typeKey(.forwardDelete) } label: { Label("Forward Delete", systemImage: "delete.right") }
+            }
         }
-        Section {
-            Button { controller.typeKey(.forwardDelete) } label: { Label("Forward Delete", systemImage: "delete.right") }
+    }
+
+    private func pcKey(_ legend: String, systemImage: String, key: MacKey) -> some View {
+        Button { controller.typeKey(key) } label: {
+            Label { Text(verbatim: legend) } icon: { Image(systemName: systemImage) }
         }
     }
 }

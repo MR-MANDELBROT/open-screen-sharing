@@ -44,7 +44,7 @@ func (c *Client) sendInput(message []byte, motion bool) error {
 		return nil
 	}
 	c.access.Unlock()
-	return c.outbox.push(message, motion)
+	return c.outbox.Push(message, motion)
 }
 
 func (c *Client) releaseInput() error {
@@ -236,10 +236,24 @@ func (c *Client) SendKey(keysym uint32, down bool) error {
 	if c.observing() {
 		return E.New("rfb: key events are not sent while observing")
 	}
+	c.trackKey(keysym, down)
 	if c.info.Dialect == DialectApple {
 		keysym = appleKeysym(keysym)
 	}
 	return c.sendKeyboard(keyEventMessage(down, keysym))
+}
+
+func (c *Client) trackKey(keysym uint32, down bool) {
+	c.access.Lock()
+	defer c.access.Unlock()
+	if !down {
+		delete(c.heldKeys, keysym)
+		return
+	}
+	if c.heldKeys == nil {
+		c.heldKeys = make(map[uint32]bool)
+	}
+	c.heldKeys[keysym] = true
 }
 
 func appleKeysym(keysym uint32) uint32 {

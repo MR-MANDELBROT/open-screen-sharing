@@ -98,8 +98,6 @@ struct FloatingToolbar: View {
                     .font(.system(size: 12, weight: .heavy))
                     .frame(width: 34, height: 14)
                     .glassEffectCompat(tint: glassTint, in: Capsule())
-                    .scaleEffect(controller.isToolbarHandleHighlighted ? 1.25 : 1)
-                    .animation(.smoothCompat(duration: 0.2), value: controller.isToolbarHandleHighlighted)
                     .padding(.top, 8)
                     .frame(width: 88, height: 44, alignment: .top)
                     .contentShape(Rectangle())

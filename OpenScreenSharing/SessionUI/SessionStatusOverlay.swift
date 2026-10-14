@@ -128,7 +128,19 @@ struct SessionStatusOverlay: View {
     }
 
     private func failureAlert(_ failure: SessionFailure) -> AlertState {
-        AlertState(describe(failure), errorMessage: failure.message, closeLabel: String(localized: "Close"), onClose: onClose)
+        guard case .certificateChanged(let fingerprint) = failure.kind else {
+            return AlertState(describe(failure), errorMessage: failure.message, closeLabel: String(localized: "Close"), onClose: onClose)
+        }
+        return AlertState(
+            title: describe(failure),
+            message: String(
+                localized:
+                    "This is expected after the computer is reinstalled or renews its certificate. If neither happened, another device may be pretending to be this computer."
+            ),
+            actions: [
+                AlertState.Action(label: String(localized: "Connect Anyway"), role: nil) { controller.trustCertificate(fingerprint) },
+                AlertState.Action(label: String(localized: "Close"), role: .cancel, isDefault: true, perform: onClose),
+            ])
     }
 
     private func describe(_ failure: SessionFailure) -> String {
@@ -141,8 +153,11 @@ struct SessionStatusOverlay: View {
         case .unreachable, .other: String(localized: "Couldn’t Connect to “\(name)”")
         case .connectionLost: String(localized: "Lost the Connection to “\(name)”")
         case .ended, .drawingFailed: String(localized: "Disconnected from “\(name)”")
-        case .closedByServer: String(localized: "“\(name)” Ended Screen Sharing")
+        case .closedByServer:
+            controller.route.remoteProtocol == .rdp
+                ? String(localized: "“\(name)” Ended the Session") : String(localized: "“\(name)” Ended Screen Sharing")
         case .unsupported: String(localized: "“\(name)” Isn’t Supported")
+        case .certificateChanged: String(localized: "“\(name)” Has a New Certificate")
         case .highPerformance(.busy): String(localized: "Another Device Is Using High Performance on “\(name)”")
         case .highPerformance(.unsupported): String(localized: "“\(name)” Doesn’t Support High Performance")
         case .highPerformance(.undecodable): String(localized: "This Device Can’t Play High Performance Video")

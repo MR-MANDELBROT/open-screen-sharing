@@ -13,7 +13,7 @@ struct KeyboardAccessoryBar: View {
                         if !controller.usesHardwareKeyboard {
                             key("Tab", systemImage: "arrow.right.to.line", key: .tab)
                         }
-                        ForEach(ModifierKey.allCases, id: \.self) { modifier in
+                        ForEach(controller.platform == .pc ? ModifierKey.pcOrder : ModifierKey.allCases, id: \.self) { modifier in
                             ModifierKeyButton(controller: controller, modifier: modifier)
                         }
                     }
@@ -108,15 +108,7 @@ struct KeyboardAccessoryBar: View {
 
     private var moreKeysMenu: some View {
         Menu {
-            Section {
-                Button { controller.typeKey(.home) } label: { Label("Home", systemImage: "arrow.up.to.line") }
-                Button { controller.typeKey(.end) } label: { Label("End", systemImage: "arrow.down.to.line") }
-                Button { controller.typeKey(.pageUp) } label: { Label("Page Up", systemImage: "arrow.up.to.line.compact") }
-                Button { controller.typeKey(.pageDown) } label: { Label("Page Down", systemImage: "arrow.down.to.line.compact") }
-            }
-            Section {
-                Button { controller.typeKey(.forwardDelete) } label: { Label("Forward Delete", systemImage: "delete.right") }
-            }
+            MoreKeyItems(controller: controller)
         } label: {
             Label("More Keys", systemImage: moreKeysSymbol)
                 .frame(minWidth: 44, minHeight: 44)
@@ -145,22 +137,34 @@ struct ModifierKeyButton: View {
         isLocked || controller.pressedModifiers.contains(modifier) || controller.stickyModifiers.contains(modifier)
     }
 
+    private var pcLabel: (text: String, title: String.LocalizationValue)? {
+        guard controller.platform == .pc else { return nil }
+        return modifier.pcLabel
+    }
+
     private var face: some View {
-        Label(String(localized: modifier.title), systemImage: modifier.systemImage)
-            .frame(width: 44, height: 44)
-            .foregroundStyle(isActive ? Color.white : Color.primary)
-            .background {
-                if isActive {
-                    Circle().fill(Color.accentColor).frame(width: 38, height: 38)
-                }
+        Group {
+            if let pcLabel {
+                Text(verbatim: pcLabel.text)
+                    .font(.subheadline.weight(.semibold))
+            } else {
+                Label(String(localized: modifier.title), systemImage: modifier.systemImage)
             }
-            .overlay(alignment: .bottom) {
-                if isLocked {
-                    Capsule().fill(Color.white).frame(width: 12, height: 3).padding(.bottom, 9)
-                }
+        }
+        .frame(width: 44, height: 44)
+        .foregroundStyle(isActive ? Color.white : Color.primary)
+        .background {
+            if isActive {
+                Circle().fill(Color.accentColor).frame(width: 38, height: 38)
             }
-            .contentShape(Circle())
-            .opacity(controller.isControlling ? 1 : 0.4)
+        }
+        .overlay(alignment: .bottom) {
+            if isLocked {
+                Capsule().fill(Color.white).frame(width: 12, height: 3).padding(.bottom, 9)
+            }
+        }
+        .contentShape(Circle())
+        .opacity(controller.isControlling ? 1 : 0.4)
     }
 
     var body: some View {
@@ -185,7 +189,7 @@ struct ModifierKeyButton: View {
             .selectionFeedbackCompat(trigger: isActive)
             .hoverEffect()
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(String(localized: modifier.title)))
+            .accessibilityLabel(Text(String(localized: pcLabel?.title ?? modifier.title)))
             .accessibilityValue(Text(String(localized: accessibilityValue)))
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(isActive ? AccessibilityTraits.isSelected : [])

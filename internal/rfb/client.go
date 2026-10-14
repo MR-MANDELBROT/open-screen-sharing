@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"log/slog"
 	"math"
@@ -15,6 +16,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
+	"github.com/nekohasekai/open-screen-sharing/internal/outbox"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/filecopy"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -52,7 +55,7 @@ func (s State) String() string {
 
 type Handler interface {
 	StateChanged(state State)
-	ResizeFramebuffer(width, height int) (*Framebuffer, error)
+	ResizeFramebuffer(width, height int) (*bgra.Image, error)
 	FramebufferUpdated(update Update)
 	CursorChanged(cursor *Cursor)
 	CursorMoved(x, y int)
@@ -80,8 +83,8 @@ type Client struct {
 	logger  *slog.Logger
 	conn    net.Conn
 	stream  *stream
-	outbox  *outbox
-	writer  *writer
+	outbox  *outbox.Outbox
+	writer  *outbox.Writer
 	info    ServerInfo
 	wrapKey [16]byte
 
@@ -94,7 +97,7 @@ type Client struct {
 	running      bool
 
 	framebufferAccess sync.Mutex
-	framebuffer       *Framebuffer
+	framebuffer       *bgra.Image
 	width             int
 	height            int
 	size              atomic.Uint64
@@ -114,6 +117,7 @@ type Client struct {
 	updateInterval        time.Duration
 	scale                 float64
 	buttons               uint8
+	heldKeys              map[uint32]bool
 	scrollRemainderX      float64
 	scrollRemainderY      float64
 	displayID             uint32
@@ -243,8 +247,8 @@ func (c *Client) setup() error {
 		}
 		c.conn.SetDeadline(time.Now().Add(c.options.DialTimeout))
 	}
-	c.outbox = newOutbox()
-	c.writer = &writer{conn: c.conn}
+	c.outbox = outbox.New()
+	c.writer = outbox.NewWriter(c.conn)
 	if c.info.Dialect == DialectApple {
 		err = c.startApple()
 	} else {
@@ -255,7 +259,7 @@ func (c *Client) setup() error {
 	}
 	c.conn.SetDeadline(time.Time{})
 	go func() {
-		c.writerError = c.writer.run(c.outbox)
+		c.writerError = c.writer.Run(c.outbox)
 		if c.writerError != nil {
 			c.conn.Close()
 		}
@@ -305,14 +309,14 @@ func (c *Client) startApple() error {
 	if err != nil {
 		return err
 	}
-	c.writer.encoder = encoder
+	c.writer.SetEncoder(encoder.encode)
 	c.logger.Debug("record layer active")
 
 	displayChanges, err := c.prepare()
 	if err != nil {
 		return err
 	}
-	return c.writer.write(c.firstMessages(displayChanges))
+	return c.writer.Write(c.firstMessages(displayChanges))
 }
 
 func (c *Client) firstMessages(displayChanges [][]byte) [][]byte {
@@ -359,7 +363,7 @@ func (c *Client) startStandard() error {
 		setEncodingsMessage(c.encodings()),
 		framebufferUpdateRequestMessage(false, 0, 0, c.info.Width, c.info.Height),
 	}
-	return c.writer.write(messages)
+	return c.writer.Write(messages)
 }
 
 func (c *Client) encodings() []Encoding {
@@ -499,8 +503,8 @@ func (c *Client) Close() error {
 		c.mediaLifecycle.Lock()
 		c.closed.Store(true)
 		c.mediaLifecycle.Unlock()
-		c.outbox.close(net.ErrClosed)
-		c.writer.finishWithin(2 * time.Second)
+		c.outbox.Close(net.ErrClosed)
+		c.writer.FinishWithin(2 * time.Second)
 		<-c.writerDone
 		c.conn.Close()
 	})
@@ -508,11 +512,11 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) send(message []byte) error {
-	return c.outbox.push(message, false)
+	return c.outbox.Push(message, false)
 }
 
 func (c *Client) SendMessage(message []byte) error {
-	return c.outbox.pushWait(message)
+	return c.outbox.PushWait(message)
 }
 
 func (c *Client) ensureFramebuffer(width, height int) error {
@@ -537,7 +541,7 @@ func (c *Client) resizeLocked(width, height int) (bool, error) {
 		return false, err
 	}
 	if framebuffer == nil {
-		framebuffer = NewFramebuffer(width, height)
+		framebuffer = bgra.New(width, height)
 	}
 	err = c.checkFramebuffer(framebuffer)
 	if err != nil {
@@ -548,8 +552,8 @@ func (c *Client) resizeLocked(width, height int) (bool, error) {
 	return true, nil
 }
 
-func (c *Client) checkFramebuffer(framebuffer *Framebuffer) error {
-	err := framebuffer.validate()
+func (c *Client) checkFramebuffer(framebuffer *bgra.Image) error {
+	err := framebuffer.Validate()
 	if err != nil {
 		return err
 	}
@@ -559,7 +563,7 @@ func (c *Client) checkFramebuffer(framebuffer *Framebuffer) error {
 	return nil
 }
 
-func (c *Client) SetFramebuffer(framebuffer *Framebuffer) error {
+func (c *Client) SetFramebuffer(framebuffer *bgra.Image) error {
 	c.framebufferAccess.Lock()
 	err := c.checkFramebuffer(framebuffer)
 	if err == nil {
@@ -572,7 +576,7 @@ func (c *Client) SetFramebuffer(framebuffer *Framebuffer) error {
 	return c.RequestRefresh()
 }
 
-func (c *Client) Framebuffer(fn func(*Framebuffer)) {
+func (c *Client) Framebuffer(fn func(*bgra.Image)) {
 	c.framebufferAccess.Lock()
 	defer c.framebufferAccess.Unlock()
 	fn(c.framebuffer)
@@ -714,8 +718,8 @@ func (c *Client) receiveRectangles(count int) (Update, error) {
 			return update, E.Cause(err, "read ", rectangle.Encoding, " rectangle ", rectangle)
 		}
 		if rectangle.Encoding.carriesPixels() && !rectangle.Empty() {
-			x, y, width, height := c.framebuffer.clip(rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height)
-			clipped := Rectangle{X: x, Y: y, Width: width, Height: height, Encoding: rectangle.Encoding}
+			bounds := image.Rect(rectangle.X, rectangle.Y, rectangle.X+rectangle.Width, rectangle.Y+rectangle.Height).Intersect(c.framebuffer.Bounds())
+			clipped := Rectangle{X: bounds.Min.X, Y: bounds.Min.Y, Width: bounds.Dx(), Height: bounds.Dy(), Encoding: rectangle.Encoding}
 			update.Dirty = update.Dirty.Union(clipped)
 			update.Rectangles = append(update.Rectangles, clipped)
 		}

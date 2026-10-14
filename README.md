@@ -41,7 +41,8 @@ Download and install [OpenScreenSharing.pkg](https://github.com/nekohasekai/open
 ## Roadmap
 
 * [x] Add support for macOS
-* [ ] Add support for RDP
+* [x] Add support for RDP
+* [ ] Publish to iOS App Store
 * [ ] Add support for other operating systems, such as Android, Windows, and Linux
 * [ ] Add a jailbreak version to provide numerous privilege-based improvements
 * [ ] Create a protocol extension to support high refresh rates on Mac, touch passthrough on Mac (similar to Sidecar), Smaller scaling at native quality on Mac, multi-touch support on iOS, and further protocol optimizations

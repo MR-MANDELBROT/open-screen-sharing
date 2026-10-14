@@ -175,7 +175,7 @@ func (e *sessionEvents) SystemCommandsChanged(commands []rfb.SystemCommand) {
 	if err != nil {
 		return
 	}
-	info := newServerInfo(client.Info())
+	info := newServerInfo(client.Info(), e.session.options.Platform)
 	info.setSystemCommands(commands)
 	e.session.handler.OnServerInfo(info)
 }

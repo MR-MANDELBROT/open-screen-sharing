@@ -6,7 +6,8 @@ struct SessionView: View {
     private let hasOwnWindow: Bool
     private let onClose: () -> Void
     @ObservedObject private var macToolbar = ToolbarLayout.mac
-    @ObservedObject private var touchScreenToolbar = ToolbarLayout.touchScreen
+    @ObservedObject private var iOSToolbar = ToolbarLayout.iOS
+    @ObservedObject private var pcToolbar = ToolbarLayout.pc
     @ScaledMetric(relativeTo: .body) private var toolbarItemWidth = ToolbarLayout.itemSize
 
     private var dock: ToolbarDock? {
@@ -82,7 +83,7 @@ struct SessionView: View {
                 Color.black.ignoresSafeArea()
                 FullScreenReader(isFullScreen: $controller.isFullScreen)
                     .ignoresSafeArea()
-                if #available(iOS 26, *), controller.isTouchScreen, hasOwnWindow {
+                if #available(iOS 26, *), controller.platform == .iOS, hasOwnWindow {
                     DeviceWindowShaper(screen: deviceScreen, isFullScreen: isFullScreen)
                 }
             }

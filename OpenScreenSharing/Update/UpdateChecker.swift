@@ -15,7 +15,7 @@ nonisolated enum UpdateChecker {
     private static let currentBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
 
     private static let releaseEndpoint = URL(string: "https://api.github.com/repos/nekohasekai/open-screen-sharing/releases/tags/nightly")!
-    private static let downloads = URL.cachesDirectory.appending(path: Bundle.main.bundleIdentifier ?? "OpenScreenSharing").appending(path: "Updates")
+    private static let downloads = AppDirectory.caches.appending(path: "Updates")
 
     private struct Release: Decodable {
         let body: String?

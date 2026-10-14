@@ -11,7 +11,7 @@ struct RemoteScreenView: UIViewRepresentable {
 
     func updateUIView(_ view: RemoteScreenUIView, context: Context) {
         view.windowTracker.setMatchesWindow(controller.wantsVirtualDisplay)
-        view.windowTracker.setTurnsLandscape(!controller.isTouchScreen)
+        view.windowTracker.setTurnsLandscape(controller.platform != .iOS)
         view.accessibilityValue = String(localized: controller.mode == .control ? "Controlling" : "Observing")
     }
 }

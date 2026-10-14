@@ -5,13 +5,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"image"
-	"image/png"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/nekohasekai/open-screen-sharing/cmd/internal/ctl"
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/filecopy"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
@@ -53,7 +54,7 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 			err = saveCursor(h, argument)
 		case "move":
 			var numbers []int
-			numbers, err = parseNumbers(argument, 2, strconv.Atoi)
+			numbers, err = ctl.ParseNumbers(argument, 2, strconv.Atoi)
 			if err == nil {
 				var buttons uint8
 				if len(numbers) > 2 {
@@ -63,7 +64,7 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 			}
 		case "click":
 			var numbers []int
-			numbers, err = parseNumbers(argument, 2, strconv.Atoi)
+			numbers, err = ctl.ParseNumbers(argument, 2, strconv.Atoi)
 			if err == nil {
 				buttons := uint8(rfb.ButtonLeft)
 				if len(numbers) > 2 {
@@ -76,7 +77,7 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 			}
 		case "scroll":
 			var numbers []int
-			numbers, err = parseNumbers(argument, 3, strconv.Atoi)
+			numbers, err = ctl.ParseNumbers(argument, 3, strconv.Atoi)
 			if err == nil {
 				deltaX := 0
 				if len(numbers) > 3 {
@@ -401,15 +402,7 @@ func fetchClipboard(client *rfb.Client, h *handler) (*rfb.Clipboard, error) {
 
 func setVirtualDisplay(client *rfb.Client, argument string) error {
 	size, densityText, _ := strings.Cut(argument, "@")
-	widthText, heightText, found := strings.Cut(size, "x")
-	if !found {
-		return E.New("virtual display ", strconv.Quote(argument), " is not WxH")
-	}
-	width, err := strconv.Atoi(widthText)
-	if err != nil {
-		return err
-	}
-	height, err := strconv.Atoi(heightText)
+	width, height, err := ctl.ParseSize(size)
 	if err != nil {
 		return err
 	}
@@ -424,18 +417,11 @@ func setVirtualDisplay(client *rfb.Client, argument string) error {
 }
 
 func savePNG(client *rfb.Client, path string) error {
-	var picture *image.RGBA
-	client.Framebuffer(func(framebuffer *rfb.Framebuffer) {
-		picture = image.NewRGBA(image.Rect(0, 0, framebuffer.Width, framebuffer.Height))
-		for y := 0; y < framebuffer.Height; y++ {
-			source := framebuffer.Pix[y*framebuffer.Stride : y*framebuffer.Stride+framebuffer.Width*4]
-			target := picture.Pix[y*picture.Stride : y*picture.Stride+framebuffer.Width*4]
-			for x := 0; x < len(source); x += 4 {
-				target[x], target[x+1], target[x+2], target[x+3] = source[x+2], source[x+1], source[x], source[x+3]
-			}
-		}
+	var picture *image.NRGBA
+	client.Framebuffer(func(framebuffer *bgra.Image) {
+		picture = ctl.Picture(framebuffer)
 	})
-	return writePNG(path, picture)
+	return ctl.WritePNG(path, picture)
 }
 
 func saveCursor(h *handler, path string) error {
@@ -455,15 +441,5 @@ func saveCursor(h *handler, path string) error {
 		}
 		picture.Pix[i*4], picture.Pix[i*4+1], picture.Pix[i*4+2], picture.Pix[i*4+3] = red, green, blue, alpha
 	}
-	return writePNG(path, picture)
-}
-
-func writePNG(path string, picture image.Image) error {
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	err = png.Encode(file, picture)
-	closeErr := file.Close()
-	return E.Errors(err, closeErr)
+	return ctl.WritePNG(path, picture)
 }

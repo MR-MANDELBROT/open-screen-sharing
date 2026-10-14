@@ -32,6 +32,7 @@ nonisolated struct SessionFailure: Error, Equatable, Sendable {
         case connectionLost
         case closedByServer
         case unsupported
+        case certificateChanged(fingerprint: String)
         case highPerformance(MediaFailure.Kind)
         case drawingFailed
         case ended
@@ -179,6 +180,10 @@ nonisolated struct SessionCredentials: Sendable, Equatable {
 
 nonisolated struct SessionConfiguration: Sendable {
     var address: ComputerAddress
+    var remoteProtocol: RemoteProtocol
+    var platform: RemotePlatform?
+    var trustedFingerprint: String
+    var keyboardLayout: Int
     var displayName: String
     var clientName: String
     var credentials: SessionCredentials
@@ -195,9 +200,29 @@ nonisolated struct SessionInfo: Equatable, Sendable {
     var framebufferWidth: Int = 0
     var framebufferHeight: Int = 0
     var framebufferPixelsPerCursorPixel: Double = 1
-    var isMac: Bool = true
+    var cursorPixelsPerPoint: Double = 1
+    var dialect: ServerDialect
+    var platform: RemotePlatform
+    var fingerprint: String = ""
     var keyboardSource: String?
     var secureInput: Bool = false
+
+    init(remoteProtocol: RemoteProtocol, platform: RemotePlatform?) {
+        dialect = remoteProtocol == .rdp ? .rdp : .apple
+        self.platform = platform ?? (remoteProtocol == .rdp ? .pc : .mac)
+    }
+}
+
+nonisolated enum ServerDialect: Sendable {
+    case apple
+    case standard
+    case rdp
+}
+
+nonisolated enum RemotePlatform: Sendable {
+    case mac
+    case iOS
+    case pc
 }
 
 nonisolated struct SessionCapabilities: OptionSet, Hashable, Sendable {
@@ -219,6 +244,11 @@ nonisolated struct SessionCapabilities: OptionSet, Hashable, Sendable {
     static let keyCodes = SessionCapabilities(rawValue: 1 << 14)
     static let dragToRemote = SessionCapabilities(rawValue: 1 << 15)
     static let dragFromRemote = SessionCapabilities(rawValue: 1 << 16)
+    static let quality = SessionCapabilities(rawValue: 1 << 17)
+    static let observe = SessionCapabilities(rawValue: 1 << 18)
+    static let audio = SessionCapabilities(rawValue: 1 << 19)
+    static let clipboardRequest = SessionCapabilities(rawValue: 1 << 20)
+    static let unicodeText = SessionCapabilities(rawValue: 1 << 21)
 }
 
 nonisolated enum GesturePhase: Sendable {
@@ -303,6 +333,7 @@ nonisolated struct DecodedVideoFrame: @unchecked Sendable {
 }
 
 nonisolated struct AudioFormat: Sendable {
+    var formatID: AudioFormatID
     var sampleRate: Double
     var channels: UInt32
     var framesPerPacket: UInt32

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 )
 
@@ -41,7 +42,7 @@ func (h *handler) StateChanged(state rfb.State) {
 	h.logger.Info("state", "state", state.String())
 }
 
-func (h *handler) ResizeFramebuffer(width, height int) (*rfb.Framebuffer, error) {
+func (h *handler) ResizeFramebuffer(width, height int) (*bgra.Image, error) {
 	h.logger.Info("framebuffer", "width", width, "height", height)
 	return nil, nil
 }

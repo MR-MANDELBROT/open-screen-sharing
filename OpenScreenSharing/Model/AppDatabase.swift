@@ -7,7 +7,7 @@ enum AppDatabase {
         #if os(iOS)
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         #else
-        let directory = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as! String)!
+        let directory = AppDirectory.group
         #endif
         return directory.appendingPathComponent("Screen Sharing.sqlite")
     }()
@@ -76,9 +76,11 @@ enum AppDatabase {
             t.column("thumbnail", .blob)
             t.column("createdAt", .datetime).notNull()
             t.column("supportsHighPerformance", .boolean).notNull()
+            t.column("usesHighPerformance", .boolean).notNull()
             t.column("networkQuality", .text).notNull()
             t.column("internetMaximumFrameRate", .integer).notNull()
-            t.column("serverType", .text).notNull()
+            t.column("remoteProtocol", .text).notNull()
+            t.column("trustedFingerprint", .text).notNull()
             t.column("quality", .text).notNull()
             t.column("observes", .boolean).notNull()
             t.column("sharesClipboard", .boolean).notNull()

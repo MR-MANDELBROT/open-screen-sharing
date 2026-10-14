@@ -13,7 +13,10 @@ import (
 )
 
 type ServerProbe struct {
-	IsMac bool
+	Protocol int32
+	Port     int32
+
+	Fingerprint string
 
 	SupportsAccount bool
 
@@ -35,17 +38,21 @@ type ServerProbe struct {
 }
 
 func ProbeServer(host string, port int32, timeoutSeconds float64) *ServerProbe {
-	timeout := time.Duration(timeoutSeconds * float64(time.Second))
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds*float64(time.Second)))
 	defer cancel()
+	return probeServer(ctx, host, port)
+}
+
+func probeServer(ctx context.Context, host string, port int32) *ServerProbe {
 	err := checkOwnScreen(ctx, host, port)
 	if err != nil {
 		code, message := classifyError(err)
 		return &ServerProbe{ErrorCode: code, ErrorMessage: message}
 	}
-	info, err := rfb.Probe(context.Background(), rfb.Options{
+	deadline, _ := ctx.Deadline()
+	info, err := rfb.Probe(ctx, rfb.Options{
 		Address:     net.JoinHostPort(host, strconv.Itoa(int(port))),
-		DialTimeout: timeout,
+		DialTimeout: time.Until(deadline),
 		Logger:      newLogger(),
 	})
 	if err != nil {
@@ -60,7 +67,8 @@ func ProbeServer(host string, port int32, timeoutSeconds float64) *ServerProbe {
 		return strconv.Itoa(int(securityType))
 	})
 	return &ServerProbe{
-		IsMac:                  info.Dialect == rfb.DialectApple,
+		Protocol:               ProtocolRFB,
+		Port:                   port,
 		SupportsAccount:        accountTypes,
 		AccountIsUnverified:    accountTypes && !slices.Contains(offered, rfb.SecurityAppleSRP),
 		SupportsRequestControl: slices.Contains(offered, rfb.SecurityAskControl),
@@ -75,6 +83,8 @@ func ProbeServer(host string, port int32, timeoutSeconds float64) *ServerProbe {
 type LoginCheck struct {
 	SupportsHighPerformance bool
 
+	Fingerprint string
+
 	ErrorCode    int32
 	ErrorMessage string
 }
@@ -82,6 +92,11 @@ type LoginCheck struct {
 func CheckLogin(options *SessionOptions, timeoutSeconds float64) *LoginCheck {
 	if options == nil {
 		return &LoginCheck{ErrorCode: ErrorProtocol, ErrorMessage: "options are required"}
+	}
+	if options.Protocol == ProtocolRDP {
+		fingerprint, err := checkRDPLogin(options, timeoutSeconds)
+		code, message := classifyError(err)
+		return &LoginCheck{Fingerprint: fingerprint, ErrorCode: code, ErrorMessage: message}
 	}
 	rfbOptions, err := rfbOptions(options)
 	if err != nil {
@@ -101,5 +116,5 @@ func CheckLogin(options *SessionOptions, timeoutSeconds float64) *LoginCheck {
 		code, message := classifyError(err)
 		return &LoginCheck{ErrorCode: code, ErrorMessage: message}
 	}
-	return &LoginCheck{SupportsHighPerformance: newServerInfo(info).SupportsHighPerformance}
+	return &LoginCheck{SupportsHighPerformance: newServerInfo(info, options.Platform).SupportsHighPerformance}
 }

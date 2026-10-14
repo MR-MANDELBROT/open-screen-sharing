@@ -72,6 +72,15 @@ func (e *recordEncoder) rekey(keys recordKeys) error {
 	return nil
 }
 
+func (e *recordEncoder) encode(wire []byte, data []byte) []byte {
+	for len(data) > 0 {
+		chunk := min(len(data), recordMaximumBody)
+		wire = e.seal(wire, data[:chunk])
+		data = data[chunk:]
+	}
+	return wire
+}
+
 func (e *recordEncoder) seal(output []byte, body []byte) []byte {
 	size := (2 + len(body) + recordChecksumSize + 15) &^ 15
 	start := len(output)

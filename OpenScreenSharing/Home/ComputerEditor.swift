@@ -16,7 +16,7 @@ struct ComputerEditor: View {
     @State private var authenticates: Bool
     @State private var username: String
     @State private var password: String
-    @State private var serverType: ServerType
+    @State private var choice: ServerChoice
     @State private var networkConfiguration: NetworkConfiguration
     @State private var problem: Problem?
     @State private var alert: AlertState?
@@ -38,11 +38,11 @@ struct ComputerEditor: View {
         self.computer = computer
         self.setup = setup
         _name = State(initialValue: computer.displayName)
-        _address = State(initialValue: computer.address.description)
+        _address = State(initialValue: computer.addressDescription)
         _authenticates = State(initialValue: computer.authenticates)
         _username = State(initialValue: computer.username)
         _password = State(initialValue: setup?.password ?? computer.password)
-        _serverType = State(initialValue: computer.serverType)
+        _choice = State(initialValue: ServerChoice(computer))
         _networkConfiguration = State(initialValue: computer.networkConfiguration)
     }
 
@@ -90,12 +90,18 @@ struct ComputerEditor: View {
                             }
                             .disabled(setup != nil)
                     }
-                    Picker("Server Type", selection: $serverType) {
-                        Text(verbatim: "VNC").tag(ServerType.vnc)
-                        Text(verbatim: "Apple VNC").tag(ServerType.apple)
+                    Picker("Server Type", selection: $choice) {
+                        if setup == nil || computer.remoteProtocol == .vnc {
+                            Text(verbatim: "VNC").tag(ServerChoice.vnc)
+                            Text(verbatim: "Apple VNC").tag(ServerChoice.appleVNC)
+                        }
+                        if setup == nil || computer.remoteProtocol == .rdp {
+                            Text(verbatim: "RDP").tag(ServerChoice.rdp)
+                        }
                     }
                     .pickerStyle(.menu)
-                    if serverType == .apple {
+                    .disabled(setup != nil && computer.remoteProtocol == .rdp)
+                    if choice == .appleVNC {
                         Picker("Network Quality", selection: $networkConfiguration.quality) {
                             Text("Local Network").tag(NetworkQuality.localNetwork)
                             Text("Internet").tag(NetworkQuality.internet)
@@ -182,11 +188,12 @@ struct ComputerEditor: View {
             focusedField = .name
             return
         }
-        guard let address = ConnectionTarget.address(parsing: Substring(address.trimmingCharacters(in: .whitespacesAndNewlines))) else {
+        guard let endpoint = ConnectionTarget.endpoint(parsing: Substring(address.trimmingCharacters(in: .whitespacesAndNewlines))) else {
             problem = .invalidAddress
             focusedField = .address
             return
         }
+        let address = ComputerAddress(host: endpoint.host, port: endpoint.port ?? choice.remoteProtocol.defaultPort)
         guard isComplete else {
             focusedField = trimmedUsername.isEmpty ? .username : .password
             return
@@ -195,12 +202,16 @@ struct ComputerEditor: View {
         do {
             computer = try ComputerStore.shared.save(self.computer) { computer in
                 computer.name = name
+                if computer.remoteProtocol != choice.remoteProtocol || !computer.address.matches(address) {
+                    computer.trustedFingerprint = ""
+                }
                 computer.address = address
                 computer.authenticates = authenticates
                 computer.username = authenticates ? trimmedUsername : ""
                 computer.password = authenticates ? password : ""
                 computer.networkConfiguration = networkConfiguration
-                computer.serverType = serverType
+                computer.remoteProtocol = choice.remoteProtocol
+                computer.usesHighPerformance = choice.usesHighPerformance
             }
         } catch {
             alert = AlertState(String(localized: "Couldn’t Save “\(name)”"), error: error)
@@ -250,5 +261,23 @@ struct NearbyDetailsView: View {
             }
         }
         .phonePresentationDetents([.medium])
+    }
+}
+
+private enum ServerChoice: Hashable {
+    case vnc
+    case appleVNC
+    case rdp
+
+    init(_ computer: Computer) {
+        self = computer.remoteProtocol == .rdp ? .rdp : computer.usesHighPerformance ? .appleVNC : .vnc
+    }
+
+    var remoteProtocol: RemoteProtocol {
+        self == .rdp ? .rdp : .vnc
+    }
+
+    var usesHighPerformance: Bool {
+        self == .appleVNC
     }
 }

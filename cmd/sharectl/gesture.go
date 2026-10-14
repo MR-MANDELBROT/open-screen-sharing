@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nekohasekai/open-screen-sharing/cmd/internal/ctl"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -14,7 +15,7 @@ const gestureStep = 16 * time.Millisecond
 func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.Duration) error) (bool, error) {
 	switch verb {
 	case "dblclick":
-		numbers, err := parseNumbers(argument, 2, strconv.Atoi)
+		numbers, err := ctl.ParseNumbers(argument, 2, strconv.Atoi)
 		if err != nil {
 			return true, err
 		}
@@ -29,13 +30,13 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 		}
 		return true, nil
 	case "drag":
-		numbers, err := parseNumbers(argument, 4, strconv.Atoi)
+		numbers, err := ctl.ParseNumbers(argument, 4, strconv.Atoi)
 		if err != nil {
 			return true, err
 		}
 		return true, drag(client, numbers, wait)
 	case "pinch", "rotate":
-		values, err := parseNumbers(argument, 4, func(value string) (float64, error) {
+		values, err := ctl.ParseNumbers(argument, 4, func(value string) (float64, error) {
 			return strconv.ParseFloat(value, 64)
 		})
 		if err != nil {
@@ -47,7 +48,7 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 		}
 		return true, runAmountGesture(send, int(values[0]), int(values[1]), int(values[2]), values[3], wait)
 	case "smart-magnify", "lookup":
-		numbers, err := parseNumbers(argument, 2, strconv.Atoi)
+		numbers, err := ctl.ParseNumbers(argument, 2, strconv.Atoi)
 		if err != nil {
 			return true, err
 		}
@@ -60,7 +61,7 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 		if len(parts) != 3 {
 			return true, E.New(strconv.Quote(argument), " is not X,Y,DIRECTION")
 		}
-		numbers, err := parseNumbers(strings.Join(parts[:2], ","), 2, strconv.Atoi)
+		numbers, err := ctl.ParseNumbers(strings.Join(parts[:2], ","), 2, strconv.Atoi)
 		if err != nil {
 			return true, err
 		}
@@ -71,7 +72,7 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 		}
 		return true, client.SendSwipe(numbers[0], numbers[1], direction)
 	case "flick":
-		values, err := parseNumbers(argument, 4, func(value string) (float64, error) {
+		values, err := ctl.ParseNumbers(argument, 4, func(value string) (float64, error) {
 			return strconv.ParseFloat(value, 64)
 		})
 		if err != nil {
@@ -86,7 +87,7 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 		return true, client.SendSystemCommand(command)
 	case "assist":
 		parts := strings.Split(argument, ",")
-		numbers, err := parseNumbers(strings.Join(parts[:min(len(parts), 3)], ","), 2, strconv.Atoi)
+		numbers, err := ctl.ParseNumbers(strings.Join(parts[:min(len(parts), 3)], ","), 2, strconv.Atoi)
 		if err != nil {
 			return true, err
 		}

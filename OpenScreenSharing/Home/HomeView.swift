@@ -230,34 +230,34 @@ struct HomeView: View {
         setup = SetupRequest()
     }
 
-    private func route(for target: ConnectionTarget) -> SessionRoute {
+    private func route(for link: RemoteLink) -> SessionRoute {
         var route: SessionRoute
-        if let computer = ComputerStore.shared.computer(at: target.address, username: target.username) {
+        if let computer = ComputerStore.shared.computer(at: link.address, remoteProtocol: link.remoteProtocol, username: link.username) {
             route = SessionRoute(computer: computer)
-            if let username = target.username {
+            if let username = link.username {
                 route.username = username
             }
         } else {
-            let found = nearby.computer(matching: target.address)
+            let found = nearby.computer(matching: link.address, remoteProtocol: link.remoteProtocol)
             route = SessionRoute(
-                name: found?.name ?? target.address.bonjourServiceName ?? target.address.host, address: target.address,
-                username: target.username, model: found?.model)
+                name: found?.name ?? link.address.bonjourServiceName ?? link.address.host, address: link.address,
+                remoteProtocol: link.remoteProtocol, username: link.username, model: found?.model)
         }
-        route.password = target.password
+        route.password = link.password
         return route
     }
 
     private func open(_ url: URL) {
-        guard let link = VNCLink(url: url) else {
+        guard let link = RemoteLink(string: url.absoluteString) else {
             alert = AlertState(String(localized: "Couldn’t Open the Link"), errorMessage: String(localized: "“\(url.absoluteString)” isn’t a valid address."))
             return
         }
         Task {
-            var target = link.target
-            if let serviceName = target.address.bonjourServiceName, let resolved = await ServiceResolver.resolve(name: serviceName) {
-                target.address = resolved
+            var resolved = link
+            if let serviceName = link.address.bonjourServiceName, let address = await ServiceResolver.resolve(name: serviceName) {
+                resolved.address = address
             }
-            var route = route(for: target)
+            var route = route(for: resolved)
             if route.computerID == nil, let serviceName = link.address.bonjourServiceName {
                 route.name = serviceName
             }
