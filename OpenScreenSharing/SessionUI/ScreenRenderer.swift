@@ -43,7 +43,9 @@ final class ScreenRenderer {
             }
             float3 encoded = color.rgb / color.a;
             float3 linear = select(pow((encoded + 0.055) / 1.055, 2.4), encoded / 12.92, encoded <= 0.04045);
-            float3 scaled = pow(linear * 0.01, 0.1593017578125);
+            float3x3 sRGBToDisplayP3 = float3x3(
+                float3(0.82246197, 0.03319420, 0.01708263), float3(0.17753803, 0.96680580, 0.07239744), float3(0, 0, 0.91051993));
+            float3 scaled = pow(sRGBToDisplayP3 * linear * 0.01, 0.1593017578125);
             float3 pq = pow((0.8359375 + 18.8515625 * scaled) / (1 + 18.6875 * scaled), 78.84375);
             return float4(pq * color.a, color.a);
         }

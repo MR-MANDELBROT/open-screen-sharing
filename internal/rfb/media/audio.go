@@ -77,14 +77,15 @@ func (r *audioReceiver) push(packet rtpPacket, arrival time.Time) {
 	if packet.payloadType != payloadTypeAudio || len(packet.payload) == 0 {
 		return
 	}
-	if !r.announced {
-		r.announced = true
-		r.sink.AudioFormat(audioFormat())
-	}
 	if r.haveSequence && packet.ssrc != r.ssrc {
 		r.skip(arrival, true)
 		r.haveSequence = false
 		r.timestamps = timestampExtender{}
+		r.announced = false
+	}
+	if !r.announced {
+		r.announced = true
+		r.sink.AudioFormat(audioFormat())
 	}
 	if !r.haveSequence {
 		r.haveSequence = true

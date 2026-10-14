@@ -760,6 +760,7 @@ final class SessionController: ObservableObject {
             if retryable, hasConnected, reconnectAttempts < Self.reconnectLimit, let credentials {
                 reconnectAttempts += 1
                 let attempt = reconnectAttempts
+                releaseAllKeys()
                 teardown()
                 phase = .reconnecting(attempt: attempt)
                 reconnectTask?.cancel()
@@ -1488,6 +1489,7 @@ final class SessionController: ObservableObject {
                 granted = false
                 #endif
             }
+            guard microphone == nil, isVideo, remoteAudio == .toMac, phase == .connected, !sceneInBackground else { return }
             guard granted else {
                 #if os(iOS)
                 alert = AlertState(String(localized: "Can’t Use the Microphone"), errorMessage: String(localized: "Microphone access is turned off in Settings."))
@@ -1507,7 +1509,6 @@ final class SessionController: ObservableObject {
                 #endif
                 return
             }
-            guard microphone == nil, isVideo, remoteAudio == .toMac, !sceneInBackground else { return }
             let session = self.session
             do {
                 let sender = try MicrophoneSender(
@@ -2011,6 +2012,9 @@ final class SessionController: ObservableObject {
             return true
         }
         guard isControlling, let mapped = mapping() else { return false }
+        if let modifier = ModifierKey(keysym: mapped.keysym), lockedModifiers.contains(modifier), mapped.keysym == modifier.keysym {
+            return true
+        }
         if !mapped.isModifier { textCursorMayHaveMoved() }
         if info.secureInput, !Keysym.typesInSecureInput(mapped.keysym) {
             showSecureInputNotice()
@@ -2528,7 +2532,6 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
     private var decoder: VideoDecoder!
     private var audioPlayer: AudioPlayer?
     private var isVideo = false
-    private var lastKeyframeRequest: CFAbsoluteTime = 0
     private var sceneInBackground = false
     private var awaitingLife = false
     weak var session: LibsharingRemoteSession?
@@ -2547,7 +2550,7 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
                 }
                 self.showedLife()
             },
-            failure: { [weak self] in self?.decoderFailed() },
+            failure: { [weak self] in self?.session?.requestKeyframe() },
             unsupported: { [weak self] hdr, error in self?.onMain { hdr ? $0.hdrDecodingFailed(error) : $0.videoDecodingFailed(error) } }
         )
     }
@@ -2596,17 +2599,6 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.isDetached, let controller = self.controller else { return }
             body(controller)
-        }
-    }
-
-    private func decoderFailed() {
-        let now = CFAbsoluteTimeGetCurrent()
-        lock.lock()
-        let shouldRequest = now - lastKeyframeRequest > 0.5
-        if shouldRequest { lastKeyframeRequest = now }
-        lock.unlock()
-        if shouldRequest {
-            session?.requestKeyframe()
         }
     }
 

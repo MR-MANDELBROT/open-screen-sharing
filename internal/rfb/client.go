@@ -833,7 +833,11 @@ func (c *Client) RequestRefresh() error {
 func (c *Client) SetQuality(quality Quality) error {
 	c.access.Lock()
 	c.quality = quality
+	preparing := c.preparing
 	c.access.Unlock()
+	if preparing {
+		return nil
+	}
 	err := c.send(setEncodingsMessage(c.encodings()))
 	if err != nil {
 		return err

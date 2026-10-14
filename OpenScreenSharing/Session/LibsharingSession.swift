@@ -643,8 +643,10 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
 
     func onDisplays(_ displays: LibsharingDisplayList?) {
         guard let displays else { return }
-        if displays.framebufferWidth > 0, displays.desktopWidth > 0 {
-            let ratio = Double(displays.desktopWidth) / Double(displays.framebufferWidth)
+        let selected = (0..<displays.len()).lazy.compactMap { displays.get($0) }.first { $0.displayID == displays.current }
+        let pointsWide = selected?.logicalWidth ?? displays.desktopWidth
+        if displays.framebufferWidth > 0, pointsWide > 0 {
+            let ratio = Double(pointsWide) / Double(displays.framebufferWidth)
             locked { screenPointsPerPixel = ratio }
             updateInfo { info in
                 info.framebufferPixelsPerCursorPixel = 1 / ratio

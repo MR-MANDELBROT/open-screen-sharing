@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	TypeUTF8PlainText = "public.utf8-plain-text"
+	TypeUTF8PlainText  = "public.utf8-plain-text"
+	typeUTF16PlainText = "public.utf16-plain-text"
 	// ScreensharingAgent's SetPasteboard handler rejects a pasteboard whose compressed or
 	// uncompressed size is above 100 MiB (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434,
 	// UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3, sub_100019b98 0x100019c74..0x100019c8c).
@@ -109,6 +110,9 @@ func parsePasteboardArchive(archive []byte) (*Clipboard, error) {
 			}
 			flavor.Data = bytes.Clone(counted(maximumPasteboard))
 			flavor.Promise = len(flavor.Data) == 0
+			if flavor.Type == typeUTF16PlainText && len(flavor.Data)%2 == 0 {
+				flavor.Data = swapUTF16Order(flavor.Data)
+			}
 			item.Flavors = append(item.Flavors, flavor)
 		}
 		clipboard.Items = append(clipboard.Items, item)
@@ -138,10 +142,25 @@ func buildPasteboardArchive(clipboard *Clipboard) []byte {
 				appendCounted([]byte(tag.Key))
 				appendCounted([]byte(tag.Value))
 			}
-			appendCounted(flavor.Data)
+			data := flavor.Data
+			if flavor.Type == typeUTF16PlainText && len(data)%2 == 0 {
+				data = swapUTF16Order(data)
+			}
+			appendCounted(data)
 		}
 	}
 	return archive
+}
+
+// ScreenSharing passes each flavor through CoreEndianFlipData('aevt', its OSType), which turns
+// 'utxt' into big-endian UTF-16 on the wire (ScreenSharing 776.27, macOS 27.0.1 26A434,
+// _CopyPasteboardEntries 0x1cc179428..0x1cc179454, _UnpackScrapDataWithFilter 0x1cc165b94..0x1cc165bb8).
+func swapUTF16Order(data []byte) []byte {
+	swapped := make([]byte, len(data))
+	for i := 0; i < len(data); i += 2 {
+		binary.NativeEndian.PutUint16(swapped[i:], binary.BigEndian.Uint16(data[i:]))
+	}
+	return swapped
 }
 
 func inflatePasteboard(compressed []byte, size uint32) ([]byte, error) {
@@ -244,14 +263,19 @@ func (c *Client) SetSharedClipboard(enabled bool) error {
 	if c.info.Dialect != DialectApple {
 		return E.New("rfb: only a Mac shares its pasteboard")
 	}
-	c.access.Lock()
-	c.sharedClipboard = enabled
-	c.access.Unlock()
-	err := c.send(autoPasteboardMessage(enabled))
-	if err != nil || !enabled {
-		return err
-	}
-	return c.RequestClipboard()
+	c.enqueueKeyboard(func() {
+		c.access.Lock()
+		c.sharedClipboard = enabled
+		c.access.Unlock()
+		err := c.send(autoPasteboardMessage(enabled))
+		if err == nil && enabled {
+			err = c.RequestClipboard()
+		}
+		if err != nil {
+			c.logger.Warn("share pasteboard", "error", err)
+		}
+	})
+	return nil
 }
 
 func (c *Client) SetClipboard(clipboard *Clipboard) error {
@@ -272,9 +296,11 @@ func (c *Client) SetClipboard(clipboard *Clipboard) error {
 	}
 	c.enqueueKeyboard(func() {
 		c.access.Lock()
+		restorable := restorableClipboard(clipboard)
 		if c.keyboard.paste != nil {
-			c.keyboard.paste.saved = restorableClipboard(clipboard)
+			c.keyboard.paste.saved = restorable
 		}
+		c.keyboard.pasteboard = restorable
 		c.access.Unlock()
 		c.expectOwnPasteboardEcho()
 		sendErr := c.send(message)

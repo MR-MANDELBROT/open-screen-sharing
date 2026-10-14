@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -58,11 +57,16 @@ func (c *Client) selectSession() error {
 	}
 	flags := binary.BigEndian.Uint32(prompt[4:])
 	consoleUser, _, _ := strings.Cut(string(prompt[12:]), "\x00")
-	request := SessionRequest{
-		ConsoleUser: consoleUser,
-		Choices: common.Filter([]SessionChoice{SessionShareConsole, SessionOwn}, func(choice SessionChoice) bool {
-			return flags&(1<<choice) != 0
-		}),
+	request := SessionRequest{ConsoleUser: consoleUser}
+	// Bit 1 shares the console without asking, and bit 3 vetoes the separate
+	// session offered by bit 2 (ScreenSharing 776.27, macOS 27.0.1 26A434,
+	// _CommandsAllowedToSSSessionSelectArray 0x1cc05e480..0x1cc05e4e8,
+	// -[SSSessionView ssSession:wantsSessionSelection:consoleUser:] 0x1cc08db2c..0x1cc08db68).
+	if flags&3 != 0 {
+		request.Choices = append(request.Choices, SessionShareConsole)
+	}
+	if flags&0xc == 4 {
+		request.Choices = append(request.Choices, SessionOwn)
 	}
 	c.logger.Debug("session selection", "console", consoleUser, "flags", fmt.Sprintf("%#x", flags))
 	c.handler.StateChanged(StateChoosingSession)
@@ -74,9 +78,12 @@ func (c *Client) selectSession() error {
 	switch choice {
 	case SessionShareConsole:
 		body = make([]byte, 72)
-		binary.BigEndian.PutUint16(body, 2)
-		copy(body[8:71], consoleUser)
-		c.handler.StateChanged(StateWaitingForApproval)
+		binary.BigEndian.PutUint16(body, 1)
+		if flags&2 != 0 {
+			body[6] = 1
+		} else {
+			c.handler.StateChanged(StateWaitingForApproval)
+		}
 	case SessionOwn:
 		if len(c.options.Username) > 63 {
 			return E.New("rfb: user name of ", len(c.options.Username), " bytes is over the 63-byte limit")
@@ -98,7 +105,32 @@ func (c *Client) selectSession() error {
 	default:
 		return ErrSessionCancelled
 	}
+	copy(body[8:71], c.options.ClientName)
 	message := binary.BigEndian.AppendUint16(nil, uint16(len(body)))
 	_, err = c.conn.Write(append(message, body...))
-	return err
+	if err != nil {
+		return err
+	}
+	// The server answers with a sized result of at least 80 bytes whose byte 2
+	// is the outcome (ScreenSharing 776.27, _RFBSelectSession 0x1cc05f3f4..0x1cc05f4d0,
+	// 0x1cc05f5c4..0x1cc05f6c8; screensharingd 0x10005ea94, 0x10005edcc).
+	resultLength, err := c.stream.u16()
+	if err != nil {
+		return E.Cause(err, "read session selection result")
+	}
+	if resultLength < 80 {
+		return E.New("rfb: session selection result of ", resultLength, " bytes, want at least 80")
+	}
+	result, err := c.stream.bytes(int(resultLength))
+	if err != nil {
+		return E.Cause(err, "read session selection result")
+	}
+	switch result[2] {
+	case 0:
+		return nil
+	case 1:
+		return ErrPermissionDenied
+	default:
+		return E.New("rfb: session selection failed with result ", result[2])
+	}
 }

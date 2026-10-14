@@ -202,6 +202,7 @@ func (s *Session) run(ctx context.Context, options rfb.Options) {
 
 type sessionSetup struct {
 	hdr             *bool
+	quality         *rfb.Quality
 	display         *virtualDisplay
 	highPerformance *media.OfferOptions
 }
@@ -239,6 +240,12 @@ func (s *Session) apply(client *rfb.Client, setup sessionSetup) {
 		err := client.SetHDR(*setup.hdr)
 		if err != nil {
 			client.Logger().Warn("apply the HDR setting made before connecting", "error", err)
+		}
+	}
+	if setup.quality != nil {
+		err := client.SetQuality(*setup.quality)
+		if err != nil {
+			client.Logger().Warn("apply the quality chosen before connecting", "error", err)
 		}
 	}
 	if display := setup.display; display != nil && info.SupportsVirtualDisplay {
@@ -463,11 +470,17 @@ func (s *Session) SetQuality(quality int32) error {
 	if rfb.Quality(quality) < rfb.QualityAdaptive || rfb.Quality(quality) > rfb.QualityLow {
 		return E.New("unknown quality ", quality, "; it must be ", QualityAdaptive, " to ", QualityLow)
 	}
-	client, err := s.connected()
-	if err != nil {
-		return err
+	value := rfb.Quality(quality)
+	client, kept := s.pending(func(setup *sessionSetup) {
+		setup.quality = &value
+	})
+	if kept {
+		return nil
 	}
-	return client.SetQuality(rfb.Quality(quality))
+	if client == nil {
+		return E.New("not connected")
+	}
+	return client.SetQuality(value)
 }
 
 func (s *Session) SetUpdateRate(rate int32) error {

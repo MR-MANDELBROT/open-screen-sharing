@@ -12,7 +12,6 @@ nonisolated final class MicrophoneSender: @unchecked Sendable {
     private let pcmFormat: AVAudioFormat
     private let encodedFormat: AVAudioFormat
     private let encoder: AVAudioConverter
-    private var resampler: AVAudioConverter?
     private var pending: [Float] = []
     private var running = false
     private var observers: [any NSObjectProtocol] = []
@@ -66,11 +65,10 @@ nonisolated final class MicrophoneSender: @unchecked Sendable {
         guard let resampler = AVAudioConverter(from: inputFormat, to: pcmFormat) else {
             throw MessageError("AVAudioConverter can't convert the microphone's \(inputFormat) to \(pcmFormat)")
         }
-        self.resampler = resampler
         input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             guard let self, let copy = buffer.copy() as? AVAudioPCMBuffer else { return }
-            let boxed = BufferBox(buffer: copy)
-            queue.async { self.process(boxed.buffer) }
+            let boxed = BufferBox(buffer: copy, resampler: resampler)
+            queue.async { self.process(boxed.buffer, resampler: boxed.resampler) }
         }
         engine.prepare()
         try engine.start()
@@ -94,8 +92,7 @@ nonisolated final class MicrophoneSender: @unchecked Sendable {
         }
     }
 
-    private func process(_ buffer: AVAudioPCMBuffer) {
-        guard let resampler else { return }
+    private func process(_ buffer: AVAudioPCMBuffer, resampler: AVAudioConverter) {
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * Self.sampleRate / buffer.format.sampleRate) + 32
         guard let resampled = AVAudioPCMBuffer(pcmFormat: pcmFormat, frameCapacity: capacity) else { return }
         var consumed = false
@@ -142,8 +139,10 @@ nonisolated final class MicrophoneSender: @unchecked Sendable {
 
 nonisolated private final class BufferBox: @unchecked Sendable {
     let buffer: AVAudioPCMBuffer
+    let resampler: AVAudioConverter
 
-    init(buffer: AVAudioPCMBuffer) {
+    init(buffer: AVAudioPCMBuffer, resampler: AVAudioConverter) {
         self.buffer = buffer
+        self.resampler = resampler
     }
 }
