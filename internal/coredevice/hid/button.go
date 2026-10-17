@@ -21,6 +21,11 @@ var (
 	ButtonMute       = Button{UsagePage: 0x0c, Usage: 0xe2, Hold: 80 * time.Millisecond}
 )
 
+var (
+	ButtonBrightnessUp   = Button{UsagePage: 0x0c, Usage: 0x6f}
+	ButtonBrightnessDown = Button{UsagePage: 0x0c, Usage: 0x70}
+)
+
 // idevice maps IndigoButtonEvent Down/Up to 1/2 (idevice d32c818,
 // idevice/src/services/core_device/hid.rs:23-35, 556).
 const (

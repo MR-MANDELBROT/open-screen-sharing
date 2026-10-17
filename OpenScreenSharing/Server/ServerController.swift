@@ -70,11 +70,14 @@ final class ServerController: ObservableObject {
     }()
 
     private lazy var volume = LocalVolume()
+    private lazy var brightness = LocalBrightness(queue: Self.queue)
     private var viewers: Set<Int64> = []
 
     private var server: LibsharingDeviceServer?
     private var generation = 0
     private var startTask: Task<Void, Never>?
+    private var closingTask: Task<Void, Never>?
+    private var cleanupBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var probeTask: Task<Void, Never>?
     private var isBrowsing = false
     private let advertiser = BonjourAdvertiser()
@@ -174,6 +177,8 @@ final class ServerController: ObservableObject {
     }
 
     private func launch(record: Data, generation: Int) async {
+        await closingTask?.value
+        guard generation == self.generation else { return }
         let options = LibsharingDeviceServerOptions()
         options.pairingRecord = record
         options.remotePairingPort = Int32(remotePairing.port ?? 0)
@@ -200,6 +205,7 @@ final class ServerController: ObservableObject {
                         self.viewers.remove(viewerID)
                     }
                     self.volume.setWatched(!self.viewers.isEmpty)
+                    self.brightness.setWatched(!self.viewers.isEmpty, server: self.server)
                 }
             })
         let request = UncheckedSendable(value: options)
@@ -255,6 +261,7 @@ final class ServerController: ObservableObject {
         case LibsharingDeviceServerFailed:
             fail(problem ?? ServerProblem(kind: .other, message: change.message))
         case LibsharingDeviceServerStopped:
+            brightness.setWatched(false, server: nil)
             self.generation += 1
             server = nil
             settings.isEnabled = false
@@ -276,14 +283,37 @@ final class ServerController: ObservableObject {
     private func closeServer() {
         guard let server else { return }
         self.server = nil
+        cleanupBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Restore local brightness") { [weak self] in
+            guard let self else { return }
+            brightness.setWatched(false, server: nil)
+            endCleanupBackgroundTask()
+        }
+        let restoration = brightness.stop(server)
         let box = UncheckedSendable(value: server)
-        Self.queue.async { box.value.close() }
+        closingTask = Task {
+            defer { endCleanupBackgroundTask() }
+            await restoration.value
+            await withCheckedContinuation { continuation in
+                Self.queue.async {
+                    box.value.close()
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    private func endCleanupBackgroundTask() {
+        guard cleanupBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(cleanupBackgroundTask)
+        cleanupBackgroundTask = .invalid
     }
 
     private func phaseChanged() {
         if !phase.isActive {
             viewers.removeAll()
             volume.setWatched(false)
+        } else if phase.isRunning, viewers.isEmpty, let server {
+            brightness.restore(server, locks: false)
         }
         updateBackground()
         setBrowsing(phase.isActive)

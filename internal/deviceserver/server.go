@@ -96,6 +96,7 @@ type Server struct {
 	streams  *streamManager
 	input    *inputWorker
 	clip     *clipboardBridge
+	buttons  buttonPresser
 
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -207,6 +208,7 @@ func (s *Server) Close() {
 	s.closed = true
 	started := s.started
 	s.access.Unlock()
+	s.buttons.close()
 	s.cancel()
 	_ = s.rfb.Close()
 	if started {
@@ -508,6 +510,7 @@ func (s *Server) detach(a *attachment) {
 	a.cancel()
 	s.clip.update()
 	s.input.forget()
+	s.buttons.close()
 	stopped := make(chan struct{})
 	go func() {
 		s.streams.stopDevice(a.device)

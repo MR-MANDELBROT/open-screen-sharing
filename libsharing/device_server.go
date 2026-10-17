@@ -180,6 +180,18 @@ func (s *DeviceServer) setPairingPort(port int32) bool {
 	return s.pairingPort.Swap(uint32(port)) != uint32(port)
 }
 
+func (s *DeviceServer) AdjustBrightness(steps int32) error {
+	return s.server.AdjustBrightness(int(steps))
+}
+
+func (s *DeviceServer) LockScreen() error {
+	return s.server.LockScreen()
+}
+
+func (s *DeviceServer) WakeScreen() error {
+	return s.server.WakeScreen()
+}
+
 func (s *DeviceServer) Close() {
 	servingDevices.access.Lock()
 	delete(servingDevices.ports, s)
