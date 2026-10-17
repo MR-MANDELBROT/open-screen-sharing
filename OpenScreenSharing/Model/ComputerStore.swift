@@ -4,7 +4,7 @@ import GRDB
 
 struct StoredComputer {
     var username: String
-    var password: String
+    var password: String?
     var memory: SessionMemory
     var networkConfiguration: NetworkConfiguration
     var device: DeviceInfo?
@@ -68,7 +68,7 @@ final class ComputerStore: ObservableObject {
         guard let computer = computer(id) else { return nil }
         return StoredComputer(
             username: computer.username,
-            password: computer.authenticates ? computer.password : "",
+            password: computer.authenticates ? computer.password : nil,
             memory: computer.memory,
             networkConfiguration: computer.networkConfiguration,
             device: computer.model.isEmpty ? nil : DeviceInfo(model: computer.model, enclosureColor: computer.enclosureColor),

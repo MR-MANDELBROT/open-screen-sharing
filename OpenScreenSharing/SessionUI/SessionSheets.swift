@@ -43,7 +43,7 @@ struct CredentialsView: View {
     }
 
     private var isValid: Bool {
-        !password.isEmpty && (!asksForUsername || !trimmedUsername.isEmpty)
+        asksForUsername ? !trimmedUsername.isEmpty : !password.isEmpty
     }
 
     var body: some View {
@@ -135,16 +135,12 @@ struct CredentialsView: View {
 
     private func signIn() {
         guard isValid else { return }
-        let credentials =
-            asksForUsername
-            ? SessionCredentials(loginType: .account, username: trimmedUsername, password: password)
-            : SessionCredentials(loginType: .vncPassword, username: "", password: password)
-        onSubmit(credentials, remember)
+        onSubmit(asksForUsername ? .account(username: trimmedUsername, password: password) : .vncPassword(password), remember)
         dismiss()
     }
 
     private func askForPermission() {
-        onSubmit(SessionCredentials(loginType: .askForPermission, username: trimmedUsername, password: ""), remember)
+        onSubmit(.askForPermission(username: trimmedUsername), remember)
         dismiss()
     }
 }

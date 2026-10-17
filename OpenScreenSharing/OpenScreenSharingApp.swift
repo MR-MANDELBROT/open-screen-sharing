@@ -121,7 +121,7 @@ struct SessionWindow: View {
 
     var body: some View {
         if let route {
-            SessionView(controller: SessionController(route: WindowPasswords.receive(route))) {
+            SessionView(controller: SessionController(route: WindowCredentials.receive(route))) {
                 DispatchQueue.main.async { dismissWindow() }
             }
         } else {
@@ -154,7 +154,7 @@ private struct SessionWindowOpener: ViewModifier {
         #if os(macOS)
         if RemoteScreenNSView.focusWindow(showing: route) { return }
         #endif
-        openWindow(value: WindowPasswords.send(route))
+        openWindow(value: WindowCredentials.send(route))
     }
 }
 

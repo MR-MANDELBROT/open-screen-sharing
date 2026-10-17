@@ -166,10 +166,23 @@ nonisolated struct DeviceInfo: Equatable, Sendable {
     var enclosureColor: String
 }
 
-nonisolated struct SessionCredentials: Sendable, Equatable {
-    var loginType: LoginType
-    var username: String
-    var password: String
+nonisolated enum SessionCredentials: Sendable, Hashable {
+    case account(username: String, password: String)
+    case vncPassword(String)
+    case askForPermission(username: String)
+    case noAuthentication
+
+    var username: String {
+        switch self {
+        case .account(let username, _), .askForPermission(let username): username
+        case .vncPassword, .noAuthentication: ""
+        }
+    }
+
+    var account: (username: String, password: String)? {
+        if case .account(let username, let password) = self { return (username, password) }
+        return nil
+    }
 }
 
 nonisolated struct SessionConfiguration: Sendable {

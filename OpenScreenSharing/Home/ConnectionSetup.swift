@@ -9,21 +9,22 @@ struct NewComputer: Hashable {
 
     func signedIn(_ credentials: SessionCredentials, supportsHighPerformance: Bool) -> SignedInComputer {
         let decoder = DecoderCapabilities.current
+        let account = credentials.account
         var saved = Computer(
-            name: name, address: server.address, remoteProtocol: server.remoteProtocol,
-            username: credentials.loginType == .account ? credentials.username : "")
-        saved.authenticates = credentials.loginType == .account
+            name: name, address: server.address, remoteProtocol: server.remoteProtocol, username: account?.username ?? "")
+        saved.password = account?.password ?? ""
+        saved.authenticates = account != nil
         saved.model = model ?? ""
         saved.trustedFingerprint = server.fingerprint
         saved.supportsHighPerformance = supportsHighPerformance
         saved.usesHighPerformance = supportsHighPerformance && (decoder.supportsHEVC || decoder.supportsH264)
-        return SignedInComputer(computer: saved, password: credentials.password, server: server.authentication)
+        return SignedInComputer(computer: saved, credentials: credentials, server: server.authentication)
     }
 }
 
 struct SignedInComputer: Hashable {
     let computer: Computer
-    let password: String
+    let credentials: SessionCredentials
     let server: ServerAuthentication?
 }
 
@@ -47,7 +48,7 @@ struct ConnectionSetupView: View {
                 ComputerEditor(
                     computer: signedIn.computer,
                     setup: ComputerEditor.Setup(
-                        password: signedIn.password,
+                        credentials: signedIn.credentials,
                         server: signedIn.server,
                         connect: connect
                     )
@@ -121,13 +122,11 @@ struct SetupSignInView: View {
     }
 
     private var isValid: Bool {
-        !password.isEmpty && (!asksForUsername || !trimmedUsername.isEmpty)
+        asksForUsername ? !trimmedUsername.isEmpty : !password.isEmpty
     }
 
     private var credentials: SessionCredentials {
-        asksForUsername
-            ? SessionCredentials(loginType: .account, username: trimmedUsername, password: password)
-            : SessionCredentials(loginType: .vncPassword, username: "", password: password)
+        asksForUsername ? .account(username: trimmedUsername, password: password) : .vncPassword(password)
     }
 
     var body: some View {

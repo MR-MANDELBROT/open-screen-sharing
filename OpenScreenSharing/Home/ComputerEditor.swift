@@ -5,7 +5,7 @@ struct ComputerEditor: View {
     var setup: Setup?
 
     struct Setup {
-        var password: String
+        var credentials: SessionCredentials
         var server: ServerAuthentication?
         var connect: (SessionRoute) -> Void
     }
@@ -41,7 +41,7 @@ struct ComputerEditor: View {
         _address = State(initialValue: computer.addressDescription)
         _authenticates = State(initialValue: computer.authenticates)
         _username = State(initialValue: computer.username)
-        _password = State(initialValue: setup?.password ?? computer.password)
+        _password = State(initialValue: computer.password)
         _choice = State(initialValue: ServerChoice(computer))
         _networkConfiguration = State(initialValue: computer.networkConfiguration)
     }
@@ -51,7 +51,7 @@ struct ComputerEditor: View {
     }
 
     private var isComplete: Bool {
-        !authenticates || (!trimmedUsername.isEmpty && !password.isEmpty)
+        !authenticates || !trimmedUsername.isEmpty
     }
 
     var body: some View {
@@ -140,7 +140,7 @@ struct ComputerEditor: View {
                                     .onSubmit { focusedField = .password }
                             }
                             LabeledContentCompat("Password") {
-                                TextField("Password", text: $password.masked { focusedField == .password }, prompt: Text("Required"))
+                                TextField("Password", text: $password.masked { focusedField == .password }, prompt: Text("Optional"))
                                     .textContentType(.oneTimeCode)
                                     #if os(iOS)
                                     .textInputAutocapitalization(.never)
@@ -195,7 +195,7 @@ struct ComputerEditor: View {
         }
         let address = ComputerAddress(host: endpoint.host, port: endpoint.port ?? choice.remoteProtocol.defaultPort)
         guard isComplete else {
-            focusedField = trimmedUsername.isEmpty ? .username : .password
+            focusedField = .username
             return
         }
         let computer: Computer
@@ -219,7 +219,7 @@ struct ComputerEditor: View {
         }
         if let setup {
             var route = SessionRoute(computer: computer)
-            route.password = password.isEmpty ? nil : password
+            route.credentials = setup.credentials
             route.server = setup.server
             setup.connect(route)
         }

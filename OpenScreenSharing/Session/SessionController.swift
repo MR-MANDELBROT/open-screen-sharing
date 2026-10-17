@@ -318,14 +318,14 @@ final class SessionController: ObservableObject, Identifiable {
         }
         networkConfiguration = stored?.networkConfiguration ?? NetworkConfiguration()
         let username = route.username ?? stored?.username ?? ""
-        let savedPassword = stored.flatMap { $0.username == username ? $0.password : nil } ?? ""
+        let savedPassword = stored.flatMap { $0.username == username ? $0.password : nil }
         passwordUpdate = .keep
         usedSavedPassword = false
-        if let password = route.password, !password.isEmpty {
-            connect(with: SessionCredentials(loginType: .account, username: username, password: password))
-        } else if !savedPassword.isEmpty {
+        if let credentials = route.credentials {
+            connect(with: credentials)
+        } else if let savedPassword {
             usedSavedPassword = true
-            connect(with: SessionCredentials(loginType: .account, username: username, password: savedPassword))
+            connect(with: .account(username: username, password: savedPassword))
         } else {
             askForCredentials(username: username)
         }
@@ -371,9 +371,9 @@ final class SessionController: ObservableObject, Identifiable {
 
     func submitCredentials(_ credentials: SessionCredentials, remember: Bool) {
         credentialPrompt = nil
-        switch credentials.loginType {
-        case .account: passwordUpdate = remember ? .save(credentials.password) : .delete
-        case .vncPassword, .askForPermission, .none: passwordUpdate = .keep
+        switch credentials {
+        case .account(_, let password): passwordUpdate = remember ? .save(password) : .delete
+        case .vncPassword, .askForPermission, .noAuthentication: passwordUpdate = .keep
         }
         usedSavedPassword = false
         connect(with: credentials)
@@ -430,7 +430,7 @@ final class SessionController: ObservableObject, Identifiable {
                     computerID: computerID,
                     name: route.name,
                     address: route.address,
-                    username: credentials.loginType == .account ? credentials.username : "",
+                    username: credentials.account?.username ?? "",
                     password: passwordUpdate,
                     supportsHighPerformance: capabilities.contains(.highPerformance),
                     remoteProtocol: route.remoteProtocol,
@@ -828,8 +828,11 @@ final class SessionController: ObservableObject, Identifiable {
             startHighPerformanceIfDisplayReady()
         case .failed(let failure):
             releaseAllKeys()
-            if failure.kind == .authenticationFailed, credentials?.loginType == .account || credentials?.loginType == .vncPassword {
-                retry()
+            if failure.kind == .authenticationFailed {
+                switch credentials {
+                case .account?, .vncPassword?: retry()
+                default: break
+                }
             }
         case .disconnected:
             releaseAllKeys()

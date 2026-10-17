@@ -130,13 +130,6 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     }
 }
 
-nonisolated enum LoginType: String, Codable, Sendable {
-    case account
-    case askForPermission
-    case vncPassword
-    case none
-}
-
 nonisolated enum RemoteProtocol: String, Codable, Sendable {
     case vnc
     case rdp

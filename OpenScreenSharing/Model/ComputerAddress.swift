@@ -145,7 +145,7 @@ nonisolated struct RemoteLink: Hashable, Sendable {
         address = ComputerAddress(host: unbracketed, port: components.port ?? remoteProtocol.defaultPort)
         self.remoteProtocol = remoteProtocol
         username = components.user.flatMap { $0.isEmpty ? nil : $0 }
-        password = components.password.flatMap { $0.isEmpty ? nil : $0 }
+        password = components.password.flatMap { $0.isEmpty && username == nil ? nil : $0 }
     }
 
     private static func rdpAttributes(_ query: Substring) -> [String: String]? {

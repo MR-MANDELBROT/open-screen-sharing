@@ -248,7 +248,9 @@ struct HomeView: View {
                 name: found?.name ?? link.address.bonjourServiceName ?? link.address.host, address: link.address,
                 remoteProtocol: link.remoteProtocol, username: link.username, model: found?.model)
         }
-        route.password = link.password
+        if let password = link.password {
+            route.credentials = route.username.map { .account(username: $0, password: password) } ?? .vncPassword(password)
+        }
         return route
     }
 

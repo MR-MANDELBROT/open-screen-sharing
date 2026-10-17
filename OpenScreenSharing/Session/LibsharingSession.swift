@@ -35,18 +35,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         options.audio = configuration.remoteAudio == .fromMac
         options.host = configuration.address.host
         options.port = Int32(configuration.address.port)
-        options.username = configuration.credentials.username
-        options.password = configuration.credentials.password
-        switch configuration.credentials.loginType {
-        case .account:
-            options.loginType = configuration.credentials.username.isEmpty ? LibsharingLoginVNCPassword : LibsharingLoginAccount
-        case .askForPermission:
-            options.loginType = configuration.startsInObserveMode ? LibsharingLoginRequestObserve : LibsharingLoginRequestControl
-        case .vncPassword:
-            options.loginType = LibsharingLoginVNCPassword
-        case .none:
-            options.loginType = LibsharingLoginNone
-        }
+        configuration.credentials.apply(to: options, observes: configuration.startsInObserveMode)
         options.quality = Self.quality(configuration.quality)
         options.mode = configuration.startsInObserveMode ? LibsharingModeObserve : LibsharingModeControl
         options.sharedClipboard = configuration.sharesClipboard
@@ -879,5 +868,23 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
 
     func reportMediaFailure(_ failure: MediaFailure) {
         delegate?.sessionVideoStopped(failure: failure)
+    }
+}
+
+nonisolated extension SessionCredentials {
+    func apply(to options: LibsharingSessionOptions, observes: Bool) {
+        options.username = username
+        switch self {
+        case .account(_, let password):
+            options.loginType = LibsharingLoginAccount
+            options.password = password
+        case .vncPassword(let password):
+            options.loginType = LibsharingLoginVNCPassword
+            options.password = password
+        case .askForPermission:
+            options.loginType = observes ? LibsharingLoginRequestObserve : LibsharingLoginRequestControl
+        case .noAuthentication:
+            options.loginType = LibsharingLoginNone
+        }
     }
 }

@@ -7,7 +7,7 @@ nonisolated struct SessionRoute: Codable, Hashable, Identifiable, Sendable {
     var host: String
     var port: Int
     var username: String?
-    var password: String?
+    var credentials: SessionCredentials?
     var model: String?
     var remoteProtocol: RemoteProtocol
     var usesHighPerformance: Bool?
@@ -35,16 +35,12 @@ nonisolated struct SessionRoute: Codable, Hashable, Identifiable, Sendable {
         deviceType = computer.usesHighPerformance ? computer.deviceType : nil
     }
 
-    init(
-        name: String, address: ComputerAddress, remoteProtocol: RemoteProtocol, username: String? = nil, password: String? = nil,
-        model: String? = nil
-    ) {
+    init(name: String, address: ComputerAddress, remoteProtocol: RemoteProtocol, username: String? = nil, model: String? = nil) {
         self.name = name
         host = address.host
         port = address.port
         self.remoteProtocol = remoteProtocol
         self.username = username
-        self.password = password
         self.model = model
         deviceType = model.flatMap(DeviceType.init(model:))
     }
@@ -54,19 +50,19 @@ nonisolated struct SessionRoute: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-enum WindowPasswords {
-    private static var passwords: [UUID: String] = [:]
+enum WindowCredentials {
+    private static var credentials: [UUID: SessionCredentials] = [:]
 
     static func send(_ route: SessionRoute) -> SessionRoute {
         var route = route
-        passwords[route.id] = route.password
-        route.password = nil
+        credentials[route.id] = route.credentials
+        route.credentials = nil
         return route
     }
 
     static func receive(_ route: SessionRoute) -> SessionRoute {
         var route = route
-        route.password = passwords.removeValue(forKey: route.id)
+        route.credentials = credentials.removeValue(forKey: route.id)
         return route
     }
 }

@@ -10,10 +10,10 @@ nonisolated struct ServerAuthentication: Codable, Hashable, Sendable {
 
     var openCredentials: SessionCredentials? {
         if noPassword {
-            return SessionCredentials(loginType: .none, username: "", password: "")
+            return .noAuthentication
         }
         if grantsRequests {
-            return SessionCredentials(loginType: .askForPermission, username: "", password: "")
+            return .askForPermission(username: "")
         }
         return nil
     }
@@ -65,18 +65,7 @@ nonisolated enum ServerProber {
             options.host = server.address.host
             options.port = Int32(server.address.port)
             options.trustedFingerprint = server.fingerprint
-            options.username = credentials.username
-            options.password = credentials.password
-            switch credentials.loginType {
-            case .account:
-                options.loginType = credentials.username.isEmpty ? LibsharingLoginVNCPassword : LibsharingLoginAccount
-            case .askForPermission:
-                options.loginType = LibsharingLoginRequestControl
-            case .vncPassword:
-                options.loginType = LibsharingLoginVNCPassword
-            case .none:
-                options.loginType = LibsharingLoginNone
-            }
+            credentials.apply(to: options, observes: false)
             let check = LibsharingCheckLogin(options, timeout)!
             guard check.errorCode == LibsharingErrorNone else {
                 return .failure(failure(code: check.errorCode, message: check.errorMessage, fingerprint: check.fingerprint))
