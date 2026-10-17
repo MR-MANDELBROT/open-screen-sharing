@@ -169,8 +169,9 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
                 self.updatePointerLock()
             }
             guard self.capturesKey(event) else {
-                if event.type == .keyDown { self.controller.keyDownHandledLocally() }
-                return event
+                guard event.type == .keyDown else { return event }
+                self.controller.keyDownHandledLocally()
+                return event.window === self.window && KeyShortcuts.shared.performAssigned(event) ? nil : event
             }
             return self.controller.handleKeyEvent(event) ? nil : event
         }
@@ -276,6 +277,11 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
         frame.size = CGSize(width: target.width + chrome.width, height: target.height + chrome.height)
         frame.origin.y = window.frame.maxY - frame.height
         window.setFrame(window.constrainFrameRect(frame, to: screen), display: true, animate: animate)
+    }
+
+    static func isSessionWindow(_ window: NSWindow?) -> Bool {
+        guard let window else { return false }
+        return views.allObjects.contains { $0.window === window }
     }
 
     static func focusWindow(showing route: SessionRoute) -> Bool {

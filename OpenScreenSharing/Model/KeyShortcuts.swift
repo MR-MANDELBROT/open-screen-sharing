@@ -541,6 +541,19 @@ final class KeyShortcuts: ObservableObject {
     func isAssigned(_ event: NSEvent) -> Bool {
         KeyShortcut(event: event).map { action(using: $0) != nil } ?? false
     }
+
+    // Key equivalents matched against the main menu go to the Apple menu (Log Out ⇧⌘Q, Lock Screen ⌃⌘Q) before the
+    // app's own items; a submenu matches only its own items (AppKit 2775.10.103.1, macOS 27.0.1 26A434,
+    // UUID 2688AFBC-5C39-3132-BCF5-8D00D32D7615,
+    // +[NSCocoaMenuImpl(KeyEvents) _menuItemWithKeyEquivalentMatchingEvent:inMenu:includingDisabledItems:]
+    // 0x18578a8e0..0x18578aa48).
+    func performAssigned(_ event: NSEvent) -> Bool {
+        guard !isRecording, isAssigned(event) else { return false }
+        if NSApp.mainMenu?.items.contains(where: { $0.submenu?.performKeyEquivalent(with: event) == true }) != true {
+            NSSound.beep()
+        }
+        return true
+    }
     #else
     // The SwiftUI App lifecycle on iPadOS consumes these chords before the first responder's pressesBegan,
     // unless the responder chain declares a key command for them; one whose action nobody performs lets the press through.

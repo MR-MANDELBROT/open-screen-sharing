@@ -34,6 +34,10 @@ final class AppLaunch {
         availabilityMonitor = AvailabilityMonitor(nearby: nearby)
         #if os(macOS)
         UpdateManager.shared.checkOnLaunch()
+        _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard !RemoteScreenNSView.isSessionWindow(event.window) else { return event }
+            return KeyShortcuts.shared.performAssigned(event) ? nil : event
+        }
         #endif
         #if os(iOS) && (DEBUG || SIDELOAD)
         BadgeDots.install()
