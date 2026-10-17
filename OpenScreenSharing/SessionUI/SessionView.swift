@@ -106,7 +106,7 @@ struct SessionView: View {
             .defersSystemGesturesCompat(on: controller.isControlling ? .all : [])
             .background { PointerLockRequest(locked: locksPointer) }
             .onChangeCompat(of: pointerLockAvailable) { available in
-                if !available { controller.setPointerLock(false) }
+                controller.pointerLockAvailabilityDidChange(available)
             }
             .onChangeCompat(of: pointerLockPaused) { paused in
                 if !paused, !controller.pointerLockCanResume { controller.setPointerLock(false) }
@@ -197,9 +197,6 @@ struct SessionView: View {
                 CustomizeToolbarView(controller: controller, slots: toolbarSlots)
             }
             .preferredColorScheme(colorScheme)
-            .onChange(of: pointerLockAvailable) { _, available in
-                if !available { controller.setPointerLock(false) }
-            }
             .onChange(of: locksPointer, initial: true) { _, locks in
                 controller.screen?.setLocksPointer(locks)
             }

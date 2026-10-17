@@ -34,6 +34,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var keyboardSources: [String] = []
     var windowWidth: Double = 0
     var windowHeight: Double = 0
+    var locksPointer = false
 
     init(name: String, address: ComputerAddress, remoteProtocol: RemoteProtocol = .vnc, username: String = "") {
         self.name = name
@@ -102,7 +103,8 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
             display: displaySelection,
             usesHDR: usesHDR,
             remoteAudio: remoteAudio,
-            windowSize: windowWidth > 0 && windowHeight > 0 ? CGSize(width: windowWidth, height: windowHeight) : nil
+            windowSize: windowWidth > 0 && windowHeight > 0 ? CGSize(width: windowWidth, height: windowHeight) : nil,
+            locksPointer: locksPointer
         )
     }
 
@@ -117,6 +119,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
         remoteAudio = memory.remoteAudio
         windowWidth = memory.windowSize.map { Double($0.width) } ?? 0
         windowHeight = memory.windowSize.map { Double($0.height) } ?? 0
+        locksPointer = memory.locksPointer
     }
 
     mutating func apply(_ device: DeviceInfo) {

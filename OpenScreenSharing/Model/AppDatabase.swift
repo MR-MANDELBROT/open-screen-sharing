@@ -34,14 +34,16 @@ enum AppDatabase {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let database = try DatabaseQueue(path: url.path)
         let expected = try DatabaseQueue()
-        try expected.write(createTables)
-        let saved = try database.read(schema)
-        if try saved != expected.read(schema) {
-            if !saved.isEmpty {
-                StorageNotice.logger.error("erase \(url.lastPathComponent, privacy: .public) saved with a different schema")
-                try database.erase()
-            }
-            try database.write(createTables)
+        try migrator.migrate(expected)
+        do {
+            try migrator.migrate(database)
+        } catch {
+            StorageNotice.logger.error("migrate \(url.lastPathComponent, privacy: .public): \(error, privacy: .public)")
+        }
+        if try database.read(schema) != expected.read(schema) {
+            StorageNotice.logger.error("erase \(url.lastPathComponent, privacy: .public) saved with a different schema")
+            try database.erase()
+            try migrator.migrate(database)
         }
         try database.write { db in
             for row in try Row.fetchAll(db, sql: "SELECT * FROM computers") {
@@ -61,8 +63,19 @@ enum AppDatabase {
         try String.fetchAll(db, sql: "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name != 'grdb_migrations' ORDER BY name")
     }
 
-    nonisolated static func createTables(_ db: Database) throws {
-        try db.create(table: "computers") { t in
+    static let migrator: DatabaseMigrator = {
+        var migrator = DatabaseMigrator()
+        migrator.registerMigration("1.0.0", migrate: createTables)
+        migrator.registerMigration("1.0.2") { db in
+            try db.alter(table: "computers") { t in
+                t.add(column: "locksPointer", .boolean).notNull().defaults(to: false)
+            }
+        }
+        return migrator
+    }()
+
+    private nonisolated static func createTables(_ db: Database) throws {
+        try db.create(table: "computers", options: .ifNotExists) { t in
             t.primaryKey("id", .blob)
             t.column("name", .text).notNull()
             t.column("host", .text).notNull()
@@ -93,7 +106,7 @@ enum AppDatabase {
             t.column("windowWidth", .double).notNull()
             t.column("windowHeight", .double).notNull()
         }
-        try db.create(table: "preferences") { t in
+        try db.create(table: "preferences", options: .ifNotExists) { t in
             t.primaryKey("name", .text)
             t.column("data", .blob).notNull()
         }

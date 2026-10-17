@@ -97,6 +97,7 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var usesHDR = false
     var remoteAudio = RemoteAudio.fromMac
     var windowSize: CGSize?
+    var locksPointer = false
 }
 
 private struct KeyboardSourceRequest {
@@ -393,6 +394,7 @@ final class SessionController: ObservableObject, Identifiable {
         hdrEnabled = memory.usesHDR && DecoderCapabilities.current.supportsHDR
         remoteAudio = memory.remoteAudio
         windowSize = memory.windowSize
+        isPointerLockOn = memory.locksPointer
     }
 
     private var memory: SessionMemory {
@@ -405,7 +407,8 @@ final class SessionController: ObservableObject, Identifiable {
             display: chosenDisplay,
             usesHDR: hdrEnabled,
             remoteAudio: remoteAudio,
-            windowSize: windowSize
+            windowSize: windowSize,
+            locksPointer: isPointerLockOn
         )
     }
 
@@ -1682,7 +1685,12 @@ final class SessionController: ObservableObject, Identifiable {
         guard on != isPointerLockOn else { return }
         isPointerLockOn = on
         pointerLockHasLocked = false
+        rememberState()
         if on, isToolbarVisible { toggleToolbar() }
+    }
+
+    func pointerLockAvailabilityDidChange(_ available: Bool) {
+        if !available { pointerLockHasLocked = false }
     }
 
     func setZoomMode(_ on: Bool) {
