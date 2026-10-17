@@ -4262,7 +4262,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "١. انتقل إلى الإعدادات > الخصوصية والأمن > وضع المطور\n٢. اضغط على \"Pair with %@\"\n٣. أدخل رمز الإقران الذي يعرضه Screen Sharing"
+            "value" : "١. انتقل إلى الإعدادات > الخصوصية والأمن > نمط المطور\n٢. اضغط على \"Pair with %@\"\n٣. أدخل رمز الإقران الذي يعرضه Screen Sharing"
           }
         },
         "bg" : {
@@ -4274,25 +4274,25 @@
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. সেটিংস › গোপনীয়তা ও নিরাপত্তা › ডেভেলপার মোডে যান।\n2. “Pair with %@”-এ ট্যাপ করুন।\n3. Screen Sharing-এ দেখানো পেয়ারিং কোডটি লিখুন।"
+            "value" : "1. সেটিংস › গোপনীয়তা ও সুরক্ষা › ডেভেলপার মোডে যান।\n2. “Pair with %@”-এ ট্যাপ করুন।\n3. Screen Sharing-এ দেখানো পেয়ারিং কোডটি লিখুন।"
           }
         },
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Ves a Configuració › Privacitat i seguretat › Mode de desenvolupador.\n2. Toca “Pair with %@”.\n3. Introdueix el codi d’enllaç que mostra l’app Screen Sharing."
+            "value" : "1. Ves a Configuració › Privacitat i seguretat › Mode de desenvolupament.\n2. Toca “Pair with %@”.\n3. Introdueix el codi d’enllaç que mostra l’app Screen Sharing."
           }
         },
         "cs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Přejděte do Nastavení › Soukromí a zabezpečení › Režim pro vývojáře.\n2. Klepněte na „Pair with %@“.\n3. Zadejte párovací kód, který zobrazuje aplikace Screen Sharing."
+            "value" : "1. Přejděte do Nastavení › Soukromí a zabezpečení › Vývojový režim.\n2. Klepněte na „Pair with %@“.\n3. Zadejte párovací kód, který zobrazuje aplikace Screen Sharing."
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Gå til Indstillinger › Anonymitet & sikkerhed › Udviklertilstand.\n2. Tryk på “Pair with %@”.\n3. Indtast den parringskode, som Screen Sharing viser."
+            "value" : "1. Gå til Indstillinger › Anonymitet & sikkerhed › Udviklerfunktion.\n2. Tryk på “Pair with %@”.\n3. Indtast den parringskode, som Screen Sharing viser."
           }
         },
         "de" : {
@@ -4304,7 +4304,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Μεταβείτε στις Ρυθμίσεις › Απόρρητο και ασφάλεια › Λειτουργία προγραμματιστή.\n2. Αγγίξτε «Pair with %@».\n3. Εισαγάγετε τον κωδικό ζευγοποίησης που εμφανίζει το Screen Sharing."
+            "value" : "1. Μεταβείτε στις Ρυθμίσεις › Απόρρητο και ασφάλεια › Λειτουργία δημιουργού.\n2. Αγγίξτε «Pair with %@».\n3. Εισαγάγετε τον κωδικό ζευγοποίησης που εμφανίζει το Screen Sharing."
           }
         },
         "es" : {
@@ -4340,13 +4340,13 @@
         "gu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. સેટિંગ્સ › ગોપનીયતા અને સુરક્ષા › ડેવલપર મોડ પર જાઓ.\n2. “Pair with %@” પર ટૅપ કરો.\n3. Screen Sharing દ્વારા બતાવવામાં આવેલો પેરિંગ કોડ દાખલ કરો."
+            "value" : "1. સેટિંગ્સ › પ્રાઇવસી અને સુરક્ષા › ડેવલપર મોડ પર જાઓ.\n2. “Pair with %@” પર ટૅપ કરો.\n3. Screen Sharing દ્વારા બતાવવામાં આવેલો પેરિંગ કોડ દાખલ કરો."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. יש לעבור אל ״הגדרות״ › ״פרטיות ואבטחה״ › ״מצב מפתח״.\n2. יש להקיש על ״Pair with %@״.\n3. יש להזין את קוד הקישור שמוצג ב-Screen Sharing."
+            "value" : "1. יש לעבור אל ״הגדרות״ › ״פרטיות ואבטחה״ › ״מצב פיתוח״.\n2. יש להקיש על ״Pair with %@״.\n3. יש להזין את קוד הקישור שמוצג ב-Screen Sharing."
           }
         },
         "hi" : {
@@ -4358,7 +4358,7 @@
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Idite u Postavke › Privatnost i sigurnost › Način rada za programere.\n2. Dodirnite „Pair with %@“.\n3. Unesite kôd za uparivanje koji prikazuje Screen Sharing."
+            "value" : "1. Idite u Postavke › Privatnost i sigurnost › Developerski način rada.\n2. Dodirnite „Pair with %@“.\n3. Unesite kôd za uparivanje koji prikazuje Screen Sharing."
           }
         },
         "hu" : {
@@ -4376,7 +4376,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Vai in Impostazioni › Privacy e sicurezza › Modalità sviluppatore.\n2. Tocca “Pair with %@”.\n3. Inserisci il codice di abbinamento mostrato da Screen Sharing."
+            "value" : "1. Vai in Impostazioni › Privacy e sicurezza › Modalità Sviluppo.\n2. Tocca “Pair with %@”.\n3. Inserisci il codice di abbinamento mostrato da Screen Sharing."
           }
         },
         "ja" : {
@@ -4388,13 +4388,13 @@
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Параметрлер › Құпиялылық және қауіпсіздік › Әзірлеуші режимі бөліміне өтіңіз.\n2. «Pair with %@» түймесін түртіңіз.\n3. Screen Sharing көрсеткен жұптау кодын енгізіңіз."
+            "value" : "1. Реттеулер › Құпиялылық және қауіпсіздік › Әзірлеуші режимі бөліміне өтіңіз.\n2. «Pair with %@» түймесін түртіңіз.\n3. Screen Sharing көрсеткен жұптау кодын енгізіңіз."
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. ಸೆಟ್ಟಿಂಗ್ಸ್ › ಗೌಪ್ಯತೆ ಮತ್ತು ಸುರಕ್ಷತೆ › ಡೆವಲಪರ್ ಮೋಡ್‌ಗೆ ಹೋಗಿ.\n2. “Pair with %@” ಅನ್ನು ಟ್ಯಾಪ್ ಮಾಡಿ.\n3. Screen Sharing ಆ್ಯಪ್ ತೋರಿಸುವ ಪೇರಿಂಗ್ ಕೋಡ್ ಅನ್ನು ನಮೂದಿಸಿ."
+            "value" : "1. ಸೆಟ್ಟಿಂಗ್ಸ್ › ಗೌಪ್ಯತೆ ಮತ್ತು ಭದ್ರತೆ › ಡೆವಲಪರ್ ಮೋಡ್‌ಗೆ ಹೋಗಿ.\n2. “Pair with %@” ಅನ್ನು ಟ್ಯಾಪ್ ಮಾಡಿ.\n3. Screen Sharing ಆ್ಯಪ್ ತೋರಿಸುವ ಪೇರಿಂಗ್ ಕೋಡ್ ಅನ್ನು ನಮೂದಿಸಿ."
           }
         },
         "ko" : {
@@ -4442,7 +4442,7 @@
         "or" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. ସେଟିଂସ୍ › ଗୋପନୀୟତା ଓ ସୁରକ୍ଷା › ଡେଭଲପର୍ ମୋଡ୍‌କୁ ଯାଆନ୍ତୁ।\n2. “Pair with %@” ରେ ଟାପ୍ କରନ୍ତୁ।\n3. Screen Sharing ଦେଖାଉଥିବା ପେୟାରିଂ କୋଡ୍ ଏଣ୍ଟର୍ କରନ୍ତୁ।"
+            "value" : "1. ସେଟିଂସ୍ › ଗୋପନୀୟତା ଓ ସୁରକ୍ଷା › ଡିଭେଲପର୍ ମୋଡ୍‌କୁ ଯାଆନ୍ତୁ।\n2. “Pair with %@” ରେ ଟାପ୍ କରନ୍ତୁ।\n3. Screen Sharing ଦେଖାଉଥିବା ପେୟାରିଂ କୋଡ୍ ଏଣ୍ଟର୍ କରନ୍ତୁ।"
           }
         },
         "pa" : {
@@ -4460,19 +4460,19 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Acesse Ajustes › Privacidade e Segurança › Modo de Desenvolvedor.\n2. Toque em “Pair with %@”.\n3. Digite o código de emparelhamento mostrado pelo Screen Sharing."
+            "value" : "1. Acesse Ajustes › Privacidade e Segurança › Modo de Desenvolvimento.\n2. Toque em “Pair with %@”.\n3. Digite o código de emparelhamento mostrado pelo Screen Sharing."
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Aceda a Definições › Privacidade e segurança › Modo de programador.\n2. Toque em “Pair with %@”.\n3. Introduza o código de emparelhamento apresentado pelo Screen Sharing."
+            "value" : "1. Aceda a Definições › Privacidade e segurança › Modo de programação.\n2. Toque em “Pair with %@”.\n3. Introduza o código de emparelhamento apresentado pelo Screen Sharing."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Accesați Configurări › Intimitate și securitate › Mod dezvoltator.\n2. Apăsați pe „Pair with %@”.\n3. Introduceți codul de asociere afișat de Screen Sharing."
+            "value" : "1. Accesați Configurări › Intimitate și securitate › Mod Dezvoltator.\n2. Apăsați pe „Pair with %@”.\n3. Introduceți codul de asociere afișat de Screen Sharing."
           }
         },
         "ru" : {
@@ -4484,7 +4484,7 @@
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. Prejdite do Nastavení › Súkromie a bezpečnosť › Režim pre vývojárov.\n2. Klepnite na „Pair with %@“.\n3. Zadajte párovací kód zobrazený v apke Screen Sharing."
+            "value" : "1. Prejdite do Nastavení › Súkromie a bezpečnosť › Vývojársky režim.\n2. Klepnite na „Pair with %@“.\n3. Zadajte párovací kód zobrazený v apke Screen Sharing."
           }
         },
         "sl" : {
@@ -4532,7 +4532,7 @@
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1۔ سیٹنگ › رازداری اور سیکیورٹی › ڈیولپر موڈ پر جائیں۔\n2۔ “Pair with ⁨%@⁩” پر ٹیپ کریں۔\n3۔ Screen Sharing میں دکھایا گیا پیئرنگ کوڈ درج کریں۔"
+            "value" : "1۔ سیٹنگ › رازداری اور تحفظ › ڈیولپر موڈ پر جائیں۔\n2۔ “Pair with ⁨%@⁩” پر ٹیپ کریں۔\n3۔ Screen Sharing میں دکھایا گیا پیئرنگ کوڈ درج کریں۔"
           }
         },
         "vi" : {
@@ -4544,7 +4544,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. 前往“设置”>“隐私与安全性”>“开发者模式”。\n2. 轻点“Pair with %@”。\n3. 输入 Screen Sharing 显示的配对码。"
+            "value" : "1. 前往“设置”>“隐私与安全”>“开发者模式”。\n2. 轻点“Pair with %@”。\n3. 输入 Screen Sharing 显示的配对码。"
           }
         },
         "zh-Hant" : {
@@ -32230,7 +32230,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "وضع المطور متوقف"
+            "value" : "نمط المطور متوقف"
           }
         },
         "bg" : {
@@ -32248,19 +32248,19 @@
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mode de desenvolupador desactivat"
+            "value" : "Mode de desenvolupament desactivat"
           }
         },
         "cs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Režim pro vývojáře je vypnutý"
+            "value" : "Vývojový režim je vypnutý"
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Udviklertilstand er slået fra"
+            "value" : "Udviklerfunktion er slået fra"
           }
         },
         "de" : {
@@ -32272,7 +32272,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Η Λειτουργία προγραμματιστή είναι απενεργοποιημένη"
+            "value" : "Η Λειτουργία δημιουργού είναι απενεργοποιημένη"
           }
         },
         "es" : {
@@ -32314,7 +32314,7 @@
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "מצב מפתח כבוי"
+            "value" : "מצב פיתוח כבוי"
           }
         },
         "hi" : {
@@ -32326,7 +32326,7 @@
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Način rada za programere je isključen"
+            "value" : "Developerski način rada je isključen"
           }
         },
         "hu" : {
@@ -32344,7 +32344,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modalità sviluppatore disattivata"
+            "value" : "Modalità Sviluppo disattivata"
           }
         },
         "ja" : {
@@ -32410,7 +32410,7 @@
         "or" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ଡେଭଲପର୍ ମୋଡ୍ ବନ୍ଦ ଅଛି"
+            "value" : "ଡିଭେଲପର୍ ମୋଡ୍ ବନ୍ଦ ଅଛି"
           }
         },
         "pa" : {
@@ -32428,19 +32428,19 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Modo de Desenvolvedor está desativado"
+            "value" : "O Modo de Desenvolvimento está desativado"
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Modo de programador está desativado"
+            "value" : "O Modo de programação está desativado"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modul dezvoltator este dezactivat"
+            "value" : "Modul Dezvoltator este dezactivat"
           }
         },
         "ru" : {
@@ -32452,7 +32452,7 @@
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Režim pre vývojárov je vypnutý"
+            "value" : "Vývojársky režim je vypnutý"
           }
         },
         "sl" : {
@@ -57595,7 +57595,7 @@
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Микрофонға кіру рұқсаты Параметрлерде өшірілген."
+            "value" : "Микрофонға кіру рұқсаты Реттеулерде өшірілген."
           }
         },
         "kn" : {
@@ -61731,13 +61731,13 @@
         "bg" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Новите връзки започват с изключено синхронизиране на клипборда. За да се синхронизира копираното към Mac, без да се пита всеки път, изберете „Разреши“ за „Поставяне от други приложения“ в Настройки."
+            "value" : "Новите връзки започват с изключено синхронизиране на клипборда. За да се синхронизира копираното към Mac, без да се пита всеки път, изберете „Позволи“ за „Поставяне от други приложения“ в Настройки."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "নতুন কানেকশনে ক্লিপবোর্ড সিঙ্ক বন্ধ থাকে। প্রতিবার জিজ্ঞাসা ছাড়াই আপনার কপি করা কন্টেন্ট Mac-এ সিঙ্ক করতে সেটিংসে “অন্য অ্যাপ থেকে পেস্ট করুন”-এর জন্য “অনুমতি দিন” বেছে নিন।"
+            "value" : "নতুন কানেকশনে ক্লিপবোর্ড সিঙ্ক বন্ধ থাকে। প্রতিবার জিজ্ঞাসা ছাড়াই আপনার কপি করা কন্টেন্ট Mac-এ সিঙ্ক করতে সেটিংসে “অন্য অ্যাপগুলি থেকে পেস্ট করুন”-এর জন্য “অনুমতি দিন” বেছে নিন।"
           }
         },
         "ca" : {
@@ -61803,7 +61803,7 @@
         "gu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "નવાં કનેક્શન ક્લિપબોર્ડ સિંક બંધ રાખીને શરૂ થાય છે. દર વખતે પૂછ્યા વિના તમે જે કૉપિ કરો તે Mac પર સિંક કરવા માટે, સેટિંગ્સમાં “અન્ય ઍપમાંથી પેસ્ટ કરો” માટે “મંજૂરી આપો” પસંદ કરો."
+            "value" : "નવાં કનેક્શન ક્લિપબોર્ડ સિંક બંધ રાખીને શરૂ થાય છે. દર વખતે પૂછ્યા વિના તમે જે કૉપિ કરો તે Mac પર સિંક કરવા માટે, સેટિંગ્સમાં “બીજાં ઍપ પરથી પેસ્ટ કરો” માટે “અનુમતિ આપો” પસંદ કરો."
           }
         },
         "he" : {
@@ -61821,7 +61821,7 @@
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nove veze počinju s isključenom sinkronizacijom memorijskog pretinca. Kako biste ono što kopirate sinkronizirali s Mac računalom bez upita svaki put, u Postavkama za Lijepljenje iz drugih aplikacija odaberite Dopusti."
+            "value" : "Nove veze počinju s isključenom sinkronizacijom memorijskog pretinca. Kako biste ono što kopirate sinkronizirali s Mac računalom bez upita svaki put, u Postavkama za Lijepljenje iz drugih aplikacija odaberite Dozvoli."
           }
         },
         "hu" : {
@@ -61851,13 +61851,13 @@
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Жаңа қосылымдарда алмасу буферін синхрондау өшірулі болады. Көшірген мазмұнды Mac компьютеріне әр жолы сұраусыз синхрондау үшін Параметрлерде «Басқа қолданбалардан қою» параметрін «Рұқсат ету» күйіне қойыңыз."
+            "value" : "Жаңа қосылымдарда алмасу буферін синхрондау өшірулі болады. Көшірген мазмұнды Mac компьютеріне әр жолы сұраусыз синхрондау үшін Реттеулерде «Басқа қолданбалардан көшіріп қою» параметрін «Рұқсат беру» күйіне қойыңыз."
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ಹೊಸ ಕನೆಕ್ಷನ್‌ಗಳಲ್ಲಿ ಕ್ಲಿಪ್‌ಬೋರ್ಡ್ ಸಿಂಕ್ ಆರಂಭದಲ್ಲಿ ಆಫ್ ಆಗಿರುತ್ತದೆ. ಪ್ರತಿ ಬಾರಿ ಕೇಳದೆಯೇ ನೀವು ಕಾಪಿ ಮಾಡುವುದನ್ನು Macಗೆ ಸಿಂಕ್ ಮಾಡಲು, ಸೆಟ್ಟಿಂಗ್ಸ್ ಆ್ಯಪ್‌ನಲ್ಲಿ “ಇತರ ಆ್ಯಪ್‌ಗಳಿಂದ ಪೇಸ್ಟ್ ಮಾಡಿ” ಎಂಬುದಕ್ಕೆ “ಅನುಮತಿಸಿ” ಆಯ್ಕೆಮಾಡಿ."
+            "value" : "ಹೊಸ ಕನೆಕ್ಷನ್‌ಗಳಲ್ಲಿ ಕ್ಲಿಪ್‌ಬೋರ್ಡ್ ಸಿಂಕ್ ಆರಂಭದಲ್ಲಿ ಆಫ್ ಆಗಿರುತ್ತದೆ. ಪ್ರತಿ ಬಾರಿ ಕೇಳದೆಯೇ ನೀವು ಕಾಪಿ ಮಾಡುವುದನ್ನು Macಗೆ ಸಿಂಕ್ ಮಾಡಲು, ಸೆಟ್ಟಿಂಗ್ಸ್ ಆ್ಯಪ್‌ನಲ್ಲಿ “ಬೇರೆ ಆ್ಯಪ್‌ಗಳಿಂದ ಪೇಸ್ಟ್ ಮಾಡಿ” ಎಂಬುದಕ್ಕೆ “ಅನುಮತಿಸಿ” ಆಯ್ಕೆಮಾಡಿ."
           }
         },
         "ko" : {
@@ -61875,13 +61875,13 @@
         "ml" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "പുതിയ കണക്ഷനുകൾ ക്ലിപ്പ്ബോർഡ് സിങ്ക് ഓഫാക്കിയാണ് ആരംഭിക്കുന്നത്. നിങ്ങൾ കോപ്പി ചെയ്യുന്നവ ഓരോ തവണയും ചോദിക്കാതെ Mac-ലേക്ക് സിങ്ക് ചെയ്യാൻ, ‘ക്രമീകരണ’ത്തിൽ ‘മറ്റ് ആപ്പുകളിൽ നിന്ന് പേസ്റ്റ് ചെയ്യുക’ എന്നതിന് ‘അനുവദിക്കൂ’ തിരഞ്ഞെടുക്കൂ."
+            "value" : "പുതിയ കണക്ഷനുകൾ ക്ലിപ്പ്ബോർഡ് സിങ്ക് ഓഫാക്കിയാണ് ആരംഭിക്കുന്നത്. നിങ്ങൾ കോപ്പി ചെയ്യുന്നവ ഓരോ തവണയും ചോദിക്കാതെ Mac-ലേക്ക് സിങ്ക് ചെയ്യാൻ, ‘ക്രമീകരണ’ത്തിൽ ‘മറ്റ് ആപ്പുകളിൽ നിന്ന് പേസ്റ്റ് ചെയ്യൂ’ എന്നതിന് ‘അനുവദിക്കൂ’ തിരഞ്ഞെടുക്കൂ."
           }
         },
         "mr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "नवीन कनेक्शनमध्ये क्लिपबोर्ड सिंक सुरुवातीला बंद असते. तुम्ही कॉपी केलेले Mac वर प्रत्येक वेळी न विचारता सिंक करण्यासाठी, सेटिंग्जमध्ये ‘इतर ॲप्समधून पेस्ट करा’ साठी ‘अनुमती द्या’ निवडा."
+            "value" : "नवीन कनेक्शनमध्ये क्लिपबोर्ड सिंक सुरुवातीला बंद असते. तुम्ही कॉपी केलेले Mac वर प्रत्येक वेळी न विचारता सिंक करण्यासाठी, सेटिंग्जमध्ये ‘इतर ॲपमधून पेस्ट करा’ साठी ‘अनुमती द्या’ निवडा."
           }
         },
         "ms" : {
@@ -61911,13 +61911,13 @@
         "pa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ਨਵੇਂ ਕਨੈਕਸ਼ਨਾਂ ਵਿੱਚ ਕਲਿੱਪਬੋਰਡ ਸਿੰਕ ਸ਼ੁਰੂ ਤੋਂ ਬੰਦ ਹੁੰਦਾ ਹੈ। ਹਰ ਵਾਰ ਪੁੱਛੇ ਬਿਨਾਂ ਤੁਹਾਡੇ ਵੱਲੋਂ ਕਾਪੀ ਕੀਤੀ ਸਮੱਗਰੀ ਨੂੰ Mac ਨਾਲ ਸਿੰਕ ਕਰਨ ਲਈ, ਸੈਟਿੰਗਾਂ ਵਿੱਚ “ਹੋਰ ਐਪਾਂ ਤੋਂ ਪੇਸਟ ਕਰੋ” ਲਈ “ਇਜਾਜ਼ਤ ਦਿਓ” ਚੁਣੋ।"
+            "value" : "ਨਵੇਂ ਕਨੈਕਸ਼ਨਾਂ ਵਿੱਚ ਕਲਿੱਪਬੋਰਡ ਸਿੰਕ ਸ਼ੁਰੂ ਤੋਂ ਬੰਦ ਹੁੰਦਾ ਹੈ। ਹਰ ਵਾਰ ਪੁੱਛੇ ਬਿਨਾਂ ਤੁਹਾਡੇ ਵੱਲੋਂ ਕਾਪੀ ਕੀਤੀ ਸਮੱਗਰੀ ਨੂੰ Mac ਨਾਲ ਸਿੰਕ ਕਰਨ ਲਈ, ਸੈਟਿੰਗਾਂ ਵਿੱਚ “ਹੋਰ ਐਪਾਂ ਤੋਂ ਪੇਸਟ ਕਰੋ” ਲਈ “ਆਗਿਆ ਦਿਓ” ਚੁਣੋ।"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nowe połączenia mają domyślnie wyłączoną synchronizację Schowka. Aby synchronizować kopiowaną zawartość z Makiem bez pytania za każdym razem, w Ustawieniach ustaw opcję „Wklejanie z innych aplikacji” na „Pozwalaj”."
+            "value" : "Nowe połączenia mają domyślnie wyłączoną synchronizację Schowka. Aby synchronizować kopiowaną zawartość z Makiem bez pytania za każdym razem, w Ustawieniach ustaw opcję „Wklejanie z innych aplikacji” na „Pozwól”."
           }
         },
         "pt-BR" : {
@@ -61947,13 +61947,13 @@
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nové pripojenia začínajú s vypnutou synchronizáciou schránky. Ak chcete do Macu synchronizovať skopírovaný obsah bez toho, aby sa zakaždým zobrazila otázka, vyberte v Nastaveniach pri položke Vkladanie z iných apiek možnosť Povoliť."
+            "value" : "Nové pripojenia začínajú s vypnutou synchronizáciou schránky. Ak chcete do Macu synchronizovať skopírovaný obsah bez toho, aby sa zakaždým zobrazila otázka, vyberte v Nastaveniach pri položke Vložiť z iných apiek možnosť Povoliť."
           }
         },
         "sl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nove povezave se začnejo z izklopljeno sinhronizacijo odložišča. Če želite, da se kopirana vsebina sinhronizira z Macom brez vsakokratnega vprašanja, v Nastavitvah pri možnosti Lepljenje iz drugih aplikacij izberite Dovoli."
+            "value" : "Nove povezave se začnejo z izklopljeno sinhronizacijo odložišča. Če želite, da se kopirana vsebina sinhronizira z Macom brez vsakokratnega vprašanja, v Nastavitvah pri možnosti Prilepi iz drugih aplikacij izberite Omogoči."
           }
         },
         "sv" : {
@@ -61965,7 +61965,7 @@
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "புதிய இணைப்புகளில் கிளிப்போர்டு ஒத்திசைவு ஆஃப் நிலையில் தொடங்கும். ஒவ்வொரு முறையும் கேட்கப்படாமல் நீங்கள் நகலெடுப்பதை Macக்கு ஒத்திசைக்க அமைப்புகளில் “பிற ஆப்ஸிலிருந்து ஒட்டுதல்” என்பதற்கு “அனுமதி” என்பதைத் தேர்வுசெய்யவும்."
+            "value" : "புதிய இணைப்புகளில் கிளிப்போர்டு ஒத்திசைவு ஆஃப் நிலையில் தொடங்கும். ஒவ்வொரு முறையும் கேட்கப்படாமல் நீங்கள் நகலெடுப்பதை Macக்கு ஒத்திசைக்க அமைப்புகளில் “பிற செயலிகளில் இருந்து ஒட்டு” என்பதற்கு “அனுமதி” என்பதைத் தேர்வுசெய்யவும்."
           }
         },
         "te" : {
@@ -61995,7 +61995,7 @@
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "نئے کنکشن میں کلپ بورڈ سنک شروع سے آف ہوتا ہے۔ آپ جو کچھ کاپی کرتے ہیں، اسے ہر بار پوچھے بغیر Mac پر سنک کرنے کے لیے سیٹنگ میں “دیگر ایپ سے پیسٹ کریں” کے لیے “اجازت دیں” منتخب کریں۔"
+            "value" : "نئے کنکشن میں کلپ بورڈ سنک شروع سے آف ہوتا ہے۔ آپ جو کچھ کاپی کرتے ہیں، اسے ہر بار پوچھے بغیر Mac پر سنک کرنے کے لیے سیٹنگ میں “دوسرے ایپ سے پیسٹ کریں” کے لیے “اجازت دیں” منتخب کریں۔"
           }
         },
         "vi" : {
@@ -62311,7 +62311,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新连接默认关闭同步剪贴板。若要将拷贝的内容同步到 Mac 而不必每次询问，请在“系统设置”的“隐私与安全性”>“从其他 App 粘贴”中打开 Screen Sharing。"
+            "value" : "新连接默认关闭同步剪贴板。若要将拷贝的内容同步到 Mac 而不必每次询问，请在“系统设置”的“隐私与安全”>“从其他 App 粘贴”中打开 Screen Sharing。"
           }
         },
         "zh-Hant" : {
@@ -68843,7 +68843,7 @@
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Параметрлерді ашу"
+            "value" : "Реттеулерді ашу"
           }
         },
         "kn" : {
@@ -71579,7 +71579,7 @@
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Параметрлерде жұптаңыз"
+            "value" : "Реттеулерде жұптаңыз"
           }
         },
         "kn" : {
@@ -75101,7 +75101,7 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "الخصوصية والأمن > وضع المطور"
+            "value" : "الخصوصية والأمن > نمط المطور"
           }
         },
         "bg" : {
@@ -75113,25 +75113,25 @@
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "গোপনীয়তা ও নিরাপত্তা › ডেভেলপার মোড"
+            "value" : "গোপনীয়তা ও সুরক্ষা › ডেভেলপার মোড"
           }
         },
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacitat i seguretat › Mode de desenvolupador"
+            "value" : "Privacitat i seguretat › Mode de desenvolupament"
           }
         },
         "cs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Soukromí a zabezpečení › Režim pro vývojáře"
+            "value" : "Soukromí a zabezpečení › Vývojový režim"
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Anonymitet & sikkerhed › Udviklertilstand"
+            "value" : "Anonymitet & sikkerhed › Udviklerfunktion"
           }
         },
         "de" : {
@@ -75143,7 +75143,7 @@
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Απόρρητο και ασφάλεια › Λειτουργία προγραμματιστή"
+            "value" : "Απόρρητο και ασφάλεια › Λειτουργία δημιουργού"
           }
         },
         "es" : {
@@ -75179,13 +75179,13 @@
         "gu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ગોપનીયતા અને સુરક્ષા › ડેવલપર મોડ"
+            "value" : "પ્રાઇવસી અને સુરક્ષા › ડેવલપર મોડ"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "פרטיות ואבטחה › מצב מפתח"
+            "value" : "פרטיות ואבטחה › מצב פיתוח"
           }
         },
         "hi" : {
@@ -75197,7 +75197,7 @@
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privatnost i sigurnost › Način rada za programere"
+            "value" : "Privatnost i sigurnost › Developerski način rada"
           }
         },
         "hu" : {
@@ -75215,7 +75215,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy e sicurezza › Modalità sviluppatore"
+            "value" : "Privacy e sicurezza › Modalità Sviluppo"
           }
         },
         "ja" : {
@@ -75233,7 +75233,7 @@
         "kn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ಗೌಪ್ಯತೆ ಮತ್ತು ಸುರಕ್ಷತೆ › ಡೆವಲಪರ್ ಮೋಡ್"
+            "value" : "ಗೌಪ್ಯತೆ ಮತ್ತು ಭದ್ರತೆ › ಡೆವಲಪರ್ ಮೋಡ್"
           }
         },
         "ko" : {
@@ -75281,7 +75281,7 @@
         "or" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ଗୋପନୀୟତା ଓ ସୁରକ୍ଷା › ଡେଭଲପର୍ ମୋଡ୍"
+            "value" : "ଗୋପନୀୟତା ଓ ସୁରକ୍ଷା › ଡିଭେଲପର୍ ମୋଡ୍"
           }
         },
         "pa" : {
@@ -75299,19 +75299,19 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacidade e Segurança › Modo de Desenvolvedor"
+            "value" : "Privacidade e Segurança › Modo de Desenvolvimento"
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacidade e segurança › Modo de programador"
+            "value" : "Privacidade e segurança › Modo de programação"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Intimitate și securitate › Mod dezvoltator"
+            "value" : "Intimitate și securitate › Mod Dezvoltator"
           }
         },
         "ru" : {
@@ -75323,7 +75323,7 @@
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Súkromie a bezpečnosť › Režim pre vývojárov"
+            "value" : "Súkromie a bezpečnosť › Vývojársky režim"
           }
         },
         "sl" : {
@@ -75371,7 +75371,7 @@
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "رازداری اور سیکیورٹی › ڈیولپر موڈ"
+            "value" : "رازداری اور تحفظ › ڈیولپر موڈ"
           }
         },
         "vi" : {
@@ -75383,7 +75383,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "隐私与安全性 > 开发者模式"
+            "value" : "隐私与安全 > 开发者模式"
           }
         },
         "zh-Hant" : {
@@ -83739,7 +83739,7 @@
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing фондық режимде Параметрлерді күтуді жалғастыра алмады."
+            "value" : "Screen Sharing фондық режимде Реттеулерді күтуді жалғастыра алмады."
           }
         },
         "kn" : {
@@ -83929,7 +83929,7 @@
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing-কে লোকাল নেটওয়ার্ক ব্যবহারের অনুমতি দেওয়া হয়নি। সেটিংস › গোপনীয়তা ও নিরাপত্তা › লোকাল নেটওয়ার্কে গিয়ে অনুমতি দিন।"
+            "value" : "Screen Sharing-কে স্থানীয় নেটওয়ার্ক ব্যবহারের অনুমতি দেওয়া হয়নি। সেটিংস › গোপনীয়তা ও সুরক্ষা › স্থানীয় নেটওয়ার্কে গিয়ে অনুমতি দিন।"
           }
         },
         "ca" : {
@@ -83995,7 +83995,7 @@
         "gu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharingને લોકલ નેટવર્કનો ઉપયોગ કરવાની મંજૂરી નથી. સેટિંગ્સ › ગોપનીયતા અને સુરક્ષા › લોકલ નેટવર્કમાં તેને મંજૂરી આપો."
+            "value" : "Screen Sharingને સ્થાનિક નેટવર્કનો ઉપયોગ કરવાની મંજૂરી નથી. સેટિંગ્સ › પ્રાઇવસી અને સુરક્ષા › સ્થાનિક નેટવર્કમાં તેને મંજૂરી આપો."
           }
         },
         "he" : {
@@ -84043,13 +84043,13 @@
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing қолданбасына жергілікті желіні пайдалануға рұқсат берілмеген. Рұқсатты Параметрлер › Құпиялылық және қауіпсіздік › Жергілікті желі бөлімінде беріңіз."
+            "value" : "Screen Sharing қолданбасына жергілікті желіні пайдалануға рұқсат берілмеген. Рұқсатты Реттеулер › Құпиялылық және қауіпсіздік › Жергілікті желі бөлімінде беріңіз."
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing ಆ್ಯಪ್‌ಗೆ ಸ್ಥಳೀಯ ನೆಟ್‌ವರ್ಕ್ ಬಳಸಲು ಅನುಮತಿ ಇಲ್ಲ. ಸೆಟ್ಟಿಂಗ್ಸ್ › ಗೌಪ್ಯತೆ ಮತ್ತು ಸುರಕ್ಷತೆ › ಸ್ಥಳೀಯ ನೆಟ್‌ವರ್ಕ್ ಎಂಬಲ್ಲಿ ಅದನ್ನು ಅನುಮತಿಸಿ."
+            "value" : "Screen Sharing ಆ್ಯಪ್‌ಗೆ ಸ್ಥಳೀಯ ನೆಟ್‌ವರ್ಕ್ ಬಳಸಲು ಅನುಮತಿ ಇಲ್ಲ. ಸೆಟ್ಟಿಂಗ್ಸ್ › ಗೌಪ್ಯತೆ ಮತ್ತು ಭದ್ರತೆ › ಸ್ಥಳೀಯ ನೆಟ್‌ವರ್ಕ್ ಎಂಬಲ್ಲಿ ಅದನ್ನು ಅನುಮತಿಸಿ."
           }
         },
         "ko" : {
@@ -84157,7 +84157,7 @@
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "உள்ளூர் நெட்வொர்க்கைப் பயன்படுத்த Screen Sharingக்கு அனுமதி இல்லை. அமைப்புகள் › தனியுரிமை & பாதுகாப்பு › உள்ளூர் நெட்வொர்க் என்பதில் இதை அனுமதிக்கவும்."
+            "value" : "உள்ளக நெட்வொர்க்கைப் பயன்படுத்த Screen Sharingக்கு அனுமதி இல்லை. அமைப்புகள் › தனியுரிமை & பாதுகாப்பு › உள்ளக நெட்வொர்க் என்பதில் இதை அனுமதிக்கவும்."
           }
         },
         "te" : {
@@ -84187,7 +84187,7 @@
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "‏Screen Sharing کو مقامی نیٹ ورک استعمال کرنے کی اجازت نہیں ہے۔ سیٹنگ › رازداری اور سیکیورٹی › مقامی نیٹ ورک میں اس کی اجازت دیں۔"
+            "value" : "‏Screen Sharing کو مقامی نیٹ ورک استعمال کرنے کی اجازت نہیں ہے۔ سیٹنگ › رازداری اور تحفظ › مقامی نیٹ ورک میں اس کی اجازت دیں۔"
           }
         },
         "vi" : {
@@ -84199,7 +84199,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screen Sharing 无权使用本地网络。请在“设置”>“隐私与安全性”>“本地网络”中允许。"
+            "value" : "Screen Sharing 无权使用本地网络。请在“设置”>“隐私与安全”>“本地网络”中允许。"
           }
         },
         "zh-Hant" : {
