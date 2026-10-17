@@ -134,11 +134,9 @@ nonisolated enum LoginType: String, Codable, Sendable {
     case none
 }
 
-nonisolated enum RemoteProtocol: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum RemoteProtocol: String, Codable, Sendable {
     case vnc
     case rdp
-
-    var id: Self { self }
 
     var defaultPort: Int {
         switch self {
@@ -148,12 +146,10 @@ nonisolated enum RemoteProtocol: String, Codable, CaseIterable, Identifiable, Se
     }
 }
 
-nonisolated enum DeviceType: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum DeviceType: String, Codable, Sendable {
     case mac
     case iPhone
     case iPad
-
-    var id: Self { self }
 
     init?(model: String) {
         let model = model.trimmingCharacters(in: .whitespaces)

@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
-final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInteractionDelegate, PointerLockReceiver {
+final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInteractionDelegate {
     private static let tapSlop: CGFloat = 10
     private static let tapDuration: TimeInterval = 0.35
     private static let dragStartDistance: CGFloat = 8
@@ -132,7 +132,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        if isToolbarShown || drag.isDragging, !(gestureRecognizer is UIHoverGestureRecognizer) {
+        if controller.isToolbarVisible || drag.isDragging, !(gestureRecognizer is UIHoverGestureRecognizer) {
             return false
         }
         if controller.isZoomModeOn, gestureRecognizer.numberOfTouches > 0 || gestureRecognizer === rotationGesture {
@@ -168,7 +168,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             switch touch.type {
             case .indirectPointer where isPointerLocked:
                 break
-            case _ where isToolbarShown:
+            case _ where controller.isToolbarVisible:
                 toolbarTouches.insert(touch)
             case _ where controller.isZoomModeOn:
                 zoomTouchBegan(touch)
@@ -182,10 +182,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             default: break
             }
         }
-    }
-
-    private var isToolbarShown: Bool {
-        controller.isToolbarVisible
     }
 
     func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -279,7 +275,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             let spreadAfter = Self.spread(of: current.values, around: to)
             if spreadBefore > 0 { factor = spreadAfter / spreadBefore }
         }
-        view.setZoom(view.zoomScale * factor, keeping: view.imagePoint(for: from), at: to)
+        view.setZoom(view.zoom * factor, keeping: view.imagePoint(for: from), at: to)
     }
 
     private func zoomTouchEnded(_ touch: UITouch, cancelled: Bool) {
@@ -374,7 +370,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         guard afterTap else { return }
         holdTask = Task { [weak self] in
             try? await Task.sleep(seconds: Self.secondTapHold)
-            guard !Task.isCancelled, let self, self.finger === next, next.phase == .secondTap else { return }
+            guard !Task.isCancelled, let self, self.finger === next else { return }
             self.beginDrag(next)
         }
     }
@@ -496,7 +492,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     }
 
     private func liftTouch() {
-        touchFinger = nil
         guard touchPressed else { return }
         touchPressed = false
         controller.release(.primary)
@@ -527,10 +522,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         var usesPhases = false
         var started = false
         var remainder = CGPoint.zero
-    }
-
-    private func beginScroll(_ stream: inout ScrollStream) {
-        stream = ScrollStream(usesPhases: controller.sendsGesturesToMac)
     }
 
     private func scroll(_ stream: inout ScrollStream, by delta: CGPoint) {
@@ -571,7 +562,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         case .began:
             twoFingerTranslation = .zero
             twoFingerPansView = !controller.isControlling
-            beginScroll(&twoFingerScroll)
+            twoFingerScroll = ScrollStream(usesPhases: controller.sendsGesturesToMac)
         case .changed:
             let delta = CGPoint(x: translation.x - twoFingerTranslation.x, y: translation.y - twoFingerTranslation.y)
             twoFingerTranslation = translation
@@ -599,7 +590,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         let location = gesture.location(in: view)
         switch gesture.state {
         case .began:
-            pinchStartZoom = view.zoomScale / gesture.scale
+            pinchStartZoom = view.zoom / gesture.scale
             pinchAnchor = view.imagePoint(for: location)
         case .changed:
             view.setZoom(pinchStartZoom * gesture.scale, keeping: pinchAnchor, at: location)
@@ -663,7 +654,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         case .began:
             hardwareScrollTranslation = .zero
             hardwareScrollPansView = controller.isZoomModeOn
-            beginScroll(&hardwareScroll)
+            hardwareScroll = ScrollStream(usesPhases: controller.sendsGesturesToMac)
             fallthrough
         case .changed:
             let delta = CGPoint(x: translation.x - hardwareScrollTranslation.x, y: translation.y - hardwareScrollTranslation.y)
@@ -693,7 +684,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             if wheelZoomsView {
                 let location = gesture.location(in: view)
                 let factor = pow(2, delta.y / Self.wheelPointsPerZoomDoubling)
-                view.setZoom(view.zoomScale * factor, keeping: view.imagePoint(for: location), at: location)
+                view.setZoom(view.zoom * factor, keeping: view.imagePoint(for: location), at: location)
             } else {
                 scroll(&wheelScroll, by: delta)
             }
@@ -707,7 +698,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         switch gesture.state {
         case .began, .changed:
             let location = gesture.location(in: view)
-            if !isToolbarShown, view.imageRect.insetBy(dx: -40, dy: -40).contains(location) {
+            if !controller.isToolbarVisible, view.imageRect.insetBy(dx: -40, dy: -40).contains(location) {
                 controller.movePointer(to: view.imagePoint(for: location))
             }
         default:
@@ -817,7 +808,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     }
 
     func pointerInteraction(_ interaction: UIPointerInteraction, regionFor request: UIPointerRegionRequest, defaultRegion: UIPointerRegion) -> UIPointerRegion? {
-        let inside = !isToolbarShown && view.imageRect.contains(request.location)
+        let inside = !controller.isToolbarVisible && view.imageRect.contains(request.location)
         let identifier = !inside ? "letterbox" : controller.isZoomModeOn ? "zoom" : "screen"
         return UIPointerRegion(rect: inside ? view.imageRect : view.bounds, identifier: identifier as NSString)
     }

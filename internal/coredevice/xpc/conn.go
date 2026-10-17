@@ -63,8 +63,6 @@ const maxQueued = 32 << 20
 
 const retainedFrameSize = 64 << 10
 
-const defaultHandshakeTimeout = 10 * time.Second
-
 type Conn struct {
 	conn          net.Conn
 	reader        *bufio.Reader
@@ -95,11 +93,6 @@ type stream struct {
 }
 
 func NewConn(ctx context.Context, conn net.Conn, logger *slog.Logger) (*Conn, error) {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultHandshakeTimeout)
-		defer cancel()
-	}
 	c := &Conn{
 		conn:              conn,
 		reader:            bufio.NewReaderSize(conn, 64<<10),

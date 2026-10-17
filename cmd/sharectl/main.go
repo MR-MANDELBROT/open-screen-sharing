@@ -164,7 +164,6 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	handler.client = client
 	info := client.Info()
 	logger.Info("connected", "elapsed", time.Since(started).Round(time.Millisecond), "name", info.Name,
 		"version", info.Version.String(), "dialect", info.Dialect.String(), "security", info.SecurityType.String(),

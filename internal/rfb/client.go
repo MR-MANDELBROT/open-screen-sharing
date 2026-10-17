@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"io"
 	"log/slog"
 	"math"
 	"net"
@@ -120,11 +119,9 @@ type Client struct {
 	heldKeys              map[uint32]bool
 	scrollRemainderX      float64
 	scrollRemainderY      float64
-	displayID             uint32
 	layout                *DisplayLayout
 	clipboardEcho         uint32
 	fetchInProgress       bool
-	messageHandlers       map[uint8]func(io.Reader) error
 	virtualDisplay        *virtualDisplayRequest
 	heldDisplay           []heldDisplayChange
 	hdr                   bool
@@ -164,7 +161,6 @@ func Dial(ctx context.Context, options Options, handler Handler) (*Client, error
 		mode:            options.Mode,
 		quality:         options.Quality,
 		scale:           1,
-		displayID:       options.DisplayID,
 		updateInterval:  options.UpdateInterval,
 		sharedClipboard: options.Clipboard,
 		writerDone:      make(chan struct{}),
@@ -204,10 +200,6 @@ func (c *Client) abandonMedia() {
 }
 
 func (c *Client) setup() error {
-	tcpConn, isTCP := c.conn.(*net.TCPConn)
-	if isTCP {
-		tcpConn.SetNoDelay(true)
-	}
 	c.stream = newStream(c.conn)
 	h := &handshake{conn: c.conn, stream: c.stream, options: &c.options, logger: c.logger}
 	c.conn.SetDeadline(time.Now().Add(c.options.DialTimeout))
@@ -232,10 +224,8 @@ func (c *Client) setup() error {
 		return err
 	}
 	c.info = h.info
-	if len(h.wrapKey) == 16 {
-		copy(c.wrapKey[:], h.wrapKey)
-	}
-	err = c.ensureFramebuffer(c.info.Width, c.info.Height)
+	copy(c.wrapKey[:], h.wrapKey)
+	_, err = c.resizeLocked(c.info.Width, c.info.Height)
 	if err != nil {
 		return err
 	}
@@ -277,10 +267,6 @@ func (c *Client) Logger() *slog.Logger {
 	return c.logger
 }
 
-func (c *Client) LocalAddress() net.Addr {
-	return c.conn.LocalAddr()
-}
-
 func (c *Client) startApple() error {
 	if c.wrapKey == [16]byte{} {
 		return E.New("rfb: security type ", c.info.SecurityType, " left no key for the record layer")
@@ -311,12 +297,7 @@ func (c *Client) startApple() error {
 	}
 	c.writer.SetEncoder(encoder.encode)
 	c.logger.Debug("record layer active")
-
-	displayChanges, err := c.prepare()
-	if err != nil {
-		return err
-	}
-	return c.writer.Write(c.firstMessages(displayChanges))
+	return c.writer.Write(c.firstMessages(c.prepare()))
 }
 
 func (c *Client) firstMessages(displayChanges [][]byte) [][]byte {
@@ -328,32 +309,29 @@ func (c *Client) firstMessages(displayChanges [][]byte) [][]byte {
 	// -[SSSession stConfigureVirtualDisplaysWithDimensions:] 0x1cc0da478).
 	messages = append(messages, displayChanges...)
 	messages = append(messages, setEncodingsMessage(c.encodings()))
-	if c.displayID != 0 {
-		messages = append(messages, setDisplayMessage(c.displayID))
+	if c.options.DisplayID != 0 {
+		messages = append(messages, setDisplayMessage(c.options.DisplayID))
 	}
 	c.pushing = c.options.AutomaticUpdates && c.info.Accepts(0x09)
 	return append(messages, c.updateRequests(c.info.Width, c.info.Height)...)
 }
 
-func (c *Client) prepare() ([][]byte, error) {
+func (c *Client) prepare() [][]byte {
 	if c.options.Prepare == nil {
-		return nil, nil
+		return nil
 	}
 	c.access.Lock()
 	c.preparing = true
 	c.access.Unlock()
-	err := c.options.Prepare(c)
+	c.options.Prepare(c)
 	c.access.Lock()
 	c.preparing = false
 	held := c.heldDisplay
 	c.heldDisplay = nil
 	c.access.Unlock()
-	if err != nil {
-		return nil, err
-	}
 	return common.Map(held, func(change heldDisplayChange) []byte {
 		return change.message
-	}), nil
+	})
 }
 
 func (c *Client) startStandard() error {
@@ -361,7 +339,7 @@ func (c *Client) startStandard() error {
 	messages := [][]byte{
 		setPixelFormatMessage(pixelFormatBGRA),
 		setEncodingsMessage(c.encodings()),
-		framebufferUpdateRequestMessage(false, 0, 0, c.info.Width, c.info.Height),
+		framebufferUpdateRequestMessage(false, c.info.Width, c.info.Height),
 	}
 	return c.writer.Write(messages)
 }
@@ -399,7 +377,7 @@ func (c *Client) armMessage(width, height int) []byte {
 	if pushing {
 		microseconds = uint32(min(max(interval, 0)/time.Microsecond, math.MaxUint32-1))
 	}
-	return autoFramebufferUpdateMessage(microseconds, 0, 0, width, height)
+	return autoFramebufferUpdateMessage(microseconds, width, height)
 }
 
 func (c *Client) SetUpdateInterval(interval time.Duration) error {
@@ -441,11 +419,11 @@ func (c *Client) watch(done <-chan struct{}) {
 		idle := time.Since(time.Unix(0, c.lastUpdate.Load()))
 		switch {
 		case !pixels && mediaStream:
-			c.send(framebufferUpdateRequestMessage(false, 0, 0, 1, 1))
+			c.send(framebufferUpdateRequestMessage(false, 1, 1))
 		case !pixels:
-			c.send(framebufferUpdateRequestMessage(false, 0, 0, width, height))
+			c.send(framebufferUpdateRequestMessage(false, width, height))
 		case !pushing && idle > 3*time.Second:
-			c.send(framebufferUpdateRequestMessage(true, 0, 0, width, height))
+			c.send(framebufferUpdateRequestMessage(true, width, height))
 		}
 	}
 }
@@ -517,13 +495,6 @@ func (c *Client) send(message []byte) error {
 
 func (c *Client) SendMessage(message []byte) error {
 	return c.outbox.PushWait(message)
-}
-
-func (c *Client) ensureFramebuffer(width, height int) error {
-	c.framebufferAccess.Lock()
-	defer c.framebufferAccess.Unlock()
-	_, err := c.resizeLocked(width, height)
-	return err
 }
 
 func (c *Client) resizeLocked(width, height int) (bool, error) {
@@ -612,11 +583,11 @@ func (c *Client) receiveMessage() error {
 	case 0:
 		return c.receiveFramebufferUpdate()
 	case 1:
-		_, err = c.stream.bytes(5)
+		header, err := c.stream.bytes(5)
 		if err != nil {
 			return err
 		}
-		count := binary.BigEndian.Uint16(c.stream.scratch[:2])
+		count := binary.BigEndian.Uint16(header[3:])
 		return c.stream.discard(int(count) * 6)
 	case 2:
 		c.handler.Bell()
@@ -633,15 +604,15 @@ func (c *Client) receiveMessage() error {
 		return c.receivePasteboard()
 	case 0x20:
 		return c.receiveDrag()
-	default:
+	case filecopy.MessageType:
 		c.access.Lock()
-		handler := c.messageHandlers[messageType]
+		fileCopy := c.fileCopy
 		c.access.Unlock()
-		if handler == nil {
-			return E.New("rfb: unknown server message type 0x", strconv.FormatUint(uint64(messageType), 16))
+		if fileCopy != nil {
+			return fileCopy.ReadMessage(c.stream)
 		}
-		return handler(c.stream)
 	}
+	return E.New("rfb: unknown server message type 0x", strconv.FormatUint(uint64(messageType), 16))
 }
 
 func (c *Client) receiveFramebufferUpdate() error {
@@ -683,7 +654,7 @@ func (c *Client) afterUpdate() error {
 	if pushing || mediaStream || fetching {
 		return nil
 	}
-	return c.send(framebufferUpdateRequestMessage(true, 0, 0, c.width, c.height))
+	return c.send(framebufferUpdateRequestMessage(true, c.width, c.height))
 }
 
 func (c *Client) receiveRectangles(count int) (Update, error) {
@@ -723,9 +694,6 @@ func (c *Client) receiveRectangles(count int) (Update, error) {
 			update.Dirty = update.Dirty.Union(clipped)
 			update.Rectangles = append(update.Rectangles, clipped)
 		}
-		if c.pendingRekey && c.stream.records != nil {
-			c.pendingRekey = false
-		}
 	}
 	return update, nil
 }
@@ -763,9 +731,9 @@ func (c *Client) receiveRectangle(rectangle Rectangle) error {
 	case EncodingCursorImage:
 		return c.receiveCursorImage(rectangle)
 	case EncodingRekey:
-		return c.receiveRekey(rectangle)
+		return c.receiveRekey()
 	case EncodingDisplayLayout:
-		return c.receiveDisplayLayout(rectangle)
+		return c.receiveDisplayLayout()
 	case EncodingDisplayInfo:
 		return c.receiveDisplayInfo(rectangle)
 	case EncodingKeyboardSource:
@@ -781,13 +749,13 @@ func (c *Client) receiveRectangle(rectangle Rectangle) error {
 		}
 		return c.stream.discard(int(length))
 	case EncodingMediaStream:
-		return c.receiveMediaStream(rectangle)
+		return c.receiveMediaStream()
 	default:
 		return E.New("rfb: unsupported encoding")
 	}
 }
 
-func (c *Client) receiveRekey(rectangle Rectangle) error {
+func (c *Client) receiveRekey() error {
 	body, err := c.stream.bytes(rekeySize)
 	if err != nil {
 		return err
@@ -802,7 +770,12 @@ func (c *Client) receiveRekey(rectangle Rectangle) error {
 		return E.New("rfb: unexpected rekey to generation ", generation, " during the session")
 	}
 	c.rekeyKeys = keys
-	return c.stream.startRecords(keys)
+	err = c.stream.startRecords(keys)
+	if err != nil {
+		return err
+	}
+	c.pendingRekey = false
+	return nil
 }
 
 func (c *Client) resizeAndRefresh(width, height int) error {
@@ -810,7 +783,7 @@ func (c *Client) resizeAndRefresh(width, height int) error {
 	if err != nil || !changed || !c.running {
 		return err
 	}
-	return c.send(framebufferUpdateRequestMessage(false, 0, 0, c.width, c.height))
+	return c.send(framebufferUpdateRequestMessage(false, c.width, c.height))
 }
 
 func (c *Client) receiveExtendedDesktopSize(rectangle Rectangle) error {
@@ -831,7 +804,7 @@ func (c *Client) receiveExtendedDesktopSize(rectangle Rectangle) error {
 
 func (c *Client) RequestRefresh() error {
 	width, height := c.FramebufferSize()
-	return c.send(framebufferUpdateRequestMessage(false, 0, 0, width, height))
+	return c.send(framebufferUpdateRequestMessage(false, width, height))
 }
 
 func (c *Client) SetQuality(quality Quality) error {
@@ -884,7 +857,6 @@ func (c *Client) Mode() Mode {
 func (c *Client) SelectDisplay(id uint32) error {
 	c.access.Lock()
 	defer c.access.Unlock()
-	c.displayID = id
 	return c.sendDisplayChangeLocked(setDisplayMessage(id), true)
 }
 
@@ -892,8 +864,6 @@ func (c *Client) SetScale(factor float64) error {
 	if !(factor > 0 && factor <= 1) {
 		return E.New("rfb: scale ", factor, " is outside (0, 1]")
 	}
-	c.access.Lock()
-	c.access.Unlock()
 	message := make([]byte, 10)
 	message[0] = 0x08
 	binary.BigEndian.PutUint64(message[2:], math.Float64bits(factor))
@@ -915,13 +885,13 @@ func (c *Client) updateRequests(width, height int) [][]byte {
 	mediaStream := c.mediaStream
 	c.access.Unlock()
 	if mediaStream {
-		messages := [][]byte{framebufferUpdateRequestMessage(false, 0, 0, 1, 1)}
+		messages := [][]byte{framebufferUpdateRequestMessage(false, 1, 1)}
 		if c.info.Accepts(0x09) {
-			messages = append(messages, autoFramebufferUpdateMessage(uint32(time.Second/time.Microsecond), 0, 0, 1, 1))
+			messages = append(messages, autoFramebufferUpdateMessage(uint32(time.Second/time.Microsecond), 1, 1))
 		}
 		return messages
 	}
-	messages := [][]byte{framebufferUpdateRequestMessage(false, 0, 0, width, height)}
+	messages := [][]byte{framebufferUpdateRequestMessage(false, width, height)}
 	if arm := c.armMessage(width, height); arm != nil {
 		messages = append(messages, arm)
 	}

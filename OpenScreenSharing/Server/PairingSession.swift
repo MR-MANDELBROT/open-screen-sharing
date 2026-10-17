@@ -45,10 +45,8 @@ final class PairingSession: ObservableObject {
         let events = PairingEvents { [weak self] event in
             DispatchQueue.main.async { self?.handle(event) }
         }
-        let store = PairingStore.shared
-        let identity = store.device == nil ? nil : store.record
         var error: NSError?
-        guard let responder = LibsharingNewPairingResponderWithRecord(hostName, identity, events, &error) else {
+        guard let responder = LibsharingNewPairingResponderWithRecord(hostName, PairingStore.shared.record, events, &error) else {
             state = .failed(ServerProblem(kind: .pairing, message: error?.localizedDescription ?? "libsharing returned no pairing responder"))
             return
         }

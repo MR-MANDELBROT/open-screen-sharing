@@ -59,16 +59,11 @@ func runDragAction(ctx context.Context, client *rfb.Client, h *handler, verb, ar
 		if err != nil {
 			return true, err
 		}
-		h.access.Lock()
 		h.dropID, h.dropPaths = id, paths
-		h.access.Unlock()
 		h.logger.Info("drop started", "id", id)
 		return true, nil
 	case "drop-cancel":
-		h.access.Lock()
-		id := h.dropID
-		h.access.Unlock()
-		return true, client.CancelDrag(id)
+		return true, client.CancelDrag(h.dropID)
 	case "drop-finish":
 		timeout, err := time.ParseDuration(argument)
 		if err != nil {
@@ -98,18 +93,15 @@ func runDragAction(ctx context.Context, client *rfb.Client, h *handler, verb, ar
 }
 
 func finishDrop(ctx context.Context, client *rfb.Client, h *handler, timeout time.Duration) error {
-	h.access.Lock()
-	id, paths := h.dropID, h.dropPaths
-	h.access.Unlock()
 	deadline := time.After(timeout)
 	for {
 		select {
 		case destination := <-h.destinations:
-			if destination.id != id {
+			if destination.id != h.dropID {
 				h.logger.Info("drop destination of another drag", "id", destination.id)
 				continue
 			}
-			for _, path := range paths {
+			for _, path := range h.dropPaths {
 				err := copyFile(ctx, client, h, true, path, destination.path)
 				if err != nil {
 					return err
@@ -117,7 +109,7 @@ func finishDrop(ctx context.Context, client *rfb.Client, h *handler, timeout tim
 			}
 			return nil
 		case <-deadline:
-			return E.New("no drop destination for drag ", id, " within ", timeout)
+			return E.New("no drop destination for drag ", h.dropID, " within ", timeout)
 		case <-ctx.Done():
 			return ctx.Err()
 		}

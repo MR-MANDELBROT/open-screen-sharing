@@ -45,10 +45,9 @@ const (
 )
 
 const (
-	DialectAutomatic int32 = 0
-	DialectApple     int32 = 1
-	DialectStandard  int32 = 2
-	DialectRDP       int32 = 3
+	DialectApple    int32 = 1
+	DialectStandard int32 = 2
+	DialectRDP      int32 = 3
 )
 
 const (
@@ -58,7 +57,6 @@ const (
 )
 
 const (
-	StateIdle               int32 = 0
 	StateConnecting         int32 = 1
 	StateAuthenticating     int32 = 2
 	StateWaitingForApproval int32 = 3
@@ -93,14 +91,7 @@ const (
 	ButtonRight  int32 = 4
 )
 
-const (
-	PromptChooseSession int32 = 1
-)
-
-const (
-	ClipboardProblemUnreadable  = int32(rfb.ClipboardUnreadable)
-	ClipboardProblemNotRestored = int32(rfb.ClipboardNotRestored)
-)
+const ClipboardProblemNotRestored = int32(rfb.ClipboardNotRestored)
 
 const (
 	SessionChoiceCancel       int32 = -1
@@ -109,26 +100,10 @@ const (
 )
 
 const (
-	StatusSessionEnding      int32 = 1
-	StatusDisplaysSleep      int32 = 5
-	StatusDisplaysWake       int32 = 6
-	StatusConnectionPaused   int32 = 7
-	StatusConnectionResumed  int32 = 8
-	StatusControlAllowed     int32 = 9
-	StatusObserveOnly        int32 = 10
-	StatusPointerHidden      int32 = 11
-	StatusPointerShown       int32 = 12
-	StatusBusyCursorStart    int32 = 13
-	StatusBusyCursorEnd      int32 = 14
-	StatusUserSessionChanged int32 = 17
-)
-
-const (
-	AccessibilityIncreaseContrast          int32 = 3
-	AccessibilityReduceMotion              int32 = 4
-	AccessibilityDifferentiateWithoutColor int32 = 5
-	AccessibilityReduceTransparency        int32 = 6
-	AccessibilityShowBorders               int32 = 8
+	StatusControlAllowed int32 = 9
+	StatusObserveOnly    int32 = 10
+	StatusPointerHidden  int32 = 11
+	StatusPointerShown   int32 = 12
 )
 
 const AllDisplays int64 = 0
@@ -155,15 +130,9 @@ type SessionOptions struct {
 
 	SharedClipboard bool
 
-	DisplayID int64
-
 	ClientName string
 
-	Dialect int32
-
 	Platform int32
-
-	AllowUnverifiedLogin bool
 
 	DecoderMaxPixelRate int64
 
@@ -179,8 +148,6 @@ func NewSessionOptions() *SessionOptions {
 		Quality:         QualityAdaptive,
 		Mode:            ModeControl,
 		SharedClipboard: true,
-		DisplayID:       AllDisplays,
-		Dialect:         DialectAutomatic,
 	}
 }
 
@@ -195,9 +162,7 @@ type ServerInfo struct {
 
 	ObserveOnly bool
 
-	CaptureNotPermitted      bool
 	SupportsDisplaySelection bool
-	SupportsScaling          bool
 	SupportsVirtualDisplay   bool
 	SupportsHighPerformance  bool
 	SupportsClipboard        bool
@@ -208,16 +173,12 @@ type ServerInfo struct {
 	SupportsAudio            bool
 	SupportsUnicodeText      bool
 
-	SupportsKeyCodes    bool
-	SupportsScrollWheel bool
+	SupportsKeyCodes bool
 
 	SupportsFileTransfer bool
 
 	SupportsDragToRemote   bool
 	SupportsDragFromRemote bool
-
-	SupportsCurtain        bool
-	MaximumVirtualDisplays int32
 
 	SupportsGestures bool
 
@@ -227,9 +188,6 @@ type ServerInfo struct {
 	SupportsAppWindows     bool
 	SupportsShowDesktop    bool
 	SupportsLaunchpad      bool
-
-	SupportsAccessibilitySettings bool
-	info                          rfb.ServerInfo
 }
 
 func newServerInfo(info rfb.ServerInfo, platform int32) *ServerInfo {
@@ -241,66 +199,45 @@ func newServerInfo(info rfb.ServerInfo, platform int32) *ServerInfo {
 		platform = PlatformPC
 	}
 	return &ServerInfo{
-		Width:                         int32(info.Width),
-		Height:                        int32(info.Height),
-		Dialect:                       dialect,
-		Platform:                      platform,
-		CursorPixelsPerPoint:          1,
-		ObserveOnly:                   info.Flags&rfb.ServerFlagObserveOnly != 0,
-		CaptureNotPermitted:           info.Flags&rfb.ServerFlagCaptureNotPermitted != 0,
-		SupportsDisplaySelection:      info.Accepts(0x0d),
-		SupportsScaling:               info.Accepts(0x08),
-		SupportsVirtualDisplay:        info.Accepts(0x1d),
-		SupportsHighPerformance:       info.Accepts(0x1c) && info.Accepts(0x1d),
-		SupportsClipboard:             !apple || info.Accepts(0x15),
-		SupportsClipboardRequest:      apple,
-		SupportsQuality:               true,
-		SupportsObserve:               true,
-		SupportsKeyboardSource:        info.Accepts(0x1a),
-		SupportsKeyCodes:              info.Accepts(0x10),
-		SupportsScrollWheel:           info.Accepts(0x17),
-		SupportsFileTransfer:          info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
-		SupportsDragToRemote:          info.Accepts(0x20) && info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
-		SupportsDragFromRemote:        info.Accepts(0x0e) && info.Accepts(0x20) && info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
-		SupportsCurtain:               info.Accepts(0x0c),
-		MaximumVirtualDisplays:        int32(info.MaximumVirtualDisplays()),
-		SupportsGestures:              info.Accepts(0x17),
-		SupportsAssistCursor:          info.Accepts(0x16),
-		SupportsAccessibilitySettings: info.Accepts(36),
-		info:                          info,
+		Width:                    int32(info.Width),
+		Height:                   int32(info.Height),
+		Dialect:                  dialect,
+		Platform:                 platform,
+		CursorPixelsPerPoint:     1,
+		ObserveOnly:              info.Flags&rfb.ServerFlagObserveOnly != 0,
+		SupportsDisplaySelection: info.Accepts(0x0d),
+		SupportsVirtualDisplay:   info.Accepts(0x1d),
+		SupportsHighPerformance:  info.Accepts(0x1c) && info.Accepts(0x1d),
+		SupportsClipboard:        !apple || info.Accepts(0x15),
+		SupportsClipboardRequest: apple,
+		SupportsQuality:          true,
+		SupportsObserve:          true,
+		SupportsKeyboardSource:   info.Accepts(0x1a),
+		SupportsKeyCodes:         info.Accepts(0x10),
+		SupportsFileTransfer:     info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
+		SupportsDragToRemote:     info.Accepts(0x20) && info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
+		SupportsDragFromRemote:   info.Accepts(0x0e) && info.Accepts(0x20) && info.Accepts(0x22) && info.Flags&rfb.ServerFlagObserveOnly == 0,
+		SupportsGestures:         info.Accepts(0x17),
+		SupportsAssistCursor:     info.Accepts(0x16),
 	}
 }
 
 type Display struct {
 	DisplayID int64
 
-	Density float64
-
-	Scale float64
-
-	LogicalX      int32
-	LogicalY      int32
 	LogicalWidth  int32
 	LogicalHeight int32
 
-	BackingX      int32
-	BackingY      int32
-	BackingWidth  int32
-	BackingHeight int32
-	IsMain        bool
-	IsMirrored    bool
-	IsVirtual     bool
+	IsMain    bool
+	IsVirtual bool
 }
 
 type DisplayList struct {
-	Current           int64
-	FramebufferWidth  int32
-	FramebufferHeight int32
-	DesktopWidth      int32
-	DesktopHeight     int32
+	Current          int64
+	FramebufferWidth int32
+	DesktopWidth     int32
 
-	SessionState int64
-	displays     []*Display
+	displays []*Display
 }
 
 func (d *DisplayList) Len() int32 {
@@ -308,35 +245,20 @@ func (d *DisplayList) Len() int32 {
 }
 
 func (d *DisplayList) Get(index int32) *Display {
-	if index < 0 || int(index) >= len(d.displays) {
-		return nil
-	}
 	return d.displays[index]
 }
 
 func newDisplayList(layout *rfb.DisplayLayout) *DisplayList {
 	list := &DisplayList{
-		Current:           int64(layout.Current),
-		FramebufferWidth:  int32(layout.FramebufferWidth),
-		FramebufferHeight: int32(layout.FramebufferHeight),
-		DesktopWidth:      int32(layout.DesktopWidth),
-		DesktopHeight:     int32(layout.DesktopHeight),
-		SessionState:      int64(layout.SessionState),
+		Current:          int64(layout.Current),
+		FramebufferWidth: int32(layout.FramebufferWidth),
+		DesktopWidth:     int32(layout.DesktopWidth),
 		displays: common.Map(layout.Displays, func(display rfb.Display) *Display {
 			return &Display{
 				DisplayID:     int64(display.ID),
-				Density:       display.Density,
-				Scale:         display.Scale,
-				LogicalX:      int32(display.Logical.X),
-				LogicalY:      int32(display.Logical.Y),
 				LogicalWidth:  int32(display.Logical.Width),
 				LogicalHeight: int32(display.Logical.Height),
-				BackingX:      int32(display.Backing.X),
-				BackingY:      int32(display.Backing.Y),
-				BackingWidth:  int32(display.Backing.Width),
-				BackingHeight: int32(display.Backing.Height),
 				IsMain:        display.Flags&rfb.DisplayFlagMain != 0,
-				IsMirrored:    display.Flags&rfb.DisplayFlagMirrored != 0,
 				IsVirtual:     display.Flags&rfb.DisplayFlagVirtual != 0,
 			}
 		}),
@@ -368,24 +290,11 @@ func (c *Clipboard) Len() int32 {
 }
 
 func (c *Clipboard) Get(index int32) *ClipboardItem {
-	if index < 0 || int(index) >= len(c.items) {
-		return nil
-	}
 	return c.items[index]
 }
 
 func (c *Clipboard) AddItem(item *ClipboardItem) {
 	c.items = append(c.items, item)
-}
-
-func (c *Clipboard) Text() string {
-	text, _ := c.text()
-	return text
-}
-
-func (c *Clipboard) HasText() bool {
-	_, found := c.text()
-	return found
 }
 
 func (c *Clipboard) text() (string, bool) {
@@ -412,9 +321,6 @@ func (i *ClipboardItem) Len() int32 {
 }
 
 func (i *ClipboardItem) Get(index int32) *ClipboardFlavor {
-	if index < 0 || int(index) >= len(i.flavors) {
-		return nil
-	}
 	return i.flavors[index]
 }
 
@@ -451,8 +357,6 @@ func (c *Clipboard) toRFB() *rfb.Clipboard {
 
 type Prompt struct {
 	PromptID int64
-
-	Kind int32
 
 	ConsoleUser        string
 	AllowsShareConsole bool

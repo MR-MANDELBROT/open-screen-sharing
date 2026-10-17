@@ -126,19 +126,19 @@ func (s *session) capabilities() (uint16, []byte) {
 	add(capabilityColorCache, uint16s(colorTableCacheSize, 0))
 	add(capabilityActivation, make([]byte, 8))
 	add(capabilityOffscreenCache, make([]byte, 8))
-	if _, ok := s.serverCaps[capabilityMultifragmentUpdate]; ok {
+	if s.serverCaps[capabilityMultifragmentUpdate] {
 		add(capabilityMultifragmentUpdate, binary.LittleEndian.AppendUint32(nil, maxFastPathUpdate))
 	}
-	if _, ok := s.serverCaps[capabilityLargePointer]; ok {
+	if s.serverCaps[capabilityLargePointer] {
 		add(capabilityLargePointer, uint16s(largePointer96))
 	}
-	if _, ok := s.serverCaps[capabilitySurfaceCommands]; ok {
+	if s.serverCaps[capabilitySurfaceCommands] {
 		add(capabilitySurfaceCommands, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, surfaceSetBits|surfaceFrameMarker|surfaceStreamBits), 0))
 	}
-	if _, ok := s.serverCaps[capabilityBitmapCodecs]; ok {
+	if s.serverCaps[capabilityBitmapCodecs] {
 		add(capabilityBitmapCodecs, bitmapCodecs())
 	}
-	if _, ok := s.serverCaps[capabilityFrameAcknowledge]; ok {
+	if s.serverCaps[capabilityFrameAcknowledge] {
 		add(capabilityFrameAcknowledge, binary.LittleEndian.AppendUint32(nil, maximumUnacknowledgedFrames))
 	}
 	return count, caps

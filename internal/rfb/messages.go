@@ -22,10 +22,8 @@ func setEncodingsMessage(encodings []Encoding) []byte {
 	return message
 }
 
-func framebufferUpdateRequestMessage(incremental bool, x, y, width, height int) []byte {
-	message := []byte{3, boolByte(incremental)}
-	message = binary.BigEndian.AppendUint16(message, uint16(x))
-	message = binary.BigEndian.AppendUint16(message, uint16(y))
+func framebufferUpdateRequestMessage(incremental bool, width, height int) []byte {
+	message := []byte{3, boolByte(incremental), 0, 0, 0, 0}
 	message = binary.BigEndian.AppendUint16(message, uint16(width))
 	message = binary.BigEndian.AppendUint16(message, uint16(height))
 	return message
@@ -38,8 +36,8 @@ func keyEventMessage(down bool, keysym uint32) []byte {
 
 func pointerEventMessage(buttons uint8, x, y int) []byte {
 	message := []byte{5, buttons}
-	message = binary.BigEndian.AppendUint16(message, uint16(clampInt(x, 0, math.MaxUint16)))
-	return binary.BigEndian.AppendUint16(message, uint16(clampInt(y, 0, math.MaxUint16)))
+	message = binary.BigEndian.AppendUint16(message, clampUint16(x))
+	return binary.BigEndian.AppendUint16(message, clampUint16(y))
 }
 
 func clientCutTextMessage(text []byte) []byte {
@@ -51,12 +49,11 @@ func clientCutTextMessage(text []byte) []byte {
 // Apple's RFBAutoFrameUpdate sends a 16-byte message 9 with the rectangle at byte 8
 // (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
 // _RFBAutoFrameUpdate 0x1cc068668..0x1cc06871c, 0x1cc0687a4..0x1cc0687b0).
-func autoFramebufferUpdateMessage(intervalMicroseconds uint32, x, y, width, height int) []byte {
+func autoFramebufferUpdateMessage(intervalMicroseconds uint32, width, height int) []byte {
 	message := []byte{0x09, 0}
 	message = binary.BigEndian.AppendUint16(message, 1)
 	message = binary.BigEndian.AppendUint32(message, intervalMicroseconds)
-	message = binary.BigEndian.AppendUint16(message, uint16(x))
-	message = binary.BigEndian.AppendUint16(message, uint16(y))
+	message = append(message, 0, 0, 0, 0)
 	message = binary.BigEndian.AppendUint16(message, uint16(width))
 	return binary.BigEndian.AppendUint16(message, uint16(height))
 }
@@ -176,6 +173,6 @@ func virtualDisplayMessage(width, height int, density float64, maximumWidth, max
 	return append(message, body...), nil
 }
 
-func clampInt(value, low, high int) int {
-	return min(max(value, low), high)
+func clampUint16(value int) uint16 {
+	return uint16(min(max(value, 0), math.MaxUint16))
 }

@@ -129,16 +129,6 @@ struct ContentUnavailableViewCompat<Label: View, Description: View>: View {
     }
 }
 
-extension ContentUnavailableViewCompat where Label == SwiftUI.Label<Text, Image>, Description == EmptyView {
-    init(_ titleKey: LocalizedStringKey, systemImage: String) {
-        self.init {
-            SwiftUI.Label(titleKey, systemImage: systemImage)
-        } description: {
-            EmptyView()
-        }
-    }
-}
-
 private struct UnavailableLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         VStack(spacing: 16) {
@@ -194,33 +184,6 @@ extension View {
             }
         }
     }
-
-    #if os(iOS)
-    @ViewBuilder
-    func bottomBarCompat(@ViewBuilder leading: () -> some View, @ViewBuilder trailing: () -> some View) -> some View {
-        let leading = leading()
-        let trailing = trailing()
-        if #available(iOS 26, macOS 26, *) {
-            toolbar {
-                ToolbarItem(placement: .bottomBar) {
-                    leading
-                }
-                ToolbarSpacer(.flexible, placement: .bottomBar)
-                ToolbarItem(placement: .bottomBar) {
-                    trailing
-                }
-            }
-        } else {
-            toolbar {
-                ToolbarItemGroup(placement: .bottomBar) {
-                    leading
-                    Spacer()
-                    trailing
-                }
-            }
-        }
-    }
-    #endif
 
     func onChangeCompat(of value: some Equatable, _ action: @escaping () -> Void) -> some View {
         #if os(iOS)

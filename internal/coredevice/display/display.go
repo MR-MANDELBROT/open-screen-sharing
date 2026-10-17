@@ -49,7 +49,6 @@ type Client struct {
 	device           *coredevice.Device
 	logger           *slog.Logger
 	deviceIdentifier string
-	turn             chan struct{}
 }
 
 func New(device *coredevice.Device, logger *slog.Logger) *Client {
@@ -57,41 +56,18 @@ func New(device *coredevice.Device, logger *slog.Logger) *Client {
 		device:           device,
 		logger:           logger,
 		deviceIdentifier: uuid.NewString(),
-		turn:             make(chan struct{}, 1),
 	}
-}
-
-func (c *Client) takeTurn(ctx context.Context) error {
-	select {
-	case c.turn <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (c *Client) endTurn() {
-	<-c.turn
-}
-
-func (c *Client) invoke(ctx context.Context, feature, action string, input map[string]any) (map[string]any, error) {
-	err := c.takeTurn(ctx)
-	if err != nil {
-		return nil, E.Cause(err, feature)
-	}
-	defer c.endTurn()
-	conn, err := c.device.DialXPC(ctx, serviceName)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-	return invoke(ctx, conn, c.deviceIdentifier, feature, action, input)
 }
 
 // The device returns stoppedStreams in the client-offered SSRC namespace
 // (observed on iPad17,1, iPadOS 27.2 24B5099f).
 func (c *Client) stop(ctx context.Context, ssrc uint32) ([]uint32, error) {
-	output, err := c.invoke(ctx, featureStop, actionStop, map[string]any{
+	conn, err := c.device.DialXPC(ctx, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	output, err := invoke(ctx, conn, c.deviceIdentifier, featureStop, actionStop, map[string]any{
 		"stopAll":     false,
 		"identifiers": []any{uint64(ssrc)},
 	})
@@ -113,13 +89,6 @@ type StreamOptions struct {
 	MaximumBitrate uint64
 	TilesPerFrame  int
 	PixelFormats   uint32
-}
-
-func (o StreamOptions) videoMode() Mode {
-	if o.Mode == 0 {
-		return ModeRemoteDesktop
-	}
-	return o.Mode
 }
 
 func (c *Client) StartVideo(ctx context.Context, options StreamOptions) (*Stream, error) {
@@ -168,21 +137,14 @@ func (c *Client) start(ctx context.Context, streamType StreamType, options Strea
 		c.device.LocalAddress().String(), int(conn.Port()),
 		c.device.Address().String(), extraOptions)
 
-	err = c.takeTurn(ctx)
-	if err != nil {
-		conn.Close()
-		return nil, E.Cause(err, "start ", string(streamType))
-	}
 	began := time.Now()
 	control, err := c.device.DialXPC(ctx, serviceName)
 	if err != nil {
-		c.endTurn()
 		conn.Close()
 		return nil, E.Cause(err, "start ", string(streamType))
 	}
 	connected := time.Now()
 	output, err := invoke(ctx, control, c.deviceIdentifier, featureStart, actionStart, input)
-	c.endTurn()
 	answered := time.Now()
 	if err != nil {
 		control.Close()

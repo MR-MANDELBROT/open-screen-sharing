@@ -46,7 +46,7 @@ type srpVerifier struct {
 
 func newSRPVerifier(password string) *srpVerifier {
 	salt := randomBytes(srpSaltSize)
-	derived := passwordKey(password, salt, srpIterations, 128)
+	derived := passwordKey(password, salt, srpIterations)
 	exponent := new(big.Int).SetBytes(srpHash(salt, srpHash([]byte(":"), derived)))
 	return &srpVerifier{salt: salt, verifier: new(big.Int).Exp(srpGenerator, exponent, srpModulus)}
 }

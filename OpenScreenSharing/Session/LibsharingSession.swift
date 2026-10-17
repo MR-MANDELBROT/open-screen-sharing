@@ -8,40 +8,21 @@ import os
 nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     private let configuration: SessionConfiguration
     private let lock = NSLock()
-    private var session: LibsharingSession?
-    private var handler: LibsharingHandler?
+    private let session: LibsharingSession?
+    private let handler: LibsharingHandler
     private var transfers: [Int64: LibsharingFileTransfer] = [:]
     private var remoteAudio: RemoteAudio
     private var highPerformanceRunning = false
     private var restartingHighPerformance = false
-    private var supportsHighPerformance: Bool?
+    private var supportsHighPerformance = false
     private weak var delegate: SessionEventSink?
-    private var failure: SessionFailure?
 
-    init(configuration: SessionConfiguration) {
-        self.configuration = configuration
-        remoteAudio = configuration.remoteAudio
-    }
-
-    private var current: LibsharingSession? {
-        lock.lock()
-        defer { lock.unlock() }
-        return session
-    }
-
-    private var currentHandler: LibsharingHandler? {
-        lock.lock()
-        defer { lock.unlock() }
-        return handler
-    }
-
-    func prepare(delegate: SessionEventSink) {
+    init(configuration: SessionConfiguration, delegate: SessionEventSink) {
         LibsharingLog.installed
+        self.configuration = configuration
         self.delegate = delegate
-        guard let options = LibsharingNewSessionOptions() else {
-            failure = SessionFailure(.other, message: "libsharing returned no session options")
-            return
-        }
+        remoteAudio = configuration.remoteAudio
+        let options = LibsharingNewSessionOptions()!
         options.protocol = configuration.remoteProtocol == .rdp ? LibsharingProtocolRDP : LibsharingProtocolRFB
         options.platform =
             switch configuration.platform {
@@ -76,6 +57,13 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
 
         let handler = LibsharingHandler(delegate: delegate, remoteProtocol: configuration.remoteProtocol, platform: configuration.platform)
         handler.forwardsClipboard = configuration.sharesClipboard
+        var error: NSError?
+        session = LibsharingNewSession(options, handler, &error)
+        self.handler = handler
+        if session == nil {
+            delegate.sessionPhaseChanged(.failed(SessionFailure(.other, message: error?.localizedDescription ?? "libsharing returned no session")))
+        }
+        handler.session = session
         handler.onConnected = { [weak self] supportsHighPerformance in
             self?.connected(supportsHighPerformance: supportsHighPerformance)
         }
@@ -92,36 +80,17 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             }
             lock.unlock()
         }
-        var error: NSError?
-        guard let session = LibsharingNewSession(options, handler, &error) else {
-            failure = SessionFailure(.other, message: error?.localizedDescription ?? "libsharing returned no session")
-            return
-        }
-        lock.lock()
-        self.session = session
-        self.handler = handler
-        lock.unlock()
-        handler.session = session
     }
 
     func connect() {
-        guard let session = current else {
-            if let failure {
-                delegate?.sessionPhaseChanged(.failed(failure))
-            }
-            return
-        }
         do {
-            try session.connect()
+            try session?.connect()
         } catch {
             delegate?.sessionPhaseChanged(.failed(SessionFailure(.unreachable, message: error.localizedDescription)))
         }
     }
 
     func stop() {
-        lock.lock()
-        let session = self.session
-        lock.unlock()
         session?.disconnect()
     }
 
@@ -132,7 +101,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             case .ownSession: LibsharingSessionChoiceOwnSession
             case .cancel: LibsharingSessionChoiceCancel
             }
-        try? current?.answerPrompt(prompt.id, answer: answer)
+        try? session?.answerPrompt(prompt.id, answer: answer)
     }
 
     func sendPointer(x: Int, y: Int, buttons: PointerButtons) {
@@ -140,17 +109,17 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         if buttons.contains(.primary) { mask |= LibsharingButtonLeft }
         if buttons.contains(.middle) { mask |= LibsharingButtonMiddle }
         if buttons.contains(.secondary) { mask |= LibsharingButtonRight }
-        try? current?.sendPointer(Int32(x), y: Int32(y), buttons: mask)
+        try? session?.sendPointer(Int32(x), y: Int32(y), buttons: mask)
     }
 
     func sendScroll(x: Int, y: Int, deltaX: Double, deltaY: Double) {
-        let pointsPerPixel = currentHandler?.pointsPerPixel ?? 0.5
-        try? current?.sendScroll(Int32(x), y: Int32(y), deltaX: deltaX * pointsPerPixel, deltaY: deltaY * pointsPerPixel)
+        let pointsPerPixel = handler.pointsPerPixel
+        try? session?.sendScroll(Int32(x), y: Int32(y), deltaX: deltaX * pointsPerPixel, deltaY: deltaY * pointsPerPixel)
     }
 
     func sendKey(_ key: MacKey, keyboardType: MacKeyboardType, down: Bool) {
         guard let keyCode = key.keyCode else {
-            try? current?.sendKey(Int32(bitPattern: key.keysym), down: down)
+            try? session?.sendKey(Int32(bitPattern: key.keysym), down: down)
             return
         }
         let type =
@@ -159,19 +128,19 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             case .iso: LibsharingKeyboardISO
             case .jis: LibsharingKeyboardJIS
             }
-        try? current?.sendKeyCode(Int32(keyCode), keyboardType: type, keysym: Int32(bitPattern: key.keysym), down: down)
+        try? session?.sendKeyCode(Int32(keyCode), keyboardType: type, keysym: Int32(bitPattern: key.keysym), down: down)
     }
 
     func sendText(_ text: String) throws {
-        try current?.sendText(text)
+        try session?.sendText(text)
     }
 
     func pasteText(_ text: String) throws {
-        try current?.pasteText(text)
+        try session?.pasteText(text)
     }
 
     func selectKeyboardSource(_ id: String) {
-        try? current?.selectKeyboardSource(id)
+        try? session?.selectKeyboardSource(id)
     }
 
     private static func phaseValue(_ phase: GesturePhase) -> Int32 {
@@ -185,46 +154,27 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     }
 
     func sendMagnify(x: Int, y: Int, magnification: Double, phase: GesturePhase) {
-        try? current?.sendMagnify(Int32(x), y: Int32(y), magnification: magnification, phase: Self.phaseValue(phase))
+        try? session?.sendMagnify(Int32(x), y: Int32(y), magnification: magnification, phase: Self.phaseValue(phase))
     }
 
     func sendRotate(x: Int, y: Int, degrees: Double, phase: GesturePhase) {
-        try? current?.sendRotate(Int32(x), y: Int32(y), degrees: degrees, phase: Self.phaseValue(phase))
-    }
-
-    func sendSmartMagnify(x: Int, y: Int) {
-        try? current?.sendSmartMagnify(Int32(x), y: Int32(y))
-    }
-
-    func sendLookup(x: Int, y: Int) {
-        try? current?.sendLookup(Int32(x), y: Int32(y))
-    }
-
-    func sendSwipe(x: Int, y: Int, direction: SwipeDirection) {
-        let value =
-            switch direction {
-            case .back: LibsharingSwipeBack
-            case .forward: LibsharingSwipeForward
-            case .up: LibsharingSwipeUp
-            case .down: LibsharingSwipeDown
-            }
-        try? current?.sendSwipe(Int32(x), y: Int32(y), direction: value)
+        try? session?.sendRotate(Int32(x), y: Int32(y), degrees: degrees, phase: Self.phaseValue(phase))
     }
 
     func sendScrollPhase(x: Int, y: Int, deltaX: Double, deltaY: Double, phase: GesturePhase) {
-        let pointsPerPixel = currentHandler?.pointsPerPixel ?? 0.5
-        try? current?.sendScrollPhase(
+        let pointsPerPixel = handler.pointsPerPixel
+        try? session?.sendScrollPhase(
             Int32(x), y: Int32(y), deltaX: deltaX * pointsPerPixel, deltaY: deltaY * pointsPerPixel, phase: Self.phaseValue(phase))
     }
 
     func startScrollMomentum(x: Int, y: Int, velocityX: Double, velocityY: Double) {
-        let pointsPerPixel = currentHandler?.pointsPerPixel ?? 0.5
-        try? current?.startScrollMomentum(
+        let pointsPerPixel = handler.pointsPerPixel
+        try? session?.startScrollMomentum(
             Int32(x), y: Int32(y), velocityX: velocityX * pointsPerPixel, velocityY: velocityY * pointsPerPixel)
     }
 
     func stopScrollMomentum() {
-        current?.stopScrollMomentum()
+        session?.stopScrollMomentum()
     }
 
     func sendSystemCommand(_ command: SystemCommand) {
@@ -235,20 +185,15 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             case .showDesktop: LibsharingSystemCommandShowDesktop
             case .launchpad: LibsharingSystemCommandLaunchpad
             }
-        try? current?.sendSystemCommand(value)
+        try? session?.sendSystemCommand(value)
     }
 
-    func setAssistCursor(x: Int, y: Int, pointer: AssistPointer, pressed: Bool) {
-        let value =
-            switch pointer {
-            case .highlight: LibsharingAssistPointerHighlight
-            case .arrow: LibsharingAssistPointerArrow
-            }
-        try? current?.setAssistCursor(Int32(x), y: Int32(y), pointer: value, pressed: pressed)
+    func setAssistCursor(x: Int, y: Int, pressed: Bool) {
+        try? session?.setAssistCursor(Int32(x), y: Int32(y), pressed: pressed)
     }
 
     func hideAssistCursor() {
-        try? current?.hideAssistCursor()
+        try? session?.hideAssistCursor()
     }
 
     func setMode(_ mode: SessionMode) {
@@ -257,33 +202,29 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             case .control: LibsharingModeControl
             case .observe: LibsharingModeObserve
             }
-        try? current?.setMode(value)
+        try? session?.setMode(value)
     }
 
     func selectDisplay(_ selection: DisplaySelection) {
         switch selection {
-        case .all: try? current?.selectDisplay(LibsharingAllDisplays)
-        case .display(let id): try? current?.selectDisplay(id)
+        case .all: try? session?.selectDisplay(LibsharingAllDisplays)
+        case .display(let id): try? session?.selectDisplay(id)
         }
     }
 
     func setQuality(_ quality: SessionQuality) {
-        try? current?.setQuality(Self.quality(quality))
+        try? session?.setQuality(Self.quality(quality))
     }
 
     func startHighPerformance() {
         lock.lock()
         let supported = supportsHighPerformance
         lock.unlock()
-        if supported == true {
-            startStream()
-        } else if supported == false {
-            currentHandler?.reportMediaFailure(MediaFailure(.unsupported))
+        if supported {
+            startHighPerformanceWithConnection()
+        } else {
+            handler.reportMediaFailure(MediaFailure(.unsupported))
         }
-    }
-
-    func startHighPerformanceWithConnection() {
-        startStream()
     }
 
     private func connected(supportsHighPerformance: Bool) {
@@ -295,7 +236,8 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         lock.unlock()
     }
 
-    private func startStream() {
+    func startHighPerformanceWithConnection() {
+        guard let session else { return }
         lock.lock()
         guard !highPerformanceRunning else {
             lock.unlock()
@@ -303,12 +245,6 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         }
         highPerformanceRunning = true
         lock.unlock()
-        guard let session = current else {
-            lock.lock()
-            highPerformanceRunning = false
-            lock.unlock()
-            return
-        }
         let options: LibsharingHighPerformanceOptions
         do {
             options = try highPerformanceOptions()
@@ -316,7 +252,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             lock.lock()
             highPerformanceRunning = false
             lock.unlock()
-            currentHandler?.reportMediaFailure(MediaFailure(.undecodable, message: error.localizedDescription))
+            handler.reportMediaFailure(MediaFailure(.undecodable, message: error.localizedDescription))
             return
         }
         do {
@@ -325,12 +261,12 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             lock.lock()
             highPerformanceRunning = false
             lock.unlock()
-            currentHandler?.reportMediaFailure(MediaFailure(.other, message: error.localizedDescription))
+            handler.reportMediaFailure(MediaFailure(.other, message: error.localizedDescription))
         }
     }
 
     private func highPerformanceOptions() throws -> LibsharingHighPerformanceOptions {
-        guard let options = LibsharingNewHighPerformanceOptions() else { throw MessageError("libsharing returned no High Performance options") }
+        let options = LibsharingNewHighPerformanceOptions()!
         let capabilities = DecoderCapabilities.current
         guard capabilities.supportsHEVC || capabilities.supportsH264 else { throw MessageError("this device has no hardware decoder for HEVC or H.264") }
         options.supportedCodecs =
@@ -350,8 +286,6 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             case .fromMac: LibsharingAudioFromMac
             case .toMac: LibsharingAudioToMac
             }
-        options.frameRate60 = false
-        options.cursorInVideo = false
         options.videoMode = network.usesCoreDevice ? LibsharingVideoModeCoreDevice : LibsharingVideoModeRemoteDesktop
         options.bands = Int32(network.bands)
         options.immediatePlayout = network.schedulesPresentation
@@ -359,7 +293,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     }
 
     func uploadFile(_ localURL: URL, remoteFolder: String) throws -> Int64 {
-        guard let session = current else { throw MessageError("not connected") }
+        guard let session else { throw MessageError("not connected") }
         let transfer = try session.uploadFile(localURL.path, remoteFolder: remoteFolder)
         let id = transfer.transferID()
         lock.lock()
@@ -369,7 +303,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     }
 
     func downloadFile(_ remotePath: String, localFolder: URL) throws -> Int64 {
-        guard let session = current else { throw MessageError("not connected") }
+        guard let session else { throw MessageError("not connected") }
         let transfer = try session.downloadFile(remotePath, localFolder: localFolder.path)
         let id = transfer.transferID()
         lock.lock()
@@ -379,28 +313,25 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     }
 
     func startDrop(names: [String]) throws -> Int64 {
-        guard let session = current else { throw MessageError("not connected") }
+        guard let session else { throw MessageError("not connected") }
         var id: Int64 = 0
         try session.startDrop(names.joined(separator: "\n"), ret0_: &id)
         return id
     }
 
     func cancelDrag(_ id: Int64) {
-        try? current?.cancelDrag(id)
+        try? session?.cancelDrag(id)
     }
 
     func cancelRemoteDrag() {
-        try? current?.cancelRemoteDrag()
-    }
-
-    private func transfer(_ id: Int64) -> LibsharingFileTransfer? {
-        lock.lock()
-        defer { lock.unlock() }
-        return transfers[id]
+        try? session?.cancelRemoteDrag()
     }
 
     func cancelTransfer(_ id: Int64) {
-        try? transfer(id)?.cancel()
+        lock.lock()
+        let transfer = transfers[id]
+        lock.unlock()
+        try? transfer?.cancel()
     }
 
     fileprivate func transferFinished(_ id: Int64) {
@@ -415,7 +346,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         remoteAudio = audio
         let running = highPerformanceRunning
         lock.unlock()
-        guard changed, running, let session = current, let options = try? highPerformanceOptions() else { return }
+        guard changed, running, let session, let options = try? highPerformanceOptions() else { return }
         lock.lock()
         restartingHighPerformance = true
         lock.unlock()
@@ -429,19 +360,19 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     }
 
     func sendMicrophoneAudio(_ data: Data) {
-        try? current?.sendMicrophoneAudio(data)
+        try? session?.sendMicrophoneAudio(data)
     }
 
     func requestRefresh() {
-        try? current?.requestRefresh()
+        try? session?.requestRefresh()
     }
 
     func requestKeyframe() {
-        try? current?.requestKeyframe()
+        try? session?.requestKeyframe()
     }
 
     func statistics() -> SessionStatistics? {
-        guard let statistics = current?.statistics() else { return nil }
+        guard let statistics = session?.statistics() else { return nil }
         return SessionStatistics(
             roundTripMilliseconds: statistics.roundTripMilliseconds,
             receivedBytes: statistics.receivedBytes,
@@ -457,37 +388,37 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     }
 
     var displayWidthMultiple: Int {
-        current.map { Int($0.displayWidthMultiple()) } ?? 1
+        session.map { Int($0.displayWidthMultiple()) } ?? 1
     }
 
     func setVirtualDisplay(_ mode: VirtualDisplayMode, largestSide: Int) {
-        try? current?.setVirtualDisplay(
+        try? session?.setVirtualDisplay(
             Int32(mode.width), height: Int32(mode.height), density: Double(mode.density),
             maximumWidth: Int32(largestSide), maximumHeight: Int32(largestSide))
     }
 
     func setVisible(_ visible: Bool) {
-        try? current?.setVisible(visible)
+        try? session?.setVisible(visible)
     }
 
     func setHDR(_ enabled: Bool) {
-        try? current?.setHDR(enabled)
+        try? session?.setHDR(enabled)
     }
 
     func setUpdateRate(_ rate: Int) {
-        try? current?.setUpdateRate(Int32(rate))
+        try? session?.setUpdateRate(Int32(rate))
     }
 
     func setClipboardSharing(_ enabled: Bool) {
-        currentHandler?.forwardsClipboard = enabled
-        try? current?.setSharedClipboard(enabled)
+        handler.forwardsClipboard = enabled
+        try? session?.setSharedClipboard(enabled)
     }
 
     func sendClipboard(_ content: ClipboardContent, pasting: Bool) throws {
-        guard let session = current else { throw MessageError("not connected") }
-        guard let clipboard = LibsharingNewClipboard() else { throw MessageError("libsharing returned no clipboard") }
+        guard let session else { throw MessageError("not connected") }
+        let clipboard = LibsharingNewClipboard()!
         for item in content {
-            guard let clipboardItem = LibsharingNewClipboardItem() else { throw MessageError("libsharing returned no clipboard item") }
+            let clipboardItem = LibsharingNewClipboardItem()!
             for (type, data) in item {
                 clipboardItem.addFlavor(type, data: data)
             }
@@ -501,12 +432,12 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     }
 
     func requestClipboard() throws {
-        guard let session = current else { throw MessageError("not connected") }
-        currentHandler?.forceNextClipboard = true
+        guard let session else { throw MessageError("not connected") }
+        handler.forceNextClipboard = true
         do {
             try session.requestClipboard()
         } catch {
-            currentHandler?.forceNextClipboard = false
+            handler.forceNextClipboard = false
             throw error
         }
     }
@@ -533,7 +464,6 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
     var onConnected: (@Sendable (Bool) -> Void)?
     var onMediaStopped: (@Sendable () -> Void)?
     var onTransferFinished: (@Sendable (Int64) -> Void)?
-    private var supportsHighPerformance = false
 
     init(delegate: SessionEventSink, remoteProtocol: RemoteProtocol, platform: RemotePlatform?) {
         self.delegate = delegate
@@ -579,7 +509,7 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
         case LibsharingStateChoosingSession:
             break
         case LibsharingStateConnected:
-            onConnected?(locked { supportsHighPerformance })
+            onConnected?(locked { capabilities.contains(.highPerformance) })
             delegate.sessionPhaseChanged(.connected)
         case LibsharingStateDisconnected:
             let text = locked { framebufferFailure } ?? message ?? ""
@@ -637,10 +567,7 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
         if serverInfo.supportsAudio { capabilities.insert(.audio) }
         if serverInfo.supportsClipboardRequest { capabilities.insert(.clipboardRequest) }
         if serverInfo.supportsUnicodeText { capabilities.insert(.unicodeText) }
-        locked {
-            supportsHighPerformance = serverInfo.supportsHighPerformance
-            self.capabilities = capabilities
-        }
+        locked { self.capabilities = capabilities }
         delegate?.sessionCapabilitiesChanged(capabilities)
         updateInfo { info in
             info.dialect =
@@ -786,46 +713,33 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
 
     func onPrompt(_ prompt: LibsharingPrompt?) {
         guard let prompt else { return }
-        switch prompt.kind {
-        case LibsharingPromptChooseSession:
-            delegate?.sessionPhaseChanged(
-                .choosingSession(
-                    SessionChoicePrompt(
-                        id: prompt.promptID,
-                        consoleUser: prompt.consoleUser,
-                        allowsShareConsole: prompt.allowsShareConsole,
-                        allowsOwnSession: prompt.allowsOwnSession
-                    )))
-        default:
-            try? session?.answerPrompt(prompt.promptID, answer: LibsharingSessionChoiceCancel)
-        }
+        delegate?.sessionPhaseChanged(
+            .choosingSession(
+                SessionChoicePrompt(
+                    id: prompt.promptID,
+                    consoleUser: prompt.consoleUser,
+                    allowsShareConsole: prompt.allowsShareConsole,
+                    allowsOwnSession: prompt.allowsOwnSession
+                )))
     }
 
     func onStatus(_ status: Int32) {
         switch status {
-        case LibsharingStatusSessionEnding: delegate?.sessionEvent(.sessionEnding)
-        case LibsharingStatusDisplaysSleep: delegate?.sessionEvent(.displaysAsleep)
-        case LibsharingStatusDisplaysWake: delegate?.sessionEvent(.displaysAwake)
         case LibsharingStatusControlAllowed:
             let capabilities = locked {
                 self.capabilities.insert(.control)
                 return self.capabilities
             }
             delegate?.sessionCapabilitiesChanged(capabilities)
-            delegate?.sessionEvent(.controlAllowed(true))
         case LibsharingStatusObserveOnly:
             let capabilities = locked {
                 self.capabilities.remove(.control)
                 return self.capabilities
             }
             delegate?.sessionCapabilitiesChanged(capabilities)
-            delegate?.sessionEvent(.controlAllowed(false))
             delegate?.sessionModeChanged(.observe)
         case LibsharingStatusPointerHidden: delegate?.sessionEvent(.pointerVisible(false))
         case LibsharingStatusPointerShown: delegate?.sessionEvent(.pointerVisible(true))
-        case LibsharingStatusBusyCursorStart: delegate?.sessionEvent(.busy(true))
-        case LibsharingStatusBusyCursorEnd: delegate?.sessionEvent(.busy(false))
-        case LibsharingStatusUserSessionChanged: delegate?.sessionEvent(.userSessionChanged)
         default: break
         }
     }
@@ -890,7 +804,7 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
                 sampleRate: Double(format.sampleRate),
                 channels: UInt32(max(1, format.channels)),
                 framesPerPacket: UInt32(max(1, format.framesPerPacket)),
-                magicCookie: format.magicCookie ?? format.audioSpecificConfig ?? Data()
+                magicCookie: format.magicCookie ?? Data()
             ))
     }
 
@@ -925,8 +839,8 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
         delegate?.sessionDeviceInfo(DeviceInfo(model: model, enclosureColor: color))
     }
 
-    func onFileTransferProgress(_ transferID: Int64, transferred: Int64, total: Int64, item: String?) {
-        delegate?.sessionFileTransferProgress(id: transferID, transferred: transferred, total: total, item: item)
+    func onFileTransferProgress(_ transferID: Int64, transferred: Int64, total: Int64) {
+        delegate?.sessionFileTransferProgress(id: transferID, transferred: transferred, total: total)
     }
 
     func onFileTransferFinished(_ transferID: Int64, name: String?, errorCode: Int32, message: String?) {

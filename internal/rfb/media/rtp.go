@@ -12,7 +12,6 @@ type rtpPacket struct {
 	sequence         uint16
 	timestamp        uint32
 	ssrc             uint32
-	index            uint64
 	extensionProfile uint16
 	payloadOffset    int
 	payload          []byte

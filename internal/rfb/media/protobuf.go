@@ -42,10 +42,6 @@ func (m protoMessage) encode() []byte {
 		switch field.wireType {
 		case protoVarint:
 			out = binary.AppendUvarint(out, field.value)
-		case protoFixed64:
-			out = binary.LittleEndian.AppendUint64(out, field.value)
-		case protoFixed32:
-			out = binary.LittleEndian.AppendUint32(out, uint32(field.value))
 		case protoBytes:
 			out = binary.AppendUvarint(out, uint64(len(field.bytes)))
 			out = append(out, field.bytes...)

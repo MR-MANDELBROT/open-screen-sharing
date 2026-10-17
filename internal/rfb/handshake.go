@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -74,10 +73,6 @@ type handshake struct {
 	securityType SecurityType
 	wrapKey      []byte
 	selected     func(SecurityType)
-}
-
-func (h *handshake) offersSecurity(securityType SecurityType) bool {
-	return slices.Contains(h.info.SecurityTypes, securityType)
 }
 
 func (h *handshake) negotiateVersion() error {

@@ -17,8 +17,6 @@ struct SessionView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var toolbarWidth: CGFloat = 0
 
-    private var isFullScreen: Bool { controller.isFullScreen }
-
     private var toolbarSlots: Int {
         ToolbarLayout.capsuleSlots(width: dock?.length ?? toolbarWidth, itemWidth: toolbarItemWidth)
     }
@@ -84,7 +82,7 @@ struct SessionView: View {
                 FullScreenReader(isFullScreen: $controller.isFullScreen)
                     .ignoresSafeArea()
                 if #available(iOS 26, *), controller.platform == .iOS, hasOwnWindow {
-                    DeviceWindowShaper(screen: deviceScreen, isFullScreen: isFullScreen)
+                    DeviceWindowShaper(screen: deviceScreen, isFullScreen: controller.isFullScreen)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -95,7 +93,7 @@ struct SessionView: View {
                 }
             }
             .overlay(alignment: .top) {
-                FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: isFullScreen || !hasOwnWindow, onClose: close)
+                FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: controller.isFullScreen || !hasOwnWindow, onClose: controller.close)
             }
             .onGeometryChangeCompat(for: CGFloat.self) { proxy in
                 proxy.size.width - proxy.safeAreaInsets.leading - proxy.safeAreaInsets.trailing
@@ -103,8 +101,8 @@ struct SessionView: View {
                 toolbarWidth = width
             }
             .preferredColorScheme(colorScheme)
-            .statusBarHidden(isFullScreen)
-            .persistentSystemOverlaysCompat(isFullScreen ? .hidden : .automatic)
+            .statusBarHidden(controller.isFullScreen)
+            .persistentSystemOverlaysCompat(controller.isFullScreen ? .hidden : .automatic)
             .defersSystemGesturesCompat(on: controller.isControlling ? .all : [])
             .background { PointerLockRequest(locked: locksPointer) }
             .onChangeCompat(of: pointerLockAvailable) { available in
@@ -172,7 +170,7 @@ struct SessionView: View {
                 }
             }
             .overlay {
-                FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: false, onClose: close)
+                FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: false, onClose: controller.close)
             }
             .overlay(alignment: .top) {
                 if showsPointerLockHint {
@@ -259,13 +257,9 @@ struct SessionView: View {
                     }
                     .allowsHitTesting(false)
             }
-            SessionStatusOverlay(controller: controller, onClose: close)
+            SessionStatusOverlay(controller: controller, onClose: controller.close)
                 .environment(\.colorScheme, .dark)
         }
-    }
-
-    private func close() {
-        controller.close()
     }
 }
 

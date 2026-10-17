@@ -89,11 +89,9 @@ func negotiateTransport(ctx context.Context, opts Options, authenticating func()
 	if err != nil {
 		return nil, err
 	}
-	if opts.VerifyCertificate != nil {
-		err = opts.VerifyCertificate(fingerprint(certificate))
-		if err != nil {
-			return nil, err
-		}
+	err = opts.VerifyCertificate(fingerprint(certificate))
+	if err != nil {
+		return nil, err
 	}
 	if authenticating != nil {
 		authenticating()
@@ -110,7 +108,7 @@ func negotiateTransport(ctx context.Context, opts Options, authenticating func()
 }
 
 func (t *transport) negotiate(host string) (*x509.Certificate, error) {
-	err := t.write(connectionRequest(protocolHybrid))
+	err := t.write(connectionRequest())
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +126,6 @@ func (t *transport) negotiate(host string) (*x509.Certificate, error) {
 	if protocol != protocolHybrid {
 		return nil, E.Extend(ErrNLAUnavailable, "the server selected protocol ", protocol)
 	}
-	t.protocol = protocol
 	return t.upgrade(&tls.Config{
 		MinVersion: tls.VersionTLS12,
 		// Over TLS 1.3 negotiated by crypto/tls, Windows 11 26100 sends an internal_error alert in
@@ -140,10 +137,10 @@ func (t *transport) negotiate(host string) (*x509.Certificate, error) {
 	})
 }
 
-func connectionRequest(protocols uint32) []byte {
+func connectionRequest() []byte {
 	body := []byte{negotiationRequest, 0}
 	body = binary.LittleEndian.AppendUint16(body, negotiationLength)
-	body = binary.LittleEndian.AppendUint32(body, protocols)
+	body = binary.LittleEndian.AppendUint32(body, protocolHybrid)
 	packet := []byte{tpktVersion, 0}
 	packet = binary.BigEndian.AppendUint16(packet, uint16(tpktHeaderLength+1+x224ConnectionHeaderLength+len(body)))
 	packet = append(packet, byte(x224ConnectionHeaderLength+len(body)), x224Request, 0, 0, 0, 0, 0)

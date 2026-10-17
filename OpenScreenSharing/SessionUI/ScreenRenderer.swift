@@ -112,11 +112,11 @@ final class ScreenRenderer {
 
     struct Frame {
         var pixelBuffer: CVPixelBuffer?
-        var strips: [CVPixelBuffer?] = []
-        var stripHeight: Int = 0
-        var canvasHeight: Int = 0
+        var strips: [CVPixelBuffer?]
+        var stripHeight: Int
+        var canvasHeight: Int
         var imageRect: CGRect
-        var turns = PictureTurns.none
+        var turns: PictureTurns
         var cursor: CursorShape?
         var cursorRect: CGRect?
         var viewSize: CGSize
@@ -326,5 +326,204 @@ private nonisolated final class TextureRetainer: @unchecked Sendable {
 
     init(textures: [CVMetalTexture]) {
         self.textures = textures
+    }
+}
+
+protocol RemoteScreen: AnyObject {
+    var bounds: CGRect { get }
+    var imageRect: CGRect { get }
+    var displayScale: CGFloat { get }
+    var isOccluded: Bool { get }
+    func drawsCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> Bool
+}
+
+final class ScreenPresenter {
+    private unowned let screen: any RemoteScreen
+    private unowned let controller: SessionController
+    private let pipeline: DisplayPipeline
+    private let layer: CAMetalLayer
+    private var renderer: ScreenRenderer?
+    private var displayLink: CADisplayLink?
+    private var presentationTimer: DispatchSourceTimer?
+    private var presentationTick: CFTimeInterval = 0
+    private var needsRender = true
+    private var renderedThisFrame = false
+    private var idleFrames = 0
+    private var lastSnapshot: DisplayPipeline.Snapshot?
+    private var refreshRate = 0
+
+    init(screen: any RemoteScreen, controller: SessionController, layer: CAMetalLayer) {
+        self.screen = screen
+        self.controller = controller
+        pipeline = controller.pipeline
+        self.layer = layer
+        do {
+            renderer = try ScreenRenderer(layer: layer)
+        } catch {
+            DispatchQueue.main.async { [controller] in controller.drawingFailed(error) }
+        }
+        pipeline.setWakeHandler { [weak self] in
+            DispatchQueue.main.async { self?.contentChanged() }
+        }
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            displayLink?.invalidate()
+            presentationTimer?.cancel()
+            pipeline.setWakeHandler(nil)
+        }
+    }
+
+    func start(_ makeLink: (_ target: Any, _ selector: Selector) -> CADisplayLink) {
+        let link = makeLink(DisplayLinkTarget(self), #selector(DisplayLinkTarget.tick))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+        refreshRate = 0
+    }
+
+    func stop() {
+        displayLink?.invalidate()
+        displayLink = nil
+        presentationTimer?.cancel()
+        presentationTimer = nil
+    }
+
+    func setRefreshRate(_ rate: Int) {
+        guard rate > 0, rate != refreshRate else { return }
+        refreshRate = rate
+        let maximum = Float(rate)
+        displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: min(30, maximum), maximum: maximum, preferred: maximum)
+        controller.screenRefreshRateDidChange(rate)
+    }
+
+    func pause() {
+        displayLink?.isPaused = true
+    }
+
+    func setNeedsRender() {
+        needsRender = true
+        wake()
+    }
+
+    fileprivate func tick() {
+        renderedThisFrame = false
+        guard !screen.isOccluded else {
+            displayLink?.isPaused = true
+            return
+        }
+        if let displayLink, pipeline.isSchedulingPresentation {
+            if presentationTimer == nil {
+                let timer = DispatchSource.makeTimerSource(queue: .main)
+                timer.setEventHandler { [weak self] in
+                    MainActor.assumeIsolated { self?.presentScheduledFrames() }
+                }
+                timer.activate()
+                presentationTimer = timer
+            }
+            presentationTick = displayLink.targetTimestamp
+            let midpoint = (displayLink.timestamp + displayLink.targetTimestamp) / 2
+            presentationTimer?.schedule(deadline: .now() + max(midpoint - CACurrentMediaTime(), 0), leeway: .microseconds(100))
+        }
+        let snapshot = pipeline.consume(through: displayLink?.timestamp ?? CACurrentMediaTime())
+        if let snapshot {
+            lastSnapshot = snapshot
+        }
+        guard snapshot != nil || needsRender else {
+            idleFrames += 1
+            if idleFrames > 30 { displayLink?.isPaused = true }
+            return
+        }
+        idleFrames = 0
+        renderedThisFrame = true
+        needsRender = !render()
+    }
+
+    private func presentScheduledFrames() {
+        guard !screen.isOccluded, let snapshot = pipeline.consume(through: presentationTick) else { return }
+        lastSnapshot = snapshot
+        idleFrames = 0
+        needsRender = !render()
+    }
+
+    private func contentChanged() {
+        wake()
+        guard !renderedThisFrame, !screen.isOccluded, let snapshot = pipeline.consume(through: CACurrentMediaTime()) else { return }
+        lastSnapshot = snapshot
+        renderedThisFrame = true
+        needsRender = !render()
+    }
+
+    private func wake() {
+        guard !screen.isOccluded else { return }
+        idleFrames = 0
+        displayLink?.isPaused = false
+    }
+
+    private func render() -> Bool {
+        let viewSize = screen.bounds.size
+        guard let renderer, viewSize.width > 0, viewSize.height > 0 else { return false }
+        let snapshot = lastSnapshot ?? pipeline.snapshot()
+        lastSnapshot = snapshot
+        let epoch = snapshot.presentationEpoch
+        let generation = snapshot.pictureGeneration
+        let run = controller.debugInfo.presentationRun
+        guard snapshot.turns.shownSize(of: CGSize(width: snapshot.width, height: snapshot.height)) == controller.imageSize,
+            pipeline.isCurrentPresentation(epoch: epoch)
+        else { return false }
+        let imageRect = screen.imageRect
+        let scale = screen.displayScale
+        let cursorScale = max(scale * controller.info.framebufferPixelsPerCursorPixel, 1 / controller.cursorPixelsPerPoint)
+        let drawsCursor = screen.drawsCursor(snapshot.cursor, visible: snapshot.cursorVisible, scale: cursorScale)
+        var cursorRect: CGRect?
+        if let cursor = snapshot.cursor, snapshot.cursorVisible, controller.phase == .connected, drawsCursor {
+            let origin = CGPoint(
+                x: imageRect.minX + snapshot.cursorPosition.x * scale - cursor.hotspot.x * cursorScale,
+                y: imageRect.minY + snapshot.cursorPosition.y * scale - cursor.hotspot.y * cursorScale
+            )
+            cursorRect = CGRect(
+                origin: origin,
+                size: CGSize(width: CGFloat(cursor.image.width) * cursorScale, height: CGFloat(cursor.image.height) * cursorScale))
+        }
+        return renderer.render(
+            ScreenRenderer.Frame(
+                pixelBuffer: snapshot.pixelBuffer,
+                strips: snapshot.strips,
+                stripHeight: snapshot.stripHeight,
+                canvasHeight: snapshot.canvasHeight,
+                imageRect: imageRect,
+                turns: snapshot.turns,
+                cursor: snapshot.cursor,
+                cursorRect: cursorRect,
+                viewSize: viewSize,
+                pixelsPerImagePixel: scale * layer.contentsScale,
+                pixelsPerCursorPixel: cursorScale * layer.contentsScale
+            ),
+            in: layer,
+            presented: { [pipeline, debugInfo = controller.debugInfo] time in
+                DispatchQueue.main.async {
+                    guard let generation, let run, pipeline.isCurrentPresentation(epoch: epoch) else { return }
+                    debugInfo.picturePresented(generation, at: time, run: run)
+                }
+            },
+            failed: { [weak self, pipeline] in
+                DispatchQueue.main.async {
+                    guard let self, pipeline.isCurrentPresentation(epoch: epoch) else { return }
+                    self.setNeedsRender()
+                }
+            }
+        )
+    }
+}
+
+private final class DisplayLinkTarget {
+    weak var presenter: ScreenPresenter?
+
+    init(_ presenter: ScreenPresenter) {
+        self.presenter = presenter
+    }
+
+    @objc func tick() {
+        presenter?.tick()
     }
 }

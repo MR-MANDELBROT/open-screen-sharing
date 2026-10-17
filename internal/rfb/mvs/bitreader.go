@@ -13,10 +13,6 @@ type bitReader struct {
 	invalid  bool
 }
 
-func newBitReader(data []byte) bitReader {
-	return bitReader{data: data}
-}
-
 func (r *bitReader) refill() {
 	if r.position+8 <= len(r.data) {
 		r.value |= binary.BigEndian.Uint64(r.data[r.position:]) >> r.count

@@ -3,6 +3,7 @@ package mvs
 import (
 	"strconv"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -13,11 +14,11 @@ const (
 	fullCache
 )
 
-func (d *Decoder) decodeFull(update []byte, x, y, width, height int, target *Target) error {
+func (d *Decoder) decodeFull(update []byte, x, y, width, height int, target *bgra.Image) error {
 	if len(update) < 3 {
 		return E.New("mvs: full update of ", len(update), " bytes, shorter than its 3-byte header")
 	}
-	reader := newBitReader(update[3:])
+	reader := bitReader{data: update[3:]}
 	luminanceLimit := min(int(update[1]), 64)
 	chrominanceLimit := min(int(update[2]), 64)
 	scratch := &d.scratch

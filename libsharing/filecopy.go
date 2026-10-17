@@ -81,14 +81,6 @@ func (t *FileTransfer) TransferID() int64 {
 	return int64(t.transfer.ID())
 }
 
-func (t *FileTransfer) Pause() error {
-	return t.transfer.Pause()
-}
-
-func (t *FileTransfer) Resume() error {
-	return t.transfer.Resume()
-}
-
 func (t *FileTransfer) Cancel() error {
 	go t.transfer.Cancel()
 	t.cancel()
@@ -116,7 +108,7 @@ func (s *Session) DownloadFile(remotePath string, localFolder string) (*FileTran
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	transferID := new(atomic.Int64)
-	transfer, err := client.FileCopy().Download(ctx, remotePath, filecopy.DirectoryReceiver(localFolder), s.fileProgress(transferID))
+	transfer, err := client.FileCopy().Download(ctx, remotePath, localFolder, s.fileProgress(transferID))
 	return s.startTransfer(transfer, transferID, cancel, err)
 }
 
@@ -124,7 +116,7 @@ func (s *Session) fileProgress(transferID *atomic.Int64) func(filecopy.Progress)
 	return func(progress filecopy.Progress) {
 		id := transferID.Load()
 		if id != 0 {
-			s.handler.OnFileTransferProgress(id, progress.Transferred, progress.Total, progress.Item)
+			s.handler.OnFileTransferProgress(id, progress.Transferred, progress.Total)
 		}
 	}
 }

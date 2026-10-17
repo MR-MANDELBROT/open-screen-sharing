@@ -116,8 +116,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
             return controller.usesHighPerformance && controller.displaySupportsHDR && offers(.highPerformance)
                 && controller.networkSupportsHDR
         case .observe: return offers(.control) && offers(.observe)
-        case .lock, .volumeUp, .volumeDown, .functionKeys, .moreKeys: return offers(.control)
-        case .keyboard: return offers(.control)
+        case .keyboard, .lock, .volumeUp, .volumeDown, .functionKeys, .moreKeys: return offers(.control)
         #if os(iOS)
         case .pointerLock: return offers(.control) && PointerLock.hasMouse
         #else
@@ -247,10 +246,16 @@ struct SessionCommandView: View {
         case .pointerLock:
             toggle(isOn: Binding(get: { controller.isPointerLockOn }, set: { controller.setPointerLock($0) }))
         case .keyboard:
-            KeyboardButton(controller: controller) {
+            Button {
+                controller.toggleKeyboard()
                 if style == .barItem, controller.isToolbarVisible {
                     controller.toggleToolbar()
                 }
+            } label: {
+                Label(
+                    controller.isKeyboardVisible ? "Hide Keyboard" : "Show Keyboard",
+                    systemImage: controller.isKeyboardVisible ? "keyboard.chevron.compact.down" : "keyboard"
+                )
             }
         case .functionKeys:
             Menu { FunctionKeyItems(controller: controller) } label: { label }

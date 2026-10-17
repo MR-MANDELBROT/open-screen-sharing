@@ -7,10 +7,7 @@ final class BonjourAdvertiser {
 
     private var reference: DNSServiceRef?
 
-    var isPublishing: Bool { reference != nil }
-
-    @discardableResult
-    func start(name: String, type: String, port: Int, txt: [String: String] = [:]) -> DNSServiceErrorType {
+    func start(name: String, type: String, port: Int, txt: [String: String]) -> DNSServiceErrorType {
         stop()
         let name = Self.instanceName(name)
         let record = txt.reduce(into: Data()) { record, entry in

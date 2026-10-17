@@ -107,10 +107,7 @@ final class DiskImageStore: ObservableObject {
                 self.progress = progress
             }
         }
-        var error: NSError?
-        guard let importer = LibsharingNewDiskImageImport(directory.path, events, &error) else {
-            throw error ?? MessageError("libsharing returned no disk image import")
-        }
+        let importer = LibsharingNewDiskImageImport(directory.path, events)!
         current = importer
         isCancelled = false
         progress = DiskImageImportProgress(received: 0)

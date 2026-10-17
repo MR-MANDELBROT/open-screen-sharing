@@ -68,7 +68,6 @@ type ServerStream struct {
 	closed          bool
 	generation      uint64
 	offered         bool
-	opening         bool
 	renegotiateNext bool
 	quiet           bool
 	cancelOpen      context.CancelFunc
@@ -98,14 +97,7 @@ func (s *serverSession) close() {
 	s.wg.Wait()
 }
 
-func listenServerLeg(port uint16) (*net.UDPConn, error) {
-	return net.ListenUDP("udp", &net.UDPAddr{Port: int(port)})
-}
-
 func ListenServerStream(config ServerStreamConfig) (*ServerStream, error) {
-	if config.ListenUDP == nil {
-		config.ListenUDP = listenServerLeg
-	}
 	initial := config.InitialTarget.Unmap()
 	if initial.IsLoopback() && !config.AllowLoopbackTarget {
 		initial = netip.Addr{}
@@ -164,9 +156,6 @@ func (s *ServerStream) HandleOffer(message []byte) error {
 	offer, err := parseOffer(message)
 	s.access.Lock()
 	defer s.access.Unlock()
-	if s.closed {
-		return os.ErrClosed
-	}
 	s.stats.Offers++
 	s.quiet = false
 	if err != nil {
@@ -178,18 +167,13 @@ func (s *ServerStream) HandleOffer(message []byte) error {
 	generation := s.generation
 	s.closeLaterLocked(s.detachLocked())
 	now := time.Now()
-	err = s.video.setKeys(&offer.Video, now)
-	if err == nil && s.audio != nil {
-		err = s.audio.setKeys(&offer.Audio, now)
-	}
-	if err != nil {
-		s.stats.Errors++
-		return E.Errors(err, s.config.Send(ErrorMessage(ServerErrorBadConfiguration, 0)))
+	s.video.setKeys(&offer.Video, now)
+	if s.audio != nil {
+		s.audio.setKeys(&offer.Audio, now)
 	}
 	ctx, cancel := context.WithTimeout(s.ctx, serverOpenLimit)
 	s.cancelOpen = cancel
 	s.offered = true
-	s.opening = true
 	s.logger.Debug("media offer", "video_mode", offer.Video.Mode, "audio_mode", offer.Audio.Mode,
 		"width", offer.Video.Width, "height", offer.Video.Height, "frame_rate_60", offer.FrameRate60,
 		"pixel_formats", offer.Video.PixelFormats, "maximum_bitrate", offer.Video.MaximumBitrate)
@@ -218,7 +202,7 @@ func (s *ServerStream) open(ctx context.Context, cancel context.CancelFunc, gene
 	}
 	var audio ServerAudioSource
 	if s.audio != nil && offer.Audio.Present && offer.Audio.Mode == negotiatorModeRemoteDesktopSystemAudio {
-		audio, err = s.config.OpenAudio(ctx)
+		audio, err = s.config.OpenAudio()
 		if err != nil {
 			if !errors.Is(err, ErrAudioUnsupported) {
 				s.logger.Warn("open the device sound", "error", err)
@@ -251,11 +235,10 @@ func (s *ServerStream) open(ctx context.Context, cancel context.CancelFunc, gene
 	}
 	s.access.Lock()
 	defer s.access.Unlock()
-	if s.closed || s.generation != generation || !s.opening {
+	if s.generation != generation {
 		closeSources()
 		return
 	}
-	s.opening = false
 	s.cancelOpen = nil
 	sessionContext, sessionCancel := context.WithCancel(s.ctx)
 	session := &serverSession{
@@ -277,11 +260,7 @@ func (s *ServerStream) open(ctx context.Context, cancel context.CancelFunc, gene
 	if audio != nil {
 		s.audio.activate(&serverActive{ssrc: audioInfo.SSRC, receiverSSRC: audioInfo.ReceiverSSRC, generation: generation})
 	}
-	var arrival func() time.Time
-	if source, ok := video.(ServerPacketArrival); ok {
-		arrival = source.PacketArrival
-	}
-	session.wg.Go(func() { s.forward(session, s.video, video.ReadPacket, arrival) })
+	session.wg.Go(func() { s.forward(session, s.video, video.ReadPacket, video.PacketArrival) })
 	if audio != nil {
 		session.wg.Go(func() { s.forward(session, s.audio, audio.ReadPacket, nil) })
 	}
@@ -300,10 +279,9 @@ func (s *ServerStream) open(ctx context.Context, cancel context.CancelFunc, gene
 func (s *ServerStream) openFailed(generation uint64, err error) {
 	s.access.Lock()
 	defer s.access.Unlock()
-	if s.closed || s.generation != generation || !s.opening {
+	if s.generation != generation {
 		return
 	}
-	s.opening = false
 	s.cancelOpen = nil
 	s.renegotiateNext = false
 	s.stats.Errors++
@@ -316,14 +294,13 @@ func (s *ServerStream) detachLocked() *serverSession {
 		s.cancelOpen()
 		s.cancelOpen = nil
 	}
-	s.opening = false
 	session := s.session
 	s.session = nil
 	if session == nil {
 		return nil
 	}
 	for _, leg := range s.legs() {
-		leg.deactivate(session.generation)
+		leg.deactivate()
 	}
 	session.cancel()
 	return session
@@ -344,7 +321,7 @@ func (s *ServerStream) Renegotiate() error {
 		s.access.Unlock()
 		return os.ErrClosed
 	}
-	if s.opening {
+	if s.cancelOpen != nil {
 		s.renegotiateNext = true
 		s.access.Unlock()
 		return nil
@@ -369,10 +346,6 @@ func (s *ServerStream) renegotiateLocked() (*serverSession, error) {
 
 func (s *ServerStream) Close() error {
 	s.access.Lock()
-	if s.closed {
-		s.access.Unlock()
-		return nil
-	}
 	s.closed = true
 	s.generation++
 	previous := s.detachLocked()
@@ -477,7 +450,7 @@ func (s *ServerStream) sourceEnded(session *serverSession, leg *serverLeg, err e
 	}
 	if leg != s.video {
 		s.logger.Warn("device sound stopped", "error", err)
-		s.audio.deactivate(session.generation)
+		s.audio.deactivate()
 		s.access.Unlock()
 		return
 	}

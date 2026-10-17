@@ -41,27 +41,16 @@ func (c *Client) PressButton(ctx context.Context, button Button) error {
 	return c.sendButton(context.WithoutCancel(ctx), button, buttonUp)
 }
 
-func (c *Client) sendButton(ctx context.Context, button Button, state uint64) error {
-	c.access.Lock()
-	defer c.access.Unlock()
-	if c.closed && state == buttonUp {
-		if _, held := c.buttons[button]; !held {
-			return nil
-		}
-	}
-	return c.sendButtonState(ctx, button, state)
-}
-
 func (c *Client) releaseButtons(ctx context.Context) error {
 	for button := range c.buttons {
-		if err := c.sendButtonState(ctx, button, buttonUp); err != nil {
+		if err := c.sendButton(ctx, button, buttonUp); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Client) sendButtonState(ctx context.Context, button Button, state uint64) error {
+func (c *Client) sendButton(ctx context.Context, button Button, state uint64) error {
 	err := c.sendIndigo(ctx, "IndigoButtonEvent", buttonFeature, map[string]any{
 		"state":     state,
 		"usagePage": uint64(button.UsagePage),

@@ -155,7 +155,7 @@ func videoBlob(options StreamOptions, timestamp uint64) []byte {
 	}
 	tiers := videoBitrateTiers
 	bufferCap, limit := uint64(screenTierBufferCap), uint64(screenTierLimit)
-	switch options.videoMode() {
+	switch options.Mode {
 	case ModeNearby:
 		bufferCap, limit = nearbyTierBufferCap, nearbyTierLimit
 	case ModeCoreDevice:
@@ -235,7 +235,7 @@ func encodeOffer(streamType StreamType, options StreamOptions, now time.Time) []
 	var blob []byte
 	switch streamType {
 	case Video:
-		mode, blob = int(options.videoMode()), videoBlob(options, ntpTimestamp(now))
+		mode, blob = int(options.Mode), videoBlob(options, ntpTimestamp(now))
 	case Audio:
 		mode, blob = negotiatorModeAudio, audioBlob(options.SSRC, ntpTimestamp(now))
 	}

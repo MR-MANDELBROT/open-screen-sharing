@@ -3,17 +3,8 @@ package media
 import E "github.com/sagernet/sing/common/exceptions"
 
 const (
-	ColorPrimariesBT709  = 1
-	ColorPrimariesBT2020 = 9
-	ColorPrimariesP3D65  = 12
-
-	TransferBT709 = 1
-	TransferSRGB  = 13
-	TransferPQ    = 16
-	TransferHLG   = 18
-
-	MatrixBT709  = 1
-	MatrixBT2020 = 9
+	TransferPQ  = 16
+	TransferHLG = 18
 )
 
 type Color struct {
@@ -36,9 +27,9 @@ func parseColor(codec Codec, sets [][]byte) (Color, error) {
 		}
 		switch {
 		case codec == CodecHEVC && len(set) > 2 && hevcNALType(set) == hevcNALSPS:
-			return parseHEVCColor(newBitReader(unescapeRBSP(set[2:])))
+			return parseHEVCColor(&bitReader{data: unescapeRBSP(set[2:])})
 		case codec == CodecH264 && set[0]&0x1f == 7:
-			return parseH264Color(newBitReader(unescapeRBSP(set[1:])))
+			return parseH264Color(&bitReader{data: unescapeRBSP(set[1:])})
 		}
 	}
 	return Color{}, E.New("media: no ", codec, " sequence parameter set among ", len(sets), " parameter sets")
@@ -66,10 +57,6 @@ type bitReader struct {
 	data     []byte
 	position int
 	overrun  bool
-}
-
-func newBitReader(data []byte) *bitReader {
-	return &bitReader{data: data}
 }
 
 func (r *bitReader) bit() uint {
@@ -118,7 +105,7 @@ func HEVCPictureSize(sps []byte) (width, height int, ok bool) {
 	if len(sps) < 3 {
 		return 0, 0, false
 	}
-	r := newBitReader(unescapeRBSP(sps[2:]))
+	r := &bitReader{data: unescapeRBSP(sps[2:])}
 	_, _, width, height = readHEVCSPSHeader(r)
 	return width, height, !r.overrun
 }

@@ -13,7 +13,6 @@ import (
 
 	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	"github.com/nekohasekai/open-screen-sharing/internal/outbox"
-	"github.com/nekohasekai/open-screen-sharing/internal/rdp/codec/bulk"
 
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -58,7 +57,6 @@ const (
 )
 
 type Client struct {
-	options    Options
 	events     Events
 	logger     *slog.Logger
 	transport  *transport
@@ -85,19 +83,6 @@ type Client struct {
 	lifecycle sync.Mutex
 	running   bool
 	closed    bool
-}
-
-type graphicsEvents struct {
-	Events
-	resized func()
-}
-
-func (e graphicsEvents) ResizeFramebuffer(width, height int) (*bgra.Image, error) {
-	framebuffer, err := e.Events.ResizeFramebuffer(width, height)
-	if err == nil {
-		e.resized()
-	}
-	return framebuffer, err
 }
 
 func normalizeOptions(opts Options) (Options, error) {
@@ -134,7 +119,7 @@ func normalizeOptions(opts Options) (Options, error) {
 		}
 	}
 	for _, value := range []string{opts.Username, opts.Domain, opts.Password} {
-		if length := len(utf16le(nil, value)); length > maxCredentialLen {
+		if length := len(utf16le(value)); length > maxCredentialLen {
 			return opts, E.New("rdp: a credential of ", length, " UTF-16 bytes exceeds the ", maxCredentialLen, "-byte protocol limit")
 		}
 	}
@@ -164,7 +149,6 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 		return nil, err
 	}
 	c := &Client{
-		options:    opts,
 		events:     events,
 		logger:     opts.Logger,
 		transport:  t,
@@ -172,8 +156,8 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 		writer:     outbox.NewWriter(t.conn),
 		writerDone: make(chan struct{}),
 	}
-	c.mcs = &mcsLayer{transport: t, outbox: c.outbox, bulk: new(bulk.Decompressor), fragments: make(map[uint16][]byte)}
-	c.graphics = newGraphics(graphicsEvents{Events: events, resized: c.refreshInfo}, c.logger, opts.Width, opts.Height, c, c.mcs.bulk)
+	c.mcs = &mcsLayer{transport: t, outbox: c.outbox, fragments: make(map[uint16][]byte)}
+	c.graphics = newGraphics(events, c.logger, opts.Width, opts.Height, c)
 	c.clipboard = &clipboardChannel{events: events, changed: c.refreshInfo, shared: opts.Clipboard}
 	c.display = &displayChannel{logger: c.logger, changed: c.refreshInfo, width: opts.Width, height: opts.Height, scale: opts.DesktopScaleFactor, sentScale: opts.DesktopScaleFactor}
 	c.audio = &audioChannel{events: events, changed: c.refreshInfo}
@@ -213,7 +197,7 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 	}()
 	go c.input.run()
 	stop := context.AfterFunc(ctx, func() { _ = t.conn.Close() })
-	err = c.connect()
+	err = c.connect(opts)
 	stop()
 	if err == nil {
 		err = ctx.Err()
@@ -233,20 +217,19 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) connect() error {
-	err := c.transport.conn.SetReadDeadline(time.Now().Add(c.options.DialTimeout))
+func (c *Client) connect(opts Options) error {
+	err := c.transport.conn.SetReadDeadline(time.Now().Add(opts.DialTimeout))
 	if err != nil {
 		return err
 	}
-	err = c.mcs.connect(c.options, c.channels.channels)
+	err = c.mcs.connect(opts, c.channels.channels)
 	if err != nil {
 		return err
 	}
-	err = c.mcs.send(c.mcs.global, clientInfo(c.options))
+	err = c.mcs.send(c.mcs.global, clientInfo(opts))
 	if err != nil {
 		return err
 	}
-	c.options.Password = ""
 	c.channels.open()
 	for !c.session.active.Load() {
 		err = c.readOne()
@@ -280,10 +263,6 @@ func (c *Client) readOne() error {
 
 func (c *Client) Run() error {
 	c.lifecycle.Lock()
-	if c.running {
-		c.lifecycle.Unlock()
-		return E.New("rdp: receive loop already started")
-	}
 	c.running = true
 	closed := c.closed
 	c.lifecycle.Unlock()
@@ -413,7 +392,7 @@ func (c *Client) refreshInfo() {
 func (c *Client) Statistics() Statistics {
 	return Statistics{
 		BytesRead:    c.transport.read.Load(),
-		BytesWritten: c.transport.written.Load() + c.writer.Written(),
+		BytesWritten: c.transport.written + c.writer.Written(),
 		Frames:       c.graphics.frames.Load(),
 		Encoding:     encodingNames[c.graphics.encoding.Load()],
 	}
@@ -434,10 +413,6 @@ func (c *Client) RequestRefresh() error {
 	c.lastRefresh = time.Now()
 	c.refreshAccess.Unlock()
 	return c.session.sendData(pduRefreshRect, append([]byte{refreshAreaCount, 0, 0, 0}, c.desktopArea()...))
-}
-
-func (c *Client) acknowledgeFrame(id uint32) error {
-	return c.session.sendData(pduFrameAcknowledge, binary.LittleEndian.AppendUint32(nil, id))
 }
 
 func (c *Client) scheduleRefresh() {

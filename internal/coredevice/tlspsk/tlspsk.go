@@ -240,7 +240,7 @@ serverFlight:
 		return E.Cause(err, "write Finished")
 	}
 
-	contentType, _, err := c.readRecord()
+	contentType, _, err := c.readRecord(c.readBuffer)
 	if err != nil {
 		return E.Cause(err, "read ChangeCipherSpec")
 	}
@@ -375,7 +375,7 @@ func (c *Conn) readHandshake() (byte, []byte, error) {
 				return message[0], message[4:], nil
 			}
 		}
-		contentType, payload, err := c.readRecord()
+		contentType, payload, err := c.readRecord(c.readBuffer)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -437,11 +437,7 @@ func additionalData(sequence uint64, contentType byte, length int) [13]byte {
 	return data
 }
 
-func (c *Conn) readRecord() (byte, []byte, error) {
-	return c.readRecordInto(c.readBuffer)
-}
-
-func (c *Conn) readRecordInto(dst []byte) (byte, []byte, error) {
+func (c *Conn) readRecord(dst []byte) (byte, []byte, error) {
 	header, err := c.reader.Peek(recordHeaderLen)
 	if err != nil {
 		if errors.Is(err, io.EOF) && len(header) > 0 {
@@ -537,7 +533,7 @@ func (c *Conn) Read(p []byte) (int, error) {
 		if direct {
 			dst = p
 		}
-		contentType, payload, err := c.readRecordInto(dst)
+		contentType, payload, err := c.readRecord(dst)
 		if err != nil {
 			c.readErr = err
 			return 0, err

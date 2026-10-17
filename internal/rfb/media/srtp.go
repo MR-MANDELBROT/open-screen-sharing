@@ -30,11 +30,8 @@ type sessionKeys struct {
 	sum    [sha1.Size]byte
 }
 
-func deriveSessionKeys(master []byte, labelBase byte) (*sessionKeys, error) {
-	masterBlock, err := aes.NewCipher(master[:32])
-	if err != nil {
-		return nil, err
-	}
+func deriveSessionKeys(master []byte, labelBase byte) *sessionKeys {
+	masterBlock, _ := aes.NewCipher(master[:32])
 	derive := func(label byte, length int) []byte {
 		var iv [16]byte
 		copy(iv[:], master[32:32+sessionSaltLength])
@@ -44,14 +41,11 @@ func deriveSessionKeys(master []byte, labelBase byte) (*sessionKeys, error) {
 		return output
 	}
 	keys := &sessionKeys{}
-	keys.block, err = aes.NewCipher(derive(labelBase, 32))
-	if err != nil {
-		return nil, err
-	}
+	keys.block, _ = aes.NewCipher(derive(labelBase, 32))
 	keys.stream = newKeyStream(keys.block)
 	keys.mac = hmac.New(sha1.New, derive(labelBase+1, 20))
 	copy(keys.salt[:], derive(labelBase+2, sessionSaltLength))
-	return keys, nil
+	return keys
 }
 
 func (k *sessionKeys) xorKeyStream(ssrc uint32, index uint64, data []byte) {
@@ -138,16 +132,12 @@ func (r *replayState) accept(index uint64) {
 	r.window[distance/64] |= 1 << (distance % 64)
 }
 
-type srtpStream struct {
-	replay replayState
-}
-
-func (s *srtpStream) estimateIndex(sequence uint16) uint64 {
-	if !s.replay.started {
+func (r *replayState) estimateIndex(sequence uint16) uint64 {
+	if !r.started {
 		return uint64(sequence)
 	}
-	rollover := s.replay.highest >> 16
-	highestSequence := uint16(s.replay.highest)
+	rollover := r.highest >> 16
+	highestSequence := uint16(r.highest)
 	if highestSequence < 0x8000 {
 		if int(sequence)-int(highestSequence) > 0x8000 && rollover > 0 {
 			rollover--
@@ -160,15 +150,11 @@ func (s *srtpStream) estimateIndex(sequence uint16) uint64 {
 
 type srtpReceiver struct {
 	keys    *sessionKeys
-	streams map[uint32]*srtpStream
+	replays map[uint32]*replayState
 }
 
-func newSRTPReceiver(master []byte) (*srtpReceiver, error) {
-	keys, err := deriveSessionKeys(master, 0)
-	if err != nil {
-		return nil, err
-	}
-	return &srtpReceiver{keys: keys, streams: make(map[uint32]*srtpStream)}, nil
+func newSRTPReceiver(master []byte) *srtpReceiver {
+	return &srtpReceiver{keys: deriveSessionKeys(master, 0), replays: make(map[uint32]*replayState)}
 }
 
 func (r *srtpReceiver) unprotect(datagram []byte) (rtpPacket, error) {
@@ -180,28 +166,23 @@ func (r *srtpReceiver) unprotect(datagram []byte) (rtpPacket, error) {
 	if err != nil {
 		return rtpPacket{}, err
 	}
-	stream := r.streams[packet.ssrc]
-	if stream == nil {
-		stream = &srtpStream{}
+	replay := r.replays[packet.ssrc]
+	if replay == nil {
+		replay = &replayState{}
 	}
-	index := stream.estimateIndex(packet.sequence)
-	if !stream.replay.check(index) {
+	index := replay.estimateIndex(packet.sequence)
+	if !replay.check(index) {
 		return rtpPacket{}, E.New("media: SRTP packet ", index, " of SSRC ", packet.ssrc, " is replayed or too old")
 	}
 	if subtle.ConstantTimeCompare(r.keys.rtpTag(body, uint32(index>>16)), datagram[len(body):]) != 1 {
 		return rtpPacket{}, errAuthentication
 	}
-	if r.streams[packet.ssrc] == nil {
-		r.streams[packet.ssrc] = stream
+	if r.replays[packet.ssrc] == nil {
+		r.replays[packet.ssrc] = replay
 	}
-	stream.replay.accept(index)
+	replay.accept(index)
 	r.keys.xorKeyStream(packet.ssrc, index, body[packet.payloadOffset:])
-	packet, err = parseRTPPayload(body, packet)
-	if err != nil {
-		return rtpPacket{}, err
-	}
-	packet.index = index
-	return packet, nil
+	return parseRTPPayload(body, packet)
 }
 
 type srtcpReceiver struct {
@@ -209,12 +190,8 @@ type srtcpReceiver struct {
 	replays map[uint32]*replayState
 }
 
-func newSRTCPReceiver(master []byte) (*srtcpReceiver, error) {
-	keys, err := deriveSessionKeys(master, 3)
-	if err != nil {
-		return nil, err
-	}
-	return &srtcpReceiver{keys: keys, replays: make(map[uint32]*replayState)}, nil
+func newSRTCPReceiver(master []byte) *srtcpReceiver {
+	return &srtcpReceiver{keys: deriveSessionKeys(master, 3), replays: make(map[uint32]*replayState)}
 }
 
 func (r *srtcpReceiver) unprotect(datagram []byte) ([]byte, error) {
@@ -252,16 +229,8 @@ type srtcpSender struct {
 	index uint32
 }
 
-func newSRTCPSender(master []byte) (*srtcpSender, error) {
-	keys, err := deriveSessionKeys(master, 3)
-	if err != nil {
-		return nil, err
-	}
-	return &srtcpSender{keys: keys}, nil
-}
-
-func (s *srtcpSender) protect(packet []byte) []byte {
-	return s.appendProtected(make([]byte, 0, len(packet)+4+authTagLength), packet)
+func newSRTCPSender(master []byte) *srtcpSender {
+	return &srtcpSender{keys: deriveSessionKeys(master, 3)}
 }
 
 func (s *srtcpSender) appendProtected(out []byte, packet []byte) []byte {
@@ -279,12 +248,8 @@ type srtpSender struct {
 	keys *sessionKeys
 }
 
-func newSRTPSender(master []byte) (*srtpSender, error) {
-	keys, err := deriveSessionKeys(master, 0)
-	if err != nil {
-		return nil, err
-	}
-	return &srtpSender{keys: keys}, nil
+func newSRTPSender(master []byte) *srtpSender {
+	return &srtpSender{keys: deriveSessionKeys(master, 0)}
 }
 
 func (s *srtpSender) protect(packet []byte, payloadOffset int, index uint64) []byte {

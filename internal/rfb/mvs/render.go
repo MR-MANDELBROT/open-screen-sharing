@@ -1,8 +1,12 @@
 package mvs
 
-import "encoding/binary"
+import (
+	"encoding/binary"
 
-func fillTile(target *Target, x, y, width, height int, color uint32) {
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
+)
+
+func fillTile(target *bgra.Image, x, y, width, height int, color uint32) {
 	var line [32]byte
 	for column := 0; column < len(line); column += 4 {
 		binary.LittleEndian.PutUint32(line[column:], color)
@@ -14,7 +18,7 @@ func fillTile(target *Target, x, y, width, height int, color uint32) {
 	}
 }
 
-func blitTile(target *Target, x, y, width, height int, pixels *tilePixels) {
+func blitTile(target *bgra.Image, x, y, width, height int, pixels *tilePixels) {
 	offset := y*target.Stride + x*4
 	if width == 8 {
 		for row := range height {
@@ -29,7 +33,7 @@ func blitTile(target *Target, x, y, width, height int, pixels *tilePixels) {
 	}
 }
 
-func copyTile(target *Target, x, y, sourceX, sourceY, width, height int) {
+func copyTile(target *bgra.Image, x, y, sourceX, sourceY, width, height int) {
 	width = min(width, target.Width-sourceX)
 	height = min(height, target.Height-sourceY)
 	if width <= 0 || height <= 0 {

@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"io"
 	"maps"
-	"net"
 	"slices"
 	"sync"
 	"time"
@@ -20,9 +19,6 @@ var (
 
 type Conn interface {
 	SendMessage(message []byte) error
-}
-
-type DownloadPacer interface {
 	SetDownloading(active bool) error
 }
 
@@ -32,27 +28,21 @@ type Capabilities struct {
 }
 
 type Manager struct {
-	conn Conn
-
-	access       sync.Mutex
+	conn         Conn
 	capabilities Capabilities
-	nextSession  uint32
-	transfers    map[uint32]*Transfer
-	downloads    int
-	closeError   error
+
+	access      sync.Mutex
+	nextSession uint32
+	transfers   map[uint32]*Transfer
+	downloads   int
+	closeError  error
 
 	pacingAccess sync.Mutex
 	pacing       bool
 }
 
-func NewManager(conn Conn) *Manager {
-	return &Manager{conn: conn, transfers: make(map[uint32]*Transfer)}
-}
-
-func (m *Manager) SetCapabilities(capabilities Capabilities) {
-	m.access.Lock()
-	m.capabilities = capabilities
-	m.access.Unlock()
+func NewManager(conn Conn, capabilities Capabilities) *Manager {
+	return &Manager{conn: conn, capabilities: capabilities, transfers: make(map[uint32]*Transfer)}
 }
 
 func (m *Manager) ReadMessage(r io.Reader) error {
@@ -71,23 +61,16 @@ func (m *Manager) ReadMessage(r io.Reader) error {
 	if err != nil {
 		return err
 	}
-	parsed, body, err := parseMessage(message)
-	if err != nil {
-		return err
-	}
 	m.access.Lock()
-	transfer := m.transfers[parsed.session]
+	transfer := m.transfers[binary.BigEndian.Uint32(message[10:])]
 	m.access.Unlock()
 	if transfer != nil {
-		transfer.handler.handle(parsed.command, body)
+		transfer.handler.handle(binary.BigEndian.Uint16(message[8:]), message[headerSize:])
 	}
 	return nil
 }
 
 func (m *Manager) Close(err error) {
-	if err == nil {
-		err = net.ErrClosed
-	}
 	m.access.Lock()
 	if m.closeError == nil {
 		m.closeError = err
@@ -155,10 +138,6 @@ func (m *Manager) unregister(transfer *Transfer) {
 }
 
 func (m *Manager) updatePacing() {
-	pacer, found := m.conn.(DownloadPacer)
-	if !found {
-		return
-	}
 	m.pacingAccess.Lock()
 	defer m.pacingAccess.Unlock()
 	m.access.Lock()
@@ -168,5 +147,5 @@ func (m *Manager) updatePacing() {
 		return
 	}
 	m.pacing = active
-	pacer.SetDownloading(active)
+	m.conn.SetDownloading(active)
 }

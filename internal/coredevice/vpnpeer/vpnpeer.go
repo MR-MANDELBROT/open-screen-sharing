@@ -30,12 +30,8 @@ type tunnel struct {
 // addresses, sorted by name, then tries route gateways, route destinations
 // and point-to-point peers, in that order (minimuxer 12be70d,
 // Sources/Services/DeviceConnectionManager.swift:206-214, 260-283).
-func Candidates() []netip.Addr {
+func candidates() []netip.Addr {
 	tunnels, local := scan()
-	return candidates(tunnels, local)
-}
-
-func candidates(tunnels []tunnel, local []netip.Addr) []netip.Addr {
 	var result []netip.Addr
 	add := func(address netip.Addr) {
 		if address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() ||
@@ -61,8 +57,9 @@ type Peer struct {
 	LocalNetwork bool
 }
 
-func Find(ctx context.Context, candidates []netip.Addr, port uint16, timeout time.Duration) (Peer, error) {
-	if len(candidates) == 0 {
+func Find(ctx context.Context, port uint16, timeout time.Duration) (Peer, error) {
+	addresses := candidates()
+	if len(addresses) == 0 {
 		return Peer{}, E.New("vpnpeer: no VPN address to try")
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -72,8 +69,8 @@ func Find(ctx context.Context, candidates []netip.Addr, port uint16, timeout tim
 		local netip.Addr
 		err   error
 	}
-	results := make(chan result, len(candidates))
-	for index, address := range candidates {
+	results := make(chan result, len(addresses))
+	for index, address := range addresses {
 		go func() {
 			var dialer net.Dialer
 			conn, err := dialer.DialContext(ctx, "tcp", netip.AddrPortFrom(address, port).String())
@@ -85,13 +82,13 @@ func Find(ctx context.Context, candidates []netip.Addr, port uint16, timeout tim
 			results <- result{index: index, local: local, err: err}
 		}()
 	}
-	errs := make([]error, len(candidates))
-	for range candidates {
+	errs := make([]error, len(addresses))
+	for range addresses {
 		answer := <-results
 		if answer.err == nil {
-			return Peer{Address: candidates[answer.index], LocalNetwork: onLocalNetwork(answer.local)}, nil
+			return Peer{Address: addresses[answer.index], LocalNetwork: onLocalNetwork(answer.local)}, nil
 		}
 		errs[answer.index] = answer.err
 	}
-	return Peer{}, E.Cause(E.Errors(errs...), "none of the VPN addresses ", strings.Join(F.MapToString(candidates), ", "), " answers on port ", port)
+	return Peer{}, E.Cause(E.Errors(errs...), "none of the VPN addresses ", strings.Join(F.MapToString(addresses), ", "), " answers on port ", port)
 }

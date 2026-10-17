@@ -29,20 +29,15 @@ nonisolated struct ProbedServer: Hashable, Sendable {
 nonisolated enum ServerProber {
     static let timeout: Double = 15
 
-    static func probe(
-        host: String, port: Int?, remoteProtocol: RemoteProtocol?, timeout: Double = ServerProber.timeout
-    ) async -> Result<ProbedServer, SessionFailure> {
+    static func probe(host: String, port: Int?, remoteProtocol: RemoteProtocol?) async -> Result<ProbedServer, SessionFailure> {
         await Task.detached(priority: .userInitiated) {
             LibsharingLog.installed
-            let probe =
+            let probe: LibsharingServerProbe =
                 switch remoteProtocol {
-                case .vnc: LibsharingProbeServer(host, Int32(port ?? RemoteProtocol.vnc.defaultPort), timeout)
-                case .rdp: LibsharingProbeRDPServer(host, Int32(port ?? RemoteProtocol.rdp.defaultPort), timeout)
-                case nil: LibsharingProbeProtocol(host, Int32(port ?? 0), timeout)
+                case .vnc: LibsharingProbeServer(host, Int32(port ?? RemoteProtocol.vnc.defaultPort), timeout)!
+                case .rdp: LibsharingProbeRDPServer(host, Int32(port ?? RemoteProtocol.rdp.defaultPort), timeout)!
+                case nil: LibsharingProbeProtocol(host, Int32(port ?? 0), timeout)!
                 }
-            guard let probe else {
-                return .failure(SessionFailure(.other, message: "libsharing returned no probe result"))
-            }
             guard probe.errorCode == LibsharingErrorNone else {
                 return .failure(failure(code: probe.errorCode, message: probe.errorMessage, fingerprint: probe.fingerprint))
             }
@@ -65,9 +60,7 @@ nonisolated enum ServerProber {
     static func checkLogin(_ server: ProbedServer, credentials: SessionCredentials) async -> Result<Bool, SessionFailure> {
         await Task.detached(priority: .userInitiated) {
             LibsharingLog.installed
-            guard let options = LibsharingNewSessionOptions() else {
-                return .failure(SessionFailure(.other, message: "libsharing returned no session options"))
-            }
+            let options = LibsharingNewSessionOptions()!
             options.protocol = server.remoteProtocol == .rdp ? LibsharingProtocolRDP : LibsharingProtocolRFB
             options.host = server.address.host
             options.port = Int32(server.address.port)
@@ -84,9 +77,7 @@ nonisolated enum ServerProber {
             case .none:
                 options.loginType = LibsharingLoginNone
             }
-            guard let check = LibsharingCheckLogin(options, timeout) else {
-                return .failure(SessionFailure(.other, message: "libsharing returned no login result"))
-            }
+            let check = LibsharingCheckLogin(options, timeout)!
             guard check.errorCode == LibsharingErrorNone else {
                 return .failure(failure(code: check.errorCode, message: check.errorMessage, fingerprint: check.fingerprint))
             }

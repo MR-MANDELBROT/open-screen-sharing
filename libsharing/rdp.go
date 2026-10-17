@@ -68,7 +68,6 @@ func newRDPServerInfo(info rdp.Info) *ServerInfo {
 		SupportsClipboard:        info.Clipboard,
 		SupportsClipboardRequest: info.Clipboard,
 		SupportsKeyCodes:         true,
-		SupportsScrollWheel:      true,
 		SupportsAudio:            true,
 		SupportsUnicodeText:      info.Unicode,
 	}
@@ -77,15 +76,12 @@ func newRDPServerInfo(info rdp.Info) *ServerInfo {
 func newRDPDisplayList(width, height, scale int) *DisplayList {
 	density := float64(scale) / 100
 	return &DisplayList{
-		Current:           AllDisplays,
-		FramebufferWidth:  int32(width),
-		FramebufferHeight: int32(height),
-		DesktopWidth:      int32(width),
-		DesktopHeight:     int32(height),
+		Current:          AllDisplays,
+		FramebufferWidth: int32(width),
+		DesktopWidth:     int32(width),
 		displays: []*Display{{
-			DisplayID: 1, Density: density, Scale: 1, IsMain: true,
+			DisplayID: 1, IsMain: true,
 			LogicalWidth: int32(math.Round(float64(width) / density)), LogicalHeight: int32(math.Round(float64(height) / density)),
-			BackingWidth: int32(width), BackingHeight: int32(height),
 		}},
 	}
 }
@@ -118,7 +114,6 @@ func (r *rdpRemote) statistics(statistics *Statistics) {
 	clientStatistics := r.Statistics()
 	statistics.Encoding = clientStatistics.Encoding
 	statistics.ReceivedBytes = int64(clientStatistics.BytesRead)
-	statistics.VideoFrames = int64(clientStatistics.Frames)
 }
 
 func (r *rdpRemote) setVisible(visible bool) error {
@@ -134,7 +129,8 @@ func (r *rdpRemote) SendKeyCode(keyCode uint16, keyboardType int32, keysym uint3
 }
 
 func (r *rdpRemote) SetClipboard(clipboard *Clipboard) error {
-	return r.Client.SetClipboard(clipboard.Text())
+	text, _ := clipboard.text()
+	return r.Client.SetClipboard(text)
 }
 
 func (r *rdpRemote) PasteClipboard(clipboard *Clipboard) error {
@@ -207,23 +203,18 @@ func (e *rdpSessionEvents) Bell() {
 
 func (e *rdpSessionEvents) AudioFormatChanged(format rdp.AudioFormat) {
 	e.audioPending = nil
-	if format.Channels <= 0 || format.SampleRate < 100 || format.BitsPerSample != 16 {
-		e.audioFrameSize = 0
-		return
-	}
 	e.audioFrameSize = format.Channels * 2
 	e.audioFrames = format.SampleRate / 100
 	e.session.handler.OnAudioFormat(&AudioFormat{
 		FormatID:        0x6c70636d,
 		SampleRate:      int32(format.SampleRate),
 		Channels:        int32(format.Channels),
-		BitsPerSample:   16,
 		FramesPerPacket: int32(e.audioFrames),
 	})
 }
 
 func (e *rdpSessionEvents) AudioPacketReceived(data []byte, timestamp uint64) {
-	if e.audioFrameSize == 0 || len(data)%e.audioFrameSize != 0 || timestamp > math.MaxInt64 {
+	if timestamp > math.MaxInt64 {
 		return
 	}
 	start := int64(timestamp)

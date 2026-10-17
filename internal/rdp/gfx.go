@@ -108,7 +108,6 @@ type rdpgfx struct {
 	cacheMemory   gfxBudget
 	clear         *clear.Decoder
 	rfx           *rfx.Decoder
-	version       uint32
 	frameID       uint32
 	frame         uint64
 	framesDecoded uint32
@@ -116,14 +115,13 @@ type rdpgfx struct {
 }
 
 func (p *rdpgfx) OnOpen(send func([]byte) error) error {
-	p.OnClose()
 	p.send = send
 	p.zgfx = zgfx.NewDecompressor()
 	p.surfaces = make(map[uint16]*gfxSurface)
 	p.cache = make(map[uint16]gfxCacheEntry)
 	p.memory = gfxBudget{limit: gfxMemoryLimit(int(p.g.width.Load()), int(p.g.height.Load()))}
 	p.cacheMemory = gfxBudget{limit: gfxMaxCacheBytes}
-	return p.write(gfxCapsAdvertise, gfxCapabilities())
+	return p.send(gfxPacket(gfxCapsAdvertise, gfxCapabilities()))
 }
 
 func gfxMemoryLimit(width, height int) int {
@@ -168,17 +166,7 @@ func gfxPacket(command uint16, body []byte) []byte {
 	return append(b, body...)
 }
 
-func (p *rdpgfx) write(command uint16, body []byte) error {
-	if p.send == nil {
-		return E.New("rdpgfx: channel is closed")
-	}
-	return p.send(gfxPacket(command, body))
-}
-
 func (p *rdpgfx) OnData(data []byte) error {
-	if p.zgfx == nil {
-		return E.New("rdpgfx: data on closed channel")
-	}
 	data, err := p.zgfx.Decompress(data)
 	if err != nil {
 		return E.Cause(err, "rdpgfx: decompress channel data")
@@ -223,7 +211,6 @@ func (p *rdpgfx) process(command uint16, r *reader) error {
 		if len(body) != gfxCapsDataSize {
 			return E.New("invalid capability length ", length)
 		}
-		p.version = version
 	case gfxResetGraphics:
 		width, height, count := int(r.u32()), int(r.u32()), int(r.u32())
 		if r.err != nil {
@@ -355,7 +342,7 @@ func (p *rdpgfx) process(command uint16, r *reader) error {
 		ack := binary.LittleEndian.AppendUint32(nil, gfxQueueDepthUnavailable)
 		ack = binary.LittleEndian.AppendUint32(ack, frameID)
 		ack = binary.LittleEndian.AppendUint32(ack, p.framesDecoded)
-		return p.write(gfxFrameAcknowledge, ack)
+		return p.send(gfxPacket(gfxFrameAcknowledge, ack))
 	case gfxCacheImportReply:
 		count := int(r.u16())
 		if count != 0 {

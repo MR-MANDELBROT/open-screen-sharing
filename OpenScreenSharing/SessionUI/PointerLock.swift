@@ -5,14 +5,9 @@ import ObjectiveC
 import SwiftUI
 import UIKit
 
-protocol PointerLockReceiver: AnyObject {
-    func lockedMouseMoved(by delta: CGPoint)
-    func lockedMouseButton(_ button: PointerButtons, pressed: Bool)
-}
-
 enum PointerLock {
     private static let requests = NSHashTable<UIWindowScene>.weakObjects()
-    private static let receivers = NSHashTable<AnyObject>.weakObjects()
+    private static let receivers = NSHashTable<ScreenInput>.weakObjects()
     private static var isInstalled = false
 
     static func request(_ locked: Bool, in scene: UIWindowScene) {
@@ -26,7 +21,7 @@ enum PointerLock {
         update(scene)
     }
 
-    static func addReceiver(_ receiver: PointerLockReceiver) {
+    static func addReceiver(_ receiver: ScreenInput) {
         install()
         receivers.add(receiver)
     }
@@ -89,7 +84,7 @@ enum PointerLock {
         guard let input = mouse.mouseInput else { return }
         input.mouseMovedHandler = { _, deltaX, deltaY in
             MainActor.assumeIsolated {
-                forward { $0.lockedMouseMoved(by: CGPoint(x: CGFloat(deltaX), y: -CGFloat(deltaY))) }
+                receivers.allObjects.forEach { $0.lockedMouseMoved(by: CGPoint(x: CGFloat(deltaX), y: -CGFloat(deltaY))) }
             }
         }
         let buttons: [(GCControllerButtonInput?, PointerButtons)] = [
@@ -98,15 +93,9 @@ enum PointerLock {
         for case (let input?, let button) in buttons {
             input.pressedChangedHandler = { _, _, pressed in
                 MainActor.assumeIsolated {
-                    forward { $0.lockedMouseButton(button, pressed: pressed) }
+                    receivers.allObjects.forEach { $0.lockedMouseButton(button, pressed: pressed) }
                 }
             }
-        }
-    }
-
-    private static func forward(_ event: (PointerLockReceiver) -> Void) {
-        for case let receiver as PointerLockReceiver in receivers.allObjects {
-            event(receiver)
         }
     }
 }

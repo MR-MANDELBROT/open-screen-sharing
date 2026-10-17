@@ -62,15 +62,12 @@ type StreamStats struct {
 	VideoLosses              uint64
 	VideoLatePackets         uint64
 	VideoPlayoutDelay        time.Duration
-	AudioPackets             uint64
-	AudioLost                uint64
 	AuthFailures             uint64
 	KeyframeRequests         uint64
 	SenderReports            uint64
 	OneWayDelay              time.Duration
 	Ports                    Ports
 	Answer                   Answer
-	LastVideoPacketAt        time.Time
 }
 
 type Stream struct {
@@ -81,7 +78,6 @@ type Stream struct {
 	answer   *Answer
 	video    *leg
 	audio    *leg
-	closed   bool
 	stopOnce sync.Once
 	done     chan struct{}
 	wg       sync.WaitGroup
@@ -152,7 +148,7 @@ func (s *Stream) handlePorts(ports *Ports) error {
 	s.access.Lock()
 	defer s.access.Unlock()
 	s.stats.Ports = *ports
-	if s.closed {
+	if s.isDone() {
 		return os.ErrClosed
 	}
 	if !ports.Video.Enabled || ports.Video.Port == 0 {
@@ -180,12 +176,7 @@ func (s *Stream) handlePorts(ports *Ports) error {
 		}
 	}
 	if audio != nil && offer.options.Audio == AudioToServer {
-		s.microphone, err = newSRTPSender(offer.audioSend[:])
-		if err != nil {
-			_ = video.conn.Close()
-			_ = audio.conn.Close()
-			return err
-		}
+		s.microphone = newSRTPSender(offer.audioSend[:])
 		var random [6]byte
 		_, _ = rand.Read(random[:])
 		s.microphoneIndex = uint64(binary.BigEndian.Uint16(random[:]) & 0x7fff)
@@ -205,18 +196,6 @@ func (s *Stream) handlePorts(ports *Ports) error {
 }
 
 func (s *Stream) openLeg(port uint16, sendKey []byte, receiveKey []byte, localSSRC uint32, buffer int) (*leg, error) {
-	srtp, err := newSRTPReceiver(receiveKey)
-	if err != nil {
-		return nil, err
-	}
-	reports, err := newSRTCPReceiver(receiveKey)
-	if err != nil {
-		return nil, err
-	}
-	sender, err := newSRTCPSender(sendKey)
-	if err != nil {
-		return nil, err
-	}
 	conn, err := dialLeg(s.config.Local, netip.AddrPortFrom(s.config.Remote, port), buffer)
 	if err != nil {
 		return nil, E.Cause(err, "media: open UDP port ", port)
@@ -224,12 +203,24 @@ func (s *Stream) openLeg(port uint16, sendKey []byte, receiveKey []byte, localSS
 	return &leg{
 		conn:        conn,
 		localSSRC:   localSSRC,
-		srtp:        srtp,
-		reports:     reports,
-		sender:      sender,
+		srtp:        newSRTPReceiver(receiveKey),
+		reports:     newSRTCPReceiver(receiveKey),
+		sender:      newSRTCPSender(sendKey),
 		sources:     make(map[uint32]*receptionStats),
 		lastHeardAt: time.Now(),
 	}, nil
+}
+
+func (l *leg) source(ssrc uint32) *receptionStats {
+	source := l.sources[ssrc]
+	if source == nil {
+		if len(l.sources) >= maxTrackedVideoSSRC {
+			clear(l.sources)
+		}
+		source = &receptionStats{}
+		l.sources[ssrc] = source
+	}
+	return source
 }
 
 func (l *leg) send(packet []byte) {
@@ -243,7 +234,7 @@ func (s *Stream) SendAudio(data []byte) error {
 	s.microphoneAccess.Lock()
 	defer s.microphoneAccess.Unlock()
 	s.access.Lock()
-	if s.closed {
+	if s.isDone() {
 		s.access.Unlock()
 		return E.New("media: the stream is closed")
 	}
@@ -283,7 +274,7 @@ func (s *Stream) SendAudio(data []byte) error {
 
 func (s *Stream) StopIfNotStarted() {
 	s.access.Lock()
-	waiting := s.ports == nil && !s.closed
+	waiting := s.ports == nil
 	s.access.Unlock()
 	if waiting {
 		s.stop(ErrStreamNoVideo)
@@ -343,10 +334,9 @@ func (s *Stream) Drain(closed time.Time) {
 func (s *Stream) stop(cause error) {
 	s.stopOnce.Do(func() {
 		s.access.Lock()
-		s.closed = true
+		close(s.done)
 		video, audio := s.video, s.audio
 		s.access.Unlock()
-		close(s.done)
 		if video != nil {
 			_ = video.conn.Close()
 		}
@@ -430,21 +420,16 @@ func (s *Stream) receiveVideo(video *leg) {
 					return
 				}
 			}
-			heardAt := s.lastHeardAt(video)
-			if firstVideoExpired(assembler, now.Sub(opened)) {
+			if now.Sub(opened) > firstVideoLimit && (assembler == nil || assembler.units == 0) {
 				s.stop(ErrStreamNoVideo)
 				return
 			}
-			if now.Sub(heardAt) > legSilenceLimit {
+			if now.Sub(video.lastHeardAt) > legSilenceLimit {
 				s.stop(ErrStreamSilent)
 				return
 			}
 		}
 	}
-}
-
-func firstVideoExpired(assembler *videoAssembler, elapsed time.Duration) bool {
-	return elapsed > firstVideoLimit && (assembler == nil || assembler.units == 0)
 }
 
 func (s *Stream) applyVideoAnswer(assembler *videoAssembler, applied **Answer, unitsAtAnswer *uint64) {
@@ -456,8 +441,8 @@ func (s *Stream) applyVideoAnswer(assembler *videoAssembler, applied **Answer, u
 	*applied = s.answer
 	*unitsAtAnswer = 0
 	if assembler != nil {
-		if s.answer.Video.SSRC != 0 {
-			assembler.expectAnswer(s.answer.Video)
+		if s.answer.SSRC != 0 {
+			assembler.expectAnswer(s.answer)
 		}
 		*unitsAtAnswer = assembler.units
 	}
@@ -481,16 +466,7 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 	video.lastHeardAt = now
 	s.stats.VideoPackets++
 	s.stats.VideoBytes += uint64(len(datagram))
-	s.stats.LastVideoPacketAt = now
-	source := video.sources[packet.ssrc]
-	if source == nil {
-		if len(video.sources) >= maxTrackedVideoSSRC {
-			clear(video.sources)
-		}
-		source = &receptionStats{}
-		video.sources[packet.ssrc] = source
-	}
-	s.stats.VideoPacketsExpected += uint64(source.record(packet.sequence, packet.timestamp, videoClockRate, now))
+	s.stats.VideoPacketsExpected += uint64(video.source(packet.ssrc).record(packet.sequence, packet.timestamp, videoClockRate, now))
 	s.rate.record(packet.ssrc, packet.sequence, packet.timestamp, now)
 	s.stats.OneWayDelay = time.Duration(s.rate.delay.value * float64(time.Second))
 	s.access.Unlock()
@@ -510,15 +486,15 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 		bands := s.config.Offer.options.TilesPerFrame
 		s.access.Lock()
 		answer := s.answer
-		if s.answer != nil && s.answer.Video.TilesPerFrame >= 1 && s.answer.Video.TilesPerFrame <= bands {
-			bands = s.answer.Video.TilesPerFrame
+		if s.answer != nil && s.answer.TilesPerFrame >= 1 && s.answer.TilesPerFrame <= bands {
+			bands = s.answer.TilesPerFrame
 		}
 		s.access.Unlock()
 		*assembler = newVideoAssembler(codec, bands, s.config.Offer.options.ImmediatePlayout, s.config.Sink, func() {
 			s.requestKeyframe(video, *assembler)
 		})
-		if answer != nil && answer.Video.SSRC != 0 {
-			(*assembler).expectAnswer(answer.Video)
+		if answer != nil && answer.SSRC != 0 {
+			(*assembler).expectAnswer(answer)
 		}
 	}
 	(*assembler).push(packet, datagram[:len(datagram)-authTagLength], now.UnixNano())
@@ -588,33 +564,15 @@ func (s *Stream) receiveAudio(audio *leg) {
 				if unprotectErr == nil {
 					s.access.Lock()
 					audio.lastHeardAt = now
-					s.stats.AudioPackets++
 					s.stats.AudioBytes += uint64(len(datagram))
-					source := audio.sources[packet.ssrc]
-					if source == nil {
-						if len(audio.sources) >= maxTrackedVideoSSRC {
-							clear(audio.sources)
-						}
-						source = &receptionStats{}
-						audio.sources[packet.ssrc] = source
-					}
-					source.record(packet.sequence, packet.timestamp, audioSampleRate, now)
+					audio.source(packet.ssrc).record(packet.sequence, packet.timestamp, audioSampleRate, now)
 					s.access.Unlock()
 					receiver.push(packet, now)
 				}
 			}
 		}
 		receiver.tick(now)
-		s.access.Lock()
-		s.stats.AudioLost = receiver.lost
-		s.access.Unlock()
 	}
-}
-
-func (s *Stream) lastHeardAt(target *leg) time.Time {
-	s.access.Lock()
-	defer s.access.Unlock()
-	return target.lastHeardAt
 }
 
 func (s *Stream) isDone() bool {
@@ -638,7 +596,9 @@ func (s *Stream) feedback() {
 			return
 		case now := <-rateTicker.C:
 			var report bool
-			s.feedbackRTCP, report = s.rateReport(s.feedbackRTCP[:0], now)
+			s.access.Lock()
+			s.feedbackRTCP, report = s.rate.appendReport(s.feedbackRTCP[:0], s.video.localSSRC, now)
+			s.access.Unlock()
 			if report {
 				s.video.send(s.feedbackRTCP)
 			}
@@ -648,12 +608,6 @@ func (s *Stream) feedback() {
 			}
 		}
 	}
-}
-
-func (s *Stream) rateReport(out []byte, now time.Time) ([]byte, bool) {
-	s.access.Lock()
-	defer s.access.Unlock()
-	return s.rate.appendReport(out, s.video.localSSRC, now)
 }
 
 func (s *Stream) sendReports() {

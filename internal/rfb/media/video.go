@@ -107,7 +107,7 @@ func newVideoAssembler(codec Codec, bands int, immediate bool, sink Sink, onLoss
 	}
 }
 
-func (a *videoAssembler) expectAnswer(answer StreamAnswer) {
+func (a *videoAssembler) expectAnswer(answer *Answer) {
 	if a.haveExpected && (answer.SSRC != a.expectedBase || answer.Width != a.width || answer.Height != a.height) {
 		a.requestSync()
 		a.recovering = false

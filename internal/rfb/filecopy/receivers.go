@@ -15,10 +15,6 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
-func DirectoryReceiver(directory string) Receiver {
-	return &directoryReceiver{directory: directory}
-}
-
 type folderMetadata struct {
 	path     string
 	mode     fs.FileMode

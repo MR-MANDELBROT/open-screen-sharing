@@ -15,24 +15,17 @@ final class ClipboardAccess {
     static let shared = ClipboardAccess()
 
     #if os(iOS)
-    private(set) var setting: Setting?
+    private(set) var setting = PreferenceStore.shared.value(Setting.self, for: Key.setting)
 
     private var reading = false
     private var systemAsked = false
     #endif
-    private let store: PreferenceStore
+    private let store = PreferenceStore.shared
 
     private enum Key {
         static let setting = "pasteFromOtherApps"
         static let ownChangeCount = "ownClipboardChangeCount"
         static let explained = "explainedPasteFromOtherApps"
-    }
-
-    init(store: PreferenceStore = .shared) {
-        self.store = store
-        #if os(iOS)
-        setting = store.value(Setting.self, for: Key.setting)
-        #endif
     }
 
     private var explained: Bool { store.value(Bool.self, for: Key.explained) == true }

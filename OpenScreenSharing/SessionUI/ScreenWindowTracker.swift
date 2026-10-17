@@ -132,7 +132,6 @@ final class ScreenWindowTracker {
         }
     }
 
-    @discardableResult
     private func updateOrientation(_ scene: UIWindowScene) -> Bool {
         guard let window = view.window else { return false }
         let landscape: Bool

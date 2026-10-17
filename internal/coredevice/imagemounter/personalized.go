@@ -20,11 +20,8 @@ import (
 // manifest before requesting a ticket from TSS (pymobiledevice3 9c33842,
 // pymobiledevice3/services/mobile_image_mounter.py:396-406).
 func (c *Client) MountPersonalized(ctx context.Context, dir string) error {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, uploadTimeout)
-		defer cancel()
-	}
+	ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
+	defer cancel()
 	manifest, err := loadManifest(dir)
 	if err != nil {
 		return err
@@ -115,11 +112,6 @@ func (c *Client) personalizedTicket(ctx context.Context, conn *mounterConn, iden
 }
 
 func (c *Client) withMounter(ctx context.Context, fn func(conn *mounterConn) error) error {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
-		defer cancel()
-	}
 	conn, err := c.device.DialShim(ctx, mounterService)
 	if err != nil {
 		return E.Cause(err, "imagemounter")

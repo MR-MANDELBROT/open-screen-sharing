@@ -26,7 +26,6 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         var cursor: CursorShape?
         var cursorPosition: CGPoint
         var cursorVisible: Bool
-        var generation: Int
         var pictureGeneration: Int?
         var presentationEpoch: Int
         var turns = PictureTurns.none
@@ -80,7 +79,6 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     private var cursor: CursorShape?
     private var cursorPosition = CGPoint.zero
     private var cursorVisible = true
-    private var generation = 0
     private var pictureGeneration = 0
     private var presentationEpoch = 0
     private var dirty = false
@@ -337,26 +335,16 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         return snapshotLocked()
     }
 
-    func makeImage() -> CGImage? {
-        let snapshot = snapshot()
-        if let pixelBuffer = snapshot.pixelBuffer {
-            return PixelBufferImage.makeImage(pixelBuffer, turns: snapshot.turns)
-        }
-        return PixelBufferImage.compose(
-            strips: snapshot.strips, stripHeight: snapshot.stripHeight, canvasHeight: snapshot.canvasHeight, turns: snapshot.turns)
-    }
-
-    func makeThumbnail(maxWidth: CGFloat = 1280) -> Data? {
+    func makeThumbnail() -> Data? {
         lock.lock()
         let snapshot = shownLocked().picture == .none ? nil : snapshotLocked()
         lock.unlock()
         guard let snapshot else { return nil }
         if let pixelBuffer = snapshot.pixelBuffer {
-            return PixelBufferImage.makeThumbnail(pixelBuffer, turns: snapshot.turns, maxWidth: maxWidth)
+            return PixelBufferImage.makeThumbnail(pixelBuffer, turns: snapshot.turns)
         }
         return PixelBufferImage.makeThumbnail(
-            strips: snapshot.strips, stripHeight: snapshot.stripHeight, canvasHeight: snapshot.canvasHeight, turns: snapshot.turns,
-            maxWidth: maxWidth)
+            strips: snapshot.strips, stripHeight: snapshot.stripHeight, canvasHeight: snapshot.canvasHeight, turns: snapshot.turns)
     }
 
     private var hasPicture: Bool {
@@ -398,14 +386,14 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
                 stripHeight: Self.stripHeight(held.strips),
                 canvasHeight: held.canvasHeight,
                 width: held.width, height: held.height, cursor: cursor, cursorPosition: cursorPosition,
-                cursorVisible: cursorVisible, generation: generation, pictureGeneration: nil, presentationEpoch: presentationEpoch,
+                cursorVisible: cursorVisible, pictureGeneration: nil, presentationEpoch: presentationEpoch,
                 turns: held.turns
             )
         }
         guard hasPicture else {
             return Snapshot(
                 width: width, height: height, cursor: cursor, cursorPosition: cursorPosition, cursorVisible: cursorVisible,
-                generation: generation, pictureGeneration: nil, presentationEpoch: presentationEpoch, turns: turns
+                pictureGeneration: nil, presentationEpoch: presentationEpoch, turns: turns
             )
         }
         let stripHeight = Self.stripHeight(strips)
@@ -415,7 +403,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
             stripHeight: stripHeight,
             canvasHeight: canvasHeight,
             width: width, height: height, cursor: cursor, cursorPosition: cursorPosition,
-            cursorVisible: cursorVisible, generation: generation, pictureGeneration: hasPicture ? pictureGeneration : nil,
+            cursorVisible: cursorVisible, pictureGeneration: pictureGeneration,
             presentationEpoch: presentationEpoch, turns: turns
         )
     }
@@ -426,7 +414,6 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         if hasPicture {
             held = nil
         }
-        generation &+= 1
         let wasDirty = dirty
         dirty = true
         let handler = wakeHandler

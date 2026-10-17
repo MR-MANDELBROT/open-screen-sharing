@@ -15,22 +15,10 @@ const (
 )
 
 const (
-	SwipeBack    int32 = 0
-	SwipeForward int32 = 1
-	SwipeUp      int32 = 2
-	SwipeDown    int32 = 3
-)
-
-const (
 	SystemCommandMissionControl int32 = 1
 	SystemCommandAppWindows     int32 = 2
 	SystemCommandShowDesktop    int32 = 3
 	SystemCommandLaunchpad      int32 = 4
-)
-
-const (
-	AssistPointerHighlight int32 = 1
-	AssistPointerArrow     int32 = 2
 )
 
 var systemCommands = map[int32]rfb.SystemCommand{
@@ -73,33 +61,6 @@ func (s *Session) SendRotate(x int32, y int32, degrees float64, phase int32) err
 	return client.SendRotate(int(x), int(y), degrees, gesture)
 }
 
-func (s *Session) SendSmartMagnify(x int32, y int32) error {
-	client, err := s.connected()
-	if err != nil {
-		return err
-	}
-	return client.SendSmartMagnify(int(x), int(y))
-}
-
-func (s *Session) SendLookup(x int32, y int32) error {
-	client, err := s.connected()
-	if err != nil {
-		return err
-	}
-	return client.SendLookup(int(x), int(y))
-}
-
-func (s *Session) SendSwipe(x int32, y int32, direction int32) error {
-	client, err := s.connected()
-	if err != nil {
-		return err
-	}
-	if direction < SwipeBack || direction > SwipeDown {
-		return E.New("unknown swipe direction ", direction, "; it must be ", SwipeBack, " to ", SwipeDown)
-	}
-	return client.SendSwipe(int(x), int(y), rfb.SwipeDirection(direction))
-}
-
 func (s *Session) SendScrollPhase(x int32, y int32, deltaX float64, deltaY float64, phase int32) error {
 	client, err := s.connected()
 	if err != nil {
@@ -139,12 +100,12 @@ func (s *Session) SendSystemCommand(command int32) error {
 	return client.SendSystemCommand(systemCommand)
 }
 
-func (s *Session) SetAssistCursor(x int32, y int32, pointer int32, pressed bool) error {
+func (s *Session) SetAssistCursor(x int32, y int32, pressed bool) error {
 	client, err := s.connected()
 	if err != nil {
 		return err
 	}
-	return client.SetAssistCursor(int(x), int(y), uint32(pointer), pressed)
+	return client.SetAssistCursor(int(x), int(y), rfb.AssistPointerHighlight, pressed)
 }
 
 func (s *Session) HideAssistCursor() error {

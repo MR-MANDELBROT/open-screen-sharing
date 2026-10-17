@@ -1,14 +1,13 @@
-import Combine
 import Foundation
 import Libsharing
 import Network
 
 // The _remotepairing._tcp authTag authenticates the service identifier with the pairing record’s altIRK
 // (idevice d32c818, idevice/src/remote_pairing/peer_device.rs:33-45, idevice/src/remote_pairing/peer_device.rs:129-140).
-final class RemotePairingBrowser: ObservableObject {
+final class RemotePairingBrowser {
     static let serviceType = "_remotepairing._tcp"
 
-    @Published private(set) var port: Int?
+    private(set) var port: Int?
     var onPortChange: ((Int) -> Void)?
 
     private var browser: NWBrowser?
@@ -95,13 +94,11 @@ final class RemotePairingBrowser: ObservableObject {
     }
 
     private func retry() {
-        guard activeClients > 0, restart == nil else { return }
         cancelBrowsing()
         restart = Task {
             try? await Task.sleep(seconds: 2)
             guard !Task.isCancelled else { return }
             restart = nil
-            guard activeClients > 0 else { return }
             browse()
         }
     }

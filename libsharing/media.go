@@ -37,7 +37,7 @@ func classifyMediaError(err error) int32 {
 	case err == nil:
 		return MediaErrorNone
 	case errors.As(err, &serverError):
-		if serverError.Type == 1 && serverError.SubCode == 1 {
+		if serverError.Type == media.ServerErrorBusy && serverError.SubCode == media.ServerErrorBusySubCode {
 			return MediaErrorBusy
 		}
 		return MediaErrorRefused
@@ -56,7 +56,6 @@ const (
 )
 
 const (
-	VideoModeAutomatic int32 = 0
 	// AVConference mode 5 uses CoreDeviceScreenSharing settings
 	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
 	// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
@@ -73,12 +72,6 @@ const (
 	// AVConference 2260.14.1, macOS 27.2 26B5101f,
 	// UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE, mode table entry 0x1e18e2fb0).
 	VideoModeRemoteDesktop int32 = 7
-	// AVConference mode 9 uses NearbyScreenSharing settings
-	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
-	// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B, mode table entry 0x1e1c9ba30;
-	// AVConference 2260.14.1, macOS 27.2 26B5101f,
-	// UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE, mode table entry 0x1e18e2fc0).
-	VideoModeNearby int32 = 9
 )
 
 type HighPerformanceOptions struct {
@@ -88,49 +81,25 @@ type HighPerformanceOptions struct {
 
 	Audio int32
 
-	FrameRate60 bool
-
-	CursorInVideo bool
-
 	Bands int32
 
 	VideoMode int32
-
-	MaximumBitrate int64
 
 	ImmediatePlayout bool
 }
 
 func NewHighPerformanceOptions() *HighPerformanceOptions {
-	return &HighPerformanceOptions{SupportedCodecs: DecoderCodecHEVC, Audio: AudioFromMac, FrameRate60: true, Bands: 1, MaximumBitrate: 60_000_000}
+	return &HighPerformanceOptions{SupportedCodecs: DecoderCodecHEVC, Audio: AudioFromMac, Bands: 1}
 }
-
-const (
-	ColorPrimariesBT709  int32 = 1
-	ColorPrimariesBT2020 int32 = 9
-	ColorPrimariesP3D65  int32 = 12
-	TransferBT709        int32 = 1
-	TransferSRGB         int32 = 13
-	TransferPQ           int32 = 16
-	TransferHLG          int32 = 18
-	MatrixBT709          int32 = 1
-	MatrixBT2020         int32 = 9
-)
 
 type VideoFormat struct {
 	Codec int32
 
 	Bands int32
 
-	Width  int32
 	Height int32
 
-	BitDepth       int32
-	ChromaFormat   int32
-	FullRange      bool
-	ColorPrimaries int32
-	Transfer       int32
-	Matrix         int32
+	ChromaFormat int32
 
 	HDR           bool
 	parameterSets [][]byte
@@ -141,9 +110,6 @@ func (f *VideoFormat) Len() int32 {
 }
 
 func (f *VideoFormat) Get(index int32) []byte {
-	if index < 0 || int(index) >= len(f.parameterSets) {
-		return nil
-	}
 	return f.parameterSets[index]
 }
 
@@ -159,8 +125,6 @@ type VideoAccessUnit struct {
 
 	FrameID int64
 
-	DecodeOrder int64
-
 	FrameEnd      bool
 	ChangedBands  int32
 	Discontinuity bool
@@ -168,17 +132,14 @@ type VideoAccessUnit struct {
 	Turns int32
 
 	HoldNanoseconds int64
-	SpanNanoseconds int64
 }
 
 type AudioFormat struct {
-	FormatID            int64
-	SampleRate          int32
-	Channels            int32
-	BitsPerSample       int32
-	FramesPerPacket     int32
-	AudioSpecificConfig []byte
-	MagicCookie         []byte
+	FormatID        int64
+	SampleRate      int32
+	Channels        int32
+	FramesPerPacket int32
+	MagicCookie     []byte
 }
 
 type AudioPacket struct {
@@ -211,28 +172,15 @@ func (s *Session) StartHighPerformance(options *HighPerformanceOptions) error {
 }
 
 func offerOptions(options *HighPerformanceOptions) (media.OfferOptions, error) {
-	if options == nil {
-		options = NewHighPerformanceOptions()
-	}
 	offer := media.OfferOptions{
-		FrameRate60:    options.FrameRate60,
-		CursorInVideo:  options.CursorInVideo,
-		Audio:          media.AudioMode(options.Audio),
-		TilesPerFrame:  int(options.Bands),
-		VideoMode:      media.VideoMode(options.VideoMode),
-		PixelFormats:   media.PixelFormatsSDR420,
-		MaximumBitrate: options.MaximumBitrate,
-
+		Audio:            media.AudioMode(options.Audio),
+		TilesPerFrame:    int(options.Bands),
+		VideoMode:        media.VideoMode(options.VideoMode),
+		PixelFormats:     media.PixelFormats(options.PixelFormats),
 		ImmediatePlayout: options.ImmediatePlayout,
 	}
-	if options.PixelFormats != 0 {
-		if options.PixelFormats < 0 || options.PixelFormats&^0xff != 0 {
-			return offer, E.New("invalid decoder pixel formats 0x", strconv.FormatUint(uint64(uint32(options.PixelFormats)), 16), "; only the low 8 bits may be set")
-		}
-		offer.PixelFormats = media.PixelFormats(options.PixelFormats)
-	}
-	if options.Bands == 0 {
-		offer.TilesPerFrame = 1
+	if options.PixelFormats < 0 || options.PixelFormats&^0xff != 0 {
+		return offer, E.New("invalid decoder pixel formats 0x", strconv.FormatUint(uint64(uint32(options.PixelFormats)), 16), "; only the low 8 bits may be set")
 	}
 	if options.SupportedCodecs == 0 || options.SupportedCodecs&^(DecoderCodecHEVC|DecoderCodecH264) != 0 {
 		return offer, E.New("High Performance needs a supported hardware decoder")
@@ -245,9 +193,6 @@ func offerOptions(options *HighPerformanceOptions) (media.OfferOptions, error) {
 	}
 	if len(offer.Codecs) == 1 && offer.Codecs[0] == media.CodecH264 {
 		offer.PixelFormats &= media.PixelFormatsSDR420
-		if offer.PixelFormats == 0 {
-			offer.PixelFormats = media.PixelFormatsSDR420
-		}
 	}
 	return offer, nil
 }
@@ -286,12 +231,11 @@ func (s *Session) SetHDR(enabled bool) error {
 
 func newAudioFormat(format media.AudioFormat) *AudioFormat {
 	return &AudioFormat{
-		FormatID:            int64(format.FormatID),
-		SampleRate:          int32(format.SampleRate),
-		Channels:            int32(format.Channels),
-		FramesPerPacket:     int32(format.FramesPerPacket),
-		AudioSpecificConfig: format.AudioSpecificConfig,
-		MagicCookie:         format.MagicCookie,
+		FormatID:        int64(format.FormatID),
+		SampleRate:      int32(format.SampleRate),
+		Channels:        int32(format.Channels),
+		FramesPerPacket: int32(format.FramesPerPacket),
+		MagicCookie:     format.MagicCookie,
 	}
 }
 
@@ -333,30 +277,20 @@ func (e *mediaEvents) VideoFormat(format media.VideoFormat) {
 	if format.Codec == media.CodecH264 {
 		codec = CodecH264
 	}
-	color := format.Color
 	e.session.handler.OnVideoFormat(&VideoFormat{
-		Codec:          codec,
-		Bands:          int32(format.Bands),
-		Width:          int32(format.Width),
-		Height:         int32(format.Height),
-		BitDepth:       int32(color.BitDepth),
-		ChromaFormat:   int32(color.ChromaFormat),
-		FullRange:      color.FullRange,
-		ColorPrimaries: int32(color.Primaries),
-		Transfer:       int32(color.Transfer),
-		Matrix:         int32(color.Matrix),
-		HDR:            color.HDR(),
-		parameterSets:  format.ParameterSets,
+		Codec:         codec,
+		Bands:         int32(format.Bands),
+		Height:        int32(format.Height),
+		ChromaFormat:  int32(format.Color.ChromaFormat),
+		HDR:           format.Color.HDR(),
+		parameterSets: format.ParameterSets,
 	})
 }
 
 func (e *mediaEvents) VideoAccessUnit(unit media.VideoAccessUnit) {
-	var hold, span time.Duration
+	var hold time.Duration
 	if !unit.CompletedAt.IsZero() {
 		hold = max(time.Since(unit.CompletedAt), 0)
-		if !unit.ReceivedAt.IsZero() {
-			span = max(unit.CompletedAt.Sub(unit.ReceivedAt), 0)
-		}
 	}
 	e.session.handler.OnVideoAccessUnit(&VideoAccessUnit{
 		Data:            unit.Data,
@@ -366,13 +300,11 @@ func (e *mediaEvents) VideoAccessUnit(unit media.VideoAccessUnit) {
 		Band:            int32(unit.Band),
 		Bands:           int32(unit.Bands),
 		FrameID:         unit.FrameID,
-		DecodeOrder:     unit.DecodeOrder,
 		FrameEnd:        unit.FrameEnd,
 		ChangedBands:    int32(unit.ChangedBands),
 		Discontinuity:   unit.Discontinuity,
 		Turns:           int32(unit.Turns),
 		HoldNanoseconds: int64(hold),
-		SpanNanoseconds: int64(span),
 	})
 }
 

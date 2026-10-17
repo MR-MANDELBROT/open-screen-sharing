@@ -43,12 +43,12 @@ type dynamicChannel struct {
 }
 
 type drdynvc struct {
-	logger    *slog.Logger
-	listeners []*dynamicListener
+	logger           *slog.Logger
+	listeners        []*dynamicListener
+	capabilitiesSent bool
 
 	access   sync.Mutex
 	send     func([]byte) error
-	version  uint16
 	channels map[uint32]*dynamicChannel
 }
 
@@ -93,7 +93,6 @@ func (d *drdynvc) OnOpen(send func([]byte) error) error {
 	d.access.Lock()
 	defer d.access.Unlock()
 	d.send = send
-	d.version = 0
 	d.channels = make(map[uint32]*dynamicChannel)
 	return nil
 }
@@ -139,11 +138,8 @@ func (d *drdynvc) receive(data []byte) error {
 		if version == 0 {
 			return E.New("rdp: dynamic channel capabilities request version 0")
 		}
-		d.access.Lock()
-		d.version = min(version, dynvcVersion)
-		response := binary.LittleEndian.AppendUint16([]byte{dynamicHeader(dynvcCapabilities, 0, 0), 0}, d.version)
-		d.access.Unlock()
-		return d.sendStatic(response)
+		d.capabilitiesSent = true
+		return d.sendStatic(binary.LittleEndian.AppendUint16([]byte{dynamicHeader(dynvcCapabilities, 0, 0), 0}, min(version, dynvcVersion)))
 	}
 	id := readDynamicUint(r, idSize)
 	if r.err != nil {
@@ -180,9 +176,6 @@ func (d *drdynvc) sendStatic(data []byte) error {
 	d.access.Lock()
 	send := d.send
 	d.access.Unlock()
-	if send == nil {
-		return E.New("rdp: virtual channel ", staticChannelDynamic, " is closed")
-	}
 	return send(data)
 }
 
@@ -242,22 +235,19 @@ func (d *drdynvc) create(id uint32, idSize byte, nameData []byte) error {
 	}
 	name := string(nameData[:end])
 	listener := common.Find(d.listeners, func(listener *dynamicListener) bool { return listener.name == name })
-	d.access.Lock()
-	needsCapabilities := d.version == 0
-	if needsCapabilities {
-		d.version = dynvcVersion
-	}
-	_, duplicate := d.channels[id]
-	for _, active := range d.channels {
-		duplicate = duplicate || active.listener == listener
-	}
-	d.access.Unlock()
-	if needsCapabilities {
+	if !d.capabilitiesSent {
+		d.capabilitiesSent = true
 		err := d.sendStatic(binary.LittleEndian.AppendUint16([]byte{dynamicHeader(dynvcCapabilities, 0, 0), 0}, dynvcVersion))
 		if err != nil {
 			return err
 		}
 	}
+	d.access.Lock()
+	_, duplicate := d.channels[id]
+	for _, active := range d.channels {
+		duplicate = duplicate || active.listener == listener
+	}
+	d.access.Unlock()
 	status := uint32(dynvcCreateOK)
 	if listener == nil || duplicate {
 		status = dynvcCreateNoListener
@@ -268,10 +258,6 @@ func (d *drdynvc) create(id uint32, idSize byte, nameData []byte) error {
 	}
 	channel := &dynamicChannel{id: id, listener: listener}
 	d.access.Lock()
-	if d.channels == nil {
-		d.access.Unlock()
-		return E.New("rdp: virtual channel ", staticChannelDynamic, " closed while opening ", name)
-	}
 	d.channels[id] = channel
 	d.access.Unlock()
 	err = listener.handler.OnOpen(func(payload []byte) error { return d.sendData(channel, payload) })
@@ -287,14 +273,8 @@ func (d *drdynvc) fail(channel *dynamicChannel, err error) error {
 	}
 	d.logger.Warn("close dynamic virtual channel", "channel", channel.listener.name, "error", err)
 	d.access.Lock()
-	open := d.channels[channel.id] == channel
-	if open {
-		delete(d.channels, channel.id)
-	}
+	delete(d.channels, channel.id)
 	d.access.Unlock()
-	if !open {
-		return nil
-	}
 	channel.listener.handler.OnClose()
 	idSize := dynamicUintSize(channel.id)
 	return d.sendStatic(appendDynamicUint([]byte{dynamicHeader(dynvcClose, idSize, 0)}, channel.id, idSize))

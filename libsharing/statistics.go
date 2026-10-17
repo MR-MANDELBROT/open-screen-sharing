@@ -16,19 +16,9 @@ type Statistics struct {
 	VideoPackets         int64
 	VideoPacketsExpected int64
 
-	VideoBytes int64
-
-	VideoAccessUnits int64
-	VideoFrames      int64
-	VideoLosses      int64
-
 	KeyframeRequests int64
 
 	QueueDelayMilliseconds float64
-
-	PlayoutDelayMilliseconds float64
-
-	LateVideoPackets int64
 }
 
 func (s *Session) Statistics() *Statistics {
@@ -59,14 +49,8 @@ func (r rfbRemote) statistics(statistics *Statistics) {
 	statistics.HighPerformance = true
 	statistics.VideoPackets = int64(streamStatistics.VideoPackets)
 	statistics.VideoPacketsExpected = int64(streamStatistics.VideoPacketsExpected)
-	statistics.VideoBytes = int64(streamStatistics.VideoBytes)
-	statistics.VideoAccessUnits = int64(streamStatistics.VideoAccessUnitsReceived)
-	statistics.VideoFrames = int64(streamStatistics.VideoFrames)
-	statistics.VideoLosses = int64(streamStatistics.VideoLosses)
 	statistics.KeyframeRequests = int64(streamStatistics.KeyframeRequests)
 	statistics.QueueDelayMilliseconds = float64(streamStatistics.OneWayDelay.Microseconds()) / 1000
-	statistics.PlayoutDelayMilliseconds = float64(streamStatistics.VideoPlayoutDelay.Microseconds()) / 1000
-	statistics.LateVideoPackets = int64(streamStatistics.VideoLatePackets)
 }
 
 func encodingName(encoding rfb.Encoding) string {

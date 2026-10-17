@@ -14,21 +14,9 @@ const (
 	FromMac
 )
 
-func (d Direction) String() string {
-	switch d {
-	case ToMac:
-		return "to-mac"
-	case FromMac:
-		return "from-mac"
-	default:
-		return fmt.Sprint("direction(", int(d), ")")
-	}
-}
-
 type Progress struct {
 	Total       int64
 	Transferred int64
-	Stored      int64
 	Item        string
 	Paused      bool
 }
@@ -119,10 +107,6 @@ func (t *Transfer) ID() uint32 {
 	return t.session
 }
 
-func (t *Transfer) Direction() Direction {
-	return t.direction
-}
-
 func (t *Transfer) Progress() Progress {
 	t.access.Lock()
 	defer t.access.Unlock()
@@ -162,10 +146,6 @@ func (t *Transfer) Cancel() error {
 	return t.manager.conn.SendMessage(sessionStateMessage(commandStop, t.session))
 }
 
-func (t *Transfer) Done() <-chan struct{} {
-	return t.done
-}
-
 func (t *Transfer) Wait(ctx context.Context) (Result, error) {
 	select {
 	case <-t.done:
@@ -178,9 +158,7 @@ func (t *Transfer) Wait(ctx context.Context) (Result, error) {
 func (t *Transfer) halt(err error) bool {
 	stopped := false
 	t.stopOnce.Do(func() {
-		t.access.Lock()
 		t.stopError = err
-		t.access.Unlock()
 		close(t.stop)
 		stopped = true
 	})
@@ -196,12 +174,6 @@ func (t *Transfer) stopped() bool {
 	}
 }
 
-func (t *Transfer) stopReason() error {
-	t.access.Lock()
-	defer t.access.Unlock()
-	return t.stopError
-}
-
 func (t *Transfer) waitWhilePaused() error {
 	for {
 		t.access.Lock()
@@ -209,7 +181,7 @@ func (t *Transfer) waitWhilePaused() error {
 		t.access.Unlock()
 		select {
 		case <-t.stop:
-			return t.stopReason()
+			return t.stopError
 		default:
 		}
 		if !paused {
@@ -218,7 +190,7 @@ func (t *Transfer) waitWhilePaused() error {
 		select {
 		case <-wake:
 		case <-t.stop:
-			return t.stopReason()
+			return t.stopError
 		}
 	}
 }
@@ -245,16 +217,12 @@ func (t *Transfer) notifyProgress() {
 		case <-t.finishing:
 			select {
 			case <-t.notify:
-				if t.onProgress != nil {
-					t.onProgress(t.Progress())
-				}
+				t.onProgress(t.Progress())
 			default:
 			}
 			return
 		}
-		if t.onProgress != nil {
-			t.onProgress(t.Progress())
-		}
+		t.onProgress(t.Progress())
 	}
 }
 

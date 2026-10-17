@@ -18,8 +18,8 @@ struct AlertState {
         self.actions = actions
     }
 
-    init(_ failure: String, error: (any Error)? = nil, closeLabel: String = String(localized: "OK"), onClose: @escaping () -> Void = {}) {
-        self.init(failure, errorMessage: error?.localizedDescription ?? "", closeLabel: closeLabel, onClose: onClose)
+    init(_ failure: String, error: (any Error)?) {
+        self.init(failure, errorMessage: error?.localizedDescription ?? "")
     }
 
     init(_ failure: String, errorMessage: String, closeLabel: String = String(localized: "OK"), onClose: @escaping () -> Void = {}) {

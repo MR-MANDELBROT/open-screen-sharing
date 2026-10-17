@@ -80,10 +80,7 @@ func (t *transport) authenticate(opts Options, host string, cert *x509.Certifica
 		return err
 	}
 	nonce := make([]byte, 32)
-	_, err = rand.Read(nonce)
-	if err != nil {
-		return err
-	}
+	_, _ = rand.Read(nonce)
 	err = t.writeAuth(tsRequest{Version: credSSPVersion, NegoTokens: []negoToken{{Token: authenticate}}, PubKeyAuth: client.Seal(credSSPBinding(true, nonce, publicKey)), ClientNonce: nonce})
 	if err != nil {
 		return err
@@ -106,7 +103,7 @@ func (t *transport) authenticate(opts Options, host string, cert *x509.Certifica
 		return E.New("rdp: CredSSP public-key binding does not match the TLS certificate")
 	}
 	password, err := asn1.Marshal(passwordCredentials{
-		Domain: utf16le(nil, opts.Domain), Username: utf16le(nil, opts.Username), Password: utf16le(nil, opts.Password),
+		Domain: utf16le(opts.Domain), Username: utf16le(opts.Username), Password: utf16le(opts.Password),
 	})
 	if err != nil {
 		return err

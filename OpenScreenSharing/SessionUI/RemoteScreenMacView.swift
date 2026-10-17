@@ -17,7 +17,7 @@ struct RemoteScreenView: NSViewRepresentable {
     }
 }
 
-final class RemoteScreenNSView: NSView {
+final class RemoteScreenNSView: NSView, RemoteScreen {
     private static let minimumZoom: CGFloat = 0.25
     private static let pointerMargin: CGFloat = 40
     private static let pointsPerLine: CGFloat = 10
@@ -27,17 +27,8 @@ final class RemoteScreenNSView: NSView {
 
     private let controller: SessionController
     private let metalLayer = CAMetalLayer()
-    private var renderer: ScreenRenderer?
-    private var displayLink: CADisplayLink?
-    private var presentationTimer: DispatchSourceTimer?
-    private var presentationTick: CFTimeInterval = 0
-    private var needsRender = true
-    private var renderedThisFrame = false
-    private var idleFrames = 0
-    private var lastSnapshot: DisplayPipeline.Snapshot?
-    private var lastPresentation: (epoch: Int, generation: Int, time: CFTimeInterval)?
-    private var refreshRate = 0
-    private var isOccluded = false
+    private var presenter: ScreenPresenter!
+    private(set) var isOccluded = false
 
     private var zoom: CGFloat = 1
     private var viewportCenter: CGPoint?
@@ -81,11 +72,7 @@ final class RemoteScreenNSView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .never
         metalLayer.backgroundColor = NSColor.black.cgColor
-        do {
-            renderer = try ScreenRenderer(layer: metalLayer)
-        } catch {
-            DispatchQueue.main.async { [controller] in controller.drawingFailed(error) }
-        }
+        presenter = ScreenPresenter(screen: self, controller: controller, layer: metalLayer)
         controller.screen = self
         Self.views.add(self)
         setAccessibilityElement(true)
@@ -101,9 +88,6 @@ final class RemoteScreenNSView: NSView {
                 return self?.controller.isControlling ?? false
             },
         ])
-        controller.pipeline.setWakeHandler { [weak self] in
-            DispatchQueue.main.async { self?.contentChanged() }
-        }
         registerForDraggedTypes([.fileURL] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
     }
 
@@ -113,9 +97,6 @@ final class RemoteScreenNSView: NSView {
 
     deinit {
         MainActor.assumeIsolated {
-            displayLink?.invalidate()
-            presentationTimer?.cancel()
-            controller.pipeline.setWakeHandler(nil)
             if let keyMonitor {
                 NSEvent.removeMonitor(keyMonitor)
             }
@@ -153,10 +134,7 @@ final class RemoteScreenNSView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        displayLink?.invalidate()
-        displayLink = nil
-        presentationTimer?.cancel()
-        presentationTimer = nil
+        presenter.stop()
         if let keyMonitor {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
@@ -183,9 +161,7 @@ final class RemoteScreenNSView: NSView {
             self, selector: #selector(keyboardSourceDidChange), name: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
             object: nil, suspensionBehavior: .deliverImmediately
         )
-        let link = displayLink(target: DisplayLinkTarget(self), selector: #selector(DisplayLinkTarget.tick))
-        link.add(to: .main, forMode: .common)
-        displayLink = link
+        presenter.start(displayLink(target:selector:))
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .flagsChanged]) { [weak self] event in
             guard let self else { return event }
             if self.detectsReleaseChord(event), self.isPointerLocked {
@@ -199,7 +175,6 @@ final class RemoteScreenNSView: NSView {
             return self.controller.handleKeyEvent(event) ? nil : event
         }
         isOccluded = !window.occlusionState.contains(.visible)
-        refreshRate = 0
         updateDrawableSize()
         geometryDidChange()
         DispatchQueue.main.async { [weak self] in
@@ -358,7 +333,7 @@ final class RemoteScreenNSView: NSView {
         guard let window else { return }
         isOccluded = !window.occlusionState.contains(.visible)
         if isOccluded {
-            displayLink?.isPaused = true
+            presenter.pause()
         } else {
             setNeedsRender()
         }
@@ -367,12 +342,7 @@ final class RemoteScreenNSView: NSView {
     @objc private func windowScreenDidChange() {
         guard let screen = window?.screen else { return }
         controller.displaySupportsHDR = screen.maximumPotentialExtendedDynamicRangeColorComponentValue > 1
-        let rate = screen.maximumFramesPerSecond
-        guard rate > 0, rate != refreshRate else { return }
-        refreshRate = rate
-        let maximum = Float(rate)
-        displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: min(30, maximum), maximum: maximum, preferred: maximum)
-        controller.screenRefreshRateDidChange(rate)
+        presenter.setRefreshRate(screen.maximumFramesPerSecond)
     }
 
     @objc private func windowFullScreenDidChange() {
@@ -383,69 +353,9 @@ final class RemoteScreenNSView: NSView {
         updateLetterbox()
     }
 
-
-    fileprivate func tick() {
-        renderedThisFrame = false
-        guard !isOccluded else {
-            displayLink?.isPaused = true
-            return
-        }
-        if let displayLink, controller.pipeline.isSchedulingPresentation {
-            if presentationTimer == nil {
-                let timer = DispatchSource.makeTimerSource(queue: .main)
-                timer.setEventHandler { [weak self] in
-                    MainActor.assumeIsolated { self?.presentScheduledFrames() }
-                }
-                timer.activate()
-                presentationTimer = timer
-            }
-            presentationTick = displayLink.targetTimestamp
-            let midpoint = (displayLink.timestamp + displayLink.targetTimestamp) / 2
-            presentationTimer?.schedule(deadline: .now() + max(midpoint - CACurrentMediaTime(), 0), leeway: .microseconds(100))
-        }
-        let snapshot = controller.pipeline.consume(through: displayLink?.timestamp ?? CACurrentMediaTime())
-        if let snapshot {
-            lastSnapshot = snapshot
-        }
-        guard snapshot != nil || needsRender else {
-            idleFrames += 1
-            if idleFrames > 30 { displayLink?.isPaused = true }
-            return
-        }
-        idleFrames = 0
-        renderedThisFrame = true
-        needsRender = !render()
-    }
-
-    private func presentScheduledFrames() {
-        guard !isOccluded, let snapshot = controller.pipeline.consume(through: presentationTick) else { return }
-        lastSnapshot = snapshot
-        idleFrames = 0
-        needsRender = !render()
-    }
-
-    private func contentChanged() {
-        wake()
-        guard !renderedThisFrame, !isOccluded, let snapshot = controller.pipeline.consume(through: CACurrentMediaTime()) else { return }
-        lastSnapshot = snapshot
-        renderedThisFrame = true
-        needsRender = !render()
-    }
-
-    private func wake() {
-        guard !isOccluded else { return }
-        idleFrames = 0
-        displayLink?.isPaused = false
-    }
-
-    func backgroundStateDidChange() {
-        setNeedsRender()
-    }
-
     private func setNeedsRender() {
         updateLetterbox()
-        needsRender = true
-        wake()
+        presenter.setNeedsRender()
     }
 
     private func updateLetterbox() {
@@ -468,72 +378,6 @@ final class RemoteScreenNSView: NSView {
         return Letterbox(
             left: CGRect(x: area.minX, y: area.minY, width: max(0, picture.minX - area.minX), height: area.height),
             top: CGRect(x: area.minX, y: area.minY, width: area.width, height: max(0, picture.minY - area.minY))
-        )
-    }
-
-    private func render() -> Bool {
-        guard let renderer, bounds.width > 0, bounds.height > 0 else { return false }
-        let snapshot = lastSnapshot ?? controller.pipeline.snapshot()
-        lastSnapshot = snapshot
-        let pipeline = controller.pipeline
-        let epoch = snapshot.presentationEpoch
-        let generation = snapshot.pictureGeneration
-        let run = controller.debugInfo.presentationRun
-        guard snapshot.turns.shownSize(of: CGSize(width: snapshot.width, height: snapshot.height)) == controller.imageSize,
-            pipeline.isCurrentPresentation(epoch: epoch)
-        else { return false }
-        let imageRect = self.imageRect
-        let scale = displayScale
-        let cursorScale = max(scale * controller.info.framebufferPixelsPerCursorPixel, 1 / controller.cursorPixelsPerPoint)
-        updateRemoteCursor(snapshot.cursor, visible: snapshot.cursorVisible, scale: cursorScale)
-        drawsCursorLocally = showsRemoteCursorLocally
-        var cursorRect: CGRect?
-        if let cursor = snapshot.cursor, snapshot.cursorVisible, controller.phase == .connected, !drawsCursorLocally {
-            let origin = CGPoint(
-                x: imageRect.minX + snapshot.cursorPosition.x * scale - cursor.hotspot.x * cursorScale,
-                y: imageRect.minY + snapshot.cursorPosition.y * scale - cursor.hotspot.y * cursorScale
-            )
-            cursorRect = CGRect(
-                origin: origin,
-                size: CGSize(width: CGFloat(cursor.image.width) * cursorScale, height: CGFloat(cursor.image.height) * cursorScale))
-        }
-        return renderer.render(
-            ScreenRenderer.Frame(
-                pixelBuffer: snapshot.pixelBuffer,
-                strips: snapshot.strips,
-                stripHeight: snapshot.stripHeight,
-                canvasHeight: snapshot.canvasHeight,
-                imageRect: imageRect,
-                turns: snapshot.turns,
-                cursor: snapshot.cursor,
-                cursorRect: cursorRect,
-                viewSize: bounds.size,
-                pixelsPerImagePixel: scale * backingScale,
-                pixelsPerCursorPixel: cursorScale * backingScale
-            ),
-            in: metalLayer,
-            presented: { [weak self, pipeline] time in
-                DispatchQueue.main.async {
-                    guard let self, let generation,
-                        pipeline.isCurrentPresentation(epoch: epoch)
-                    else { return }
-                    if let previous = self.lastPresentation {
-                        guard time > previous.time,
-                            epoch != previous.epoch || generation > previous.generation
-                        else { return }
-                    }
-                    self.lastPresentation = (epoch, generation, time)
-                    if let run {
-                        self.controller.debugInfo.picturePresented(generation, at: time, run: run)
-                    }
-                }
-            },
-            failed: { [weak self, pipeline] in
-                DispatchQueue.main.async {
-                    guard let self, pipeline.isCurrentPresentation(epoch: epoch) else { return }
-                    self.setNeedsRender()
-                }
-            }
         )
     }
 
@@ -719,6 +563,12 @@ final class RemoteScreenNSView: NSView {
             window?.isKeyWindow == true
         else { return false }
         return imageRect.contains(systemPointerLocation)
+    }
+
+    func drawsCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> Bool {
+        updateRemoteCursor(shape, visible: visible, scale: scale)
+        drawsCursorLocally = showsRemoteCursorLocally
+        return !drawsCursorLocally
     }
 
     private func updateRemoteCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) {
@@ -1247,18 +1097,6 @@ private extension GesturePhase {
         case .cancelled: self = .cancelled
         default: return nil
         }
-    }
-}
-
-private final class DisplayLinkTarget {
-    weak var view: RemoteScreenNSView?
-
-    init(_ view: RemoteScreenNSView) {
-        self.view = view
-    }
-
-    @objc func tick() {
-        view?.tick()
     }
 }
 #endif

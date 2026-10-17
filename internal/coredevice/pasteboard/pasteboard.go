@@ -92,9 +92,9 @@ type Client struct {
 	device *coredevice.Device
 	logger *slog.Logger
 	nonce  string
+	writes int64
 
 	access        sync.Mutex
-	writes        int64
 	own           []change
 	sent          map[[sha1.Size]byte]time.Time
 	pendingWrites int
@@ -223,9 +223,9 @@ func (c *Client) pull(ctx context.Context, policy map[string]any) (Snapshot, err
 		ctx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
 		defer cancel()
 	}
-	conn, err := c.dial(ctx)
+	conn, err := c.device.DialXPC(ctx, service)
 	if err != nil {
-		return Snapshot{}, err
+		return Snapshot{}, E.Cause(err, "pasteboard")
 	}
 	defer conn.Close()
 	reply, err := conn.Request(ctx, map[string]any{
@@ -255,16 +255,11 @@ func (c *Client) WriteImage(ctx context.Context, imageType string, image []byte,
 }
 
 func (c *Client) write(ctx context.Context, item map[string]any, payload []byte, written func(error)) error {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
-		defer cancel()
-	}
 	fingerprint := sha1.Sum(payload)
 	c.noteSent(fingerprint)
-	conn, err := c.dial(ctx)
+	conn, err := c.device.DialXPC(ctx, service)
 	if err != nil {
-		return err
+		return E.Cause(err, "pasteboard")
 	}
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	err = conn.Send(map[string]any{
@@ -296,11 +291,8 @@ func (c *Client) write(ctx context.Context, item map[string]any, payload []byte,
 // DDI 27A9266e, UUID 93303947-1F03-3EF7-8EB1-2AF348389899, sub_2c1744
 // 0x2c17e4..0x2c1800, 0x2c24e8..0x2c24fc).
 func (c *Client) sourceMetadata() map[string]any {
-	c.access.Lock()
 	c.writes++
-	count := c.writes
-	c.access.Unlock()
-	return map[string]any{"nonce": c.nonce, "pasteboardName": general, "changeCount": count}
+	return map[string]any{"nonce": c.nonce, "pasteboardName": general, "changeCount": c.writes}
 }
 
 func (c *Client) finishWrite(conn *xpc.Conn, fingerprint [sha1.Size]byte, written func(error)) {
@@ -377,14 +369,6 @@ func (c *Client) isOwn(snapshot Snapshot) bool {
 	}
 	at, ok := c.sent[sha1.Sum(payload)]
 	return ok && time.Since(at) < echoWindow
-}
-
-func (c *Client) dial(ctx context.Context) (*xpc.Conn, error) {
-	conn, err := c.device.DialXPC(ctx, service)
-	if err != nil {
-		return nil, E.Cause(err, "pasteboard")
-	}
-	return conn, nil
 }
 
 // dtpasteboardd answers a request it refuses or fails with a dictionary that

@@ -55,17 +55,9 @@ type audioReceiver struct {
 	ssrc         uint32
 	haveSequence bool
 	next         uint16
-	held         map[uint16]heldAudio
+	held         map[uint16]rtpPacket
 	heldSince    time.Time
 	timestamps   timestampExtender
-	packets      uint64
-	lost         uint64
-	late         uint64
-}
-
-type heldAudio struct {
-	packet  rtpPacket
-	arrival time.Time
 }
 
 const (
@@ -92,12 +84,13 @@ func (r *audioReceiver) push(packet rtpPacket, arrival time.Time) {
 		r.ssrc = packet.ssrc
 		r.next = packet.sequence
 		if r.held == nil {
-			r.held = make(map[uint16]heldAudio)
+			r.held = make(map[uint16]rtpPacket)
 		}
 	}
 	switch {
 	case packet.sequence == r.next:
-		r.deliver(packet, append([]byte(nil), packet.payload...), 0, arrival)
+		packet.payload = append([]byte(nil), packet.payload...)
+		r.deliver(packet, 0)
 		r.drain(arrival)
 	case sequenceNewer(packet.sequence, r.next):
 		if _, held := r.held[packet.sequence]; held {
@@ -107,12 +100,10 @@ func (r *audioReceiver) push(packet rtpPacket, arrival time.Time) {
 			r.heldSince = arrival
 		}
 		packet.payload = append([]byte(nil), packet.payload...)
-		r.held[packet.sequence] = heldAudio{packet: packet, arrival: arrival}
+		r.held[packet.sequence] = packet
 		if len(r.held) > maxHeldAudio {
 			r.skip(arrival, false)
 		}
-	default:
-		r.late++
 	}
 }
 
@@ -134,7 +125,7 @@ func (r *audioReceiver) skip(now time.Time, all bool) {
 		}
 		held := r.held[lowest]
 		delete(r.held, lowest)
-		r.deliver(held.packet, held.packet.payload, int(lowest-r.next), held.arrival)
+		r.deliver(held, int(lowest-r.next))
 		r.drain(now)
 		if !all {
 			return
@@ -150,18 +141,15 @@ func (r *audioReceiver) drain(now time.Time) {
 			return
 		}
 		delete(r.held, r.next)
-		r.deliver(held.packet, held.packet.payload, 0, held.arrival)
+		r.deliver(held, 0)
 	}
 }
 
-func (r *audioReceiver) deliver(packet rtpPacket, data []byte, lost int, arrival time.Time) {
+func (r *audioReceiver) deliver(packet rtpPacket, lost int) {
 	r.next = packet.sequence + 1
-	r.packets++
-	r.lost += uint64(lost)
 	r.sink.AudioPacket(AudioPacket{
-		Data:       data,
-		Timestamp:  r.timestamps.extend(packet.timestamp),
-		Lost:       lost,
-		ReceivedAt: arrival,
+		Data:      packet.payload,
+		Timestamp: r.timestamps.extend(packet.timestamp),
+		Lost:      lost,
 	})
 }

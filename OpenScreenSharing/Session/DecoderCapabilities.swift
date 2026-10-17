@@ -14,8 +14,20 @@ nonisolated struct DecoderCapabilities: Sendable {
     private init() {
         supportsHEVC = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         supportsH264 = VTIsHardwareDecodeSupported(kCMVideoCodecType_H264)
-        supportsFullChroma = supportsHEVC && VideoDecoder.decodesFullChromaInHardware
-        supportsHDR = supportsHEVC && Self.decodesHDRInHardware()
+        supportsFullChroma = supportsHEVC && Self.decodesInHardware(
+            parameterSets: [
+                "40010c01ffff0408000003009e2800000300001eba0240",
+                "4201010408000003009e2800000300001e90041020b2dd49265780b4040000030004000003000420",
+                "4401c172860c0224",
+            ],
+            frame: "0000000c2801af78ebaefbfe7557cb4f")
+        supportsHDR = supportsHEVC && Self.decodesInHardware(
+            parameterSets: [
+                "40010c01ffff0408000003009c0800000300001e959809",
+                "4201010408000003009c0800000300001e900410209b2cacd24995e02d010000030001000003000108",
+                "4401c172860c4224",
+            ],
+            frame: "0000000e2801af1380e668e3ff1cfc7f6cf0")
         maximumPixelRate = supportsHEVC ? Self.decoderMaximumPixelRate() : 0
     }
 
@@ -52,37 +64,24 @@ nonisolated struct DecoderCapabilities: Sendable {
         return number.int64Value
     }
 
-    private static func decodesHDRInHardware() -> Bool {
-        let parameterSets = [
-            "40010c01ffff0408000003009c0800000300001e959809",
-            "4201010408000003009c0800000300001e900410209b2cacd24995e02d010000030001000003000108",
-            "4401c172860c4224",
-        ].map { hexData($0) as NSData }
-        let pointers = parameterSets.map { $0.bytes.assumingMemoryBound(to: UInt8.self) }
-        let sizes = parameterSets.map(\.length)
-        var description: CMVideoFormatDescription?
-        let status = withExtendedLifetime(parameterSets) {
-            CMVideoFormatDescriptionCreateFromHEVCParameterSets(
-                allocator: nil, parameterSetCount: pointers.count, parameterSetPointers: pointers,
-                parameterSetSizes: sizes, nalUnitHeaderLength: 4, extensions: nil, formatDescriptionOut: &description
-            )
-        }
-        guard status == noErr, let description,
-            let sample = sampleBuffer(hexData("0000000e2801af1380e668e3ff1cfc7f6cf0"), format: description),
+    private static func decodesInHardware(parameterSets: [String], frame: String) -> Bool {
+        guard
+            let description = try? VideoDecoder.makeFormatDescription(
+                VideoFormat(codec: .hevc, parameterSets: parameterSets.map(hexData), bands: 1)),
+            let sample = VideoDecoder.makeSampleBuffer(hexData(frame), time: .zero, format: description),
             let session = hardwareSession(description)
         else { return false }
         defer { VTDecompressionSessionInvalidate(session) }
         let decoded = LockedState(initialState: false)
-        let decodeStatus = VTDecompressionSessionDecodeFrame(session, sampleBuffer: sample, flags: [], infoFlagsOut: nil) { status, _, imageBuffer, _, _ in
-            if status == noErr && imageBuffer != nil {
-                decoded.withLock { $0 = true }
-            }
+        let status = VTDecompressionSessionDecodeFrame(session, sampleBuffer: sample, flags: [], infoFlagsOut: nil) { status, _, imageBuffer, _, _ in
+            let succeeded = status == noErr && imageBuffer != nil
+            decoded.withLock { $0 = succeeded }
         }
         VTDecompressionSessionWaitForAsynchronousFrames(session)
-        return decodeStatus == noErr && decoded.withLock { $0 }
+        return status == noErr && decoded.withLock { $0 }
     }
 
-    static let hardwareSpecification = ["RequireHardwareAcceleratedVideoDecoder": true]
+    private static let hardwareSpecification = ["RequireHardwareAcceleratedVideoDecoder": true]
 
     private static func hardwareSession(_ description: CMVideoFormatDescription) -> VTDecompressionSession? {
         var session: VTDecompressionSession?
@@ -91,31 +90,6 @@ nonisolated struct DecoderCapabilities: Sendable {
             imageBufferAttributes: nil, outputCallback: nil, decompressionSessionOut: &session
         )
         return status == noErr ? session : nil
-    }
-
-    private static func sampleBuffer(_ payload: Data, format: CMVideoFormatDescription) -> CMSampleBuffer? {
-        var block: CMBlockBuffer?
-        guard
-            CMBlockBufferCreateWithMemoryBlock(
-                allocator: nil, memoryBlock: nil, blockLength: payload.count, blockAllocator: nil, customBlockSource: nil,
-                offsetToData: 0, dataLength: payload.count, flags: 0, blockBufferOut: &block
-            ) == noErr, let block
-        else { return nil }
-        let status = payload.withUnsafeBytes {
-            CMBlockBufferReplaceDataBytes(with: $0.baseAddress!, blockBuffer: block, offsetIntoDestination: 0, dataLength: payload.count)
-        }
-        guard status == noErr else { return nil }
-        var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: .zero, decodeTimeStamp: .invalid)
-        var size = payload.count
-        var sample: CMSampleBuffer?
-        guard
-            CMSampleBufferCreateReady(
-                allocator: nil, dataBuffer: block, formatDescription: format, sampleCount: 1,
-                sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 1,
-                sampleSizeArray: &size, sampleBufferOut: &sample
-            ) == noErr
-        else { return nil }
-        return sample
     }
 
     private static func hexData(_ hex: String) -> Data {

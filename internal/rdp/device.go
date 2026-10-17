@@ -97,10 +97,7 @@ func (d *deviceChannel) OnData(data []byte) error {
 		}
 		if minor < deviceVersionServerClientID {
 			var random [4]byte
-			_, err := rand.Read(random[:])
-			if err != nil {
-				return err
-			}
+			_, _ = rand.Read(random[:])
 			id = binary.LittleEndian.Uint32(random[:])
 		}
 		d.announced, d.confirmed, d.capabilities, d.devicesSent = false, false, false, false

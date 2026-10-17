@@ -22,10 +22,9 @@ final class AppSettings: ObservableObject {
         didSet { store.set(computerOrder, for: Key.computerOrder) }
     }
 
-    private let store: PreferenceStore
+    private let store = PreferenceStore.shared
 
-    init(store: PreferenceStore = .shared) {
-        self.store = store
+    init() {
         showsDebugInfo = store.value(Bool.self, for: Key.showsDebugInfo) ?? false
         computerLayout = store.value(ComputerLayout.self, for: Key.computerLayout) ?? .grid
         computerOrder = store.value([UUID].self, for: Key.computerOrder) ?? []

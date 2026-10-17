@@ -99,7 +99,8 @@ func zeros(b []byte, n int) []byte {
 	return append(b, make([]byte, n)...)
 }
 
-func utf16le(b []byte, s string) []byte {
+func utf16le(s string) []byte {
+	var b []byte
 	for _, unit := range utf16.Encode([]rune(s)) {
 		b = binary.LittleEndian.AppendUint16(b, unit)
 	}

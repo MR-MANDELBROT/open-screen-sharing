@@ -146,10 +146,7 @@ func (w *inputWorker) next(ctx context.Context) (inputItem, bool) {
 
 func (w *inputWorker) closeClient() {
 	if w.client != nil {
-		err := w.client.Close()
-		if err != nil {
-			w.logger.Debug("close the input client", "error", err)
-		}
+		w.client.Close()
 	}
 	w.client = nil
 	w.device = nil

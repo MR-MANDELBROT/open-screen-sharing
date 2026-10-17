@@ -95,8 +95,8 @@ func encryptedPointerMessage(key [16]byte, buttons uint8, x, y int) ([]byte, err
 	block := message[2:]
 	block[10] = 0xff
 	block[11] = buttons
-	binary.BigEndian.PutUint16(block[12:], uint16(clampInt(x, 0, math.MaxUint16)))
-	binary.BigEndian.PutUint16(block[14:], uint16(clampInt(y, 0, math.MaxUint16)))
+	binary.BigEndian.PutUint16(block[12:], clampUint16(x))
+	binary.BigEndian.PutUint16(block[14:], clampUint16(y))
 	err := encryptECB(key[:], block)
 	if err != nil {
 		return nil, err

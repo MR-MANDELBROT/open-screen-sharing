@@ -1,6 +1,7 @@
 package mvs
 
 import (
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -13,13 +14,6 @@ const (
 	cacheLastIndex           = 64999
 	cacheChunkBits           = 10
 )
-
-type Target struct {
-	Pix    []byte
-	Stride int
-	Width  int
-	Height int
-}
 
 type tileState struct {
 	generation uint32
@@ -113,7 +107,7 @@ func (d *Decoder) Reset(width, height int) {
 	d.generation = 0
 }
 
-func (d *Decoder) Decode(update []byte, x, y, width, height int, target *Target) error {
+func (d *Decoder) Decode(update []byte, x, y, width, height int, target *bgra.Image) error {
 	if len(update) == 0 {
 		return E.New("mvs: empty update")
 	}
@@ -134,10 +128,6 @@ func (d *Decoder) Decode(update []byte, x, y, width, height int, target *Target)
 	}
 	if width <= 0 || height <= 0 {
 		return E.New("mvs: empty rectangle ", width, "x", height)
-	}
-	if target.Width <= 0 || target.Height <= 0 || target.Stride < target.Width*4 ||
-		len(target.Pix) < (target.Height-1)*target.Stride+target.Width*4 {
-		return E.New("mvs: invalid target ", target.Width, "x", target.Height, " with stride ", target.Stride, " and ", len(target.Pix), " bytes")
 	}
 	if x < 0 || y < 0 || x+width > target.Width || y+height > target.Height {
 		return E.New("mvs: rectangle ", width, "x", height, " at ", x, ",", y, " outside ", target.Width, "x", target.Height, " framebuffer")

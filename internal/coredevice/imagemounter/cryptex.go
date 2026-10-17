@@ -54,11 +54,8 @@ func (e *CryptexError) Error() string {
 }
 
 func (c *Client) MountCryptex(ctx context.Context, dir string) error {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, uploadTimeout)
-		defer cancel()
-	}
+	ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
+	defer cancel()
 	manifest, err := loadManifest(dir)
 	if err != nil {
 		return err
@@ -86,7 +83,7 @@ func (c *Client) MountCryptex(ctx context.Context, dir string) error {
 	if err = c.checkCanMount(ctx); err != nil {
 		return err
 	}
-	chip, err := c.readPersonalizationID(ctx)
+	chip, err := c.invokeCryptexd(ctx, "read-personalization-id", map[string]any{}, nil)
 	if err != nil {
 		return err
 	}
@@ -194,10 +191,6 @@ func (c *Client) install(ctx context.Context, files []resolvedFile, ticket []byt
 	return err
 }
 
-func (c *Client) readPersonalizationID(ctx context.Context) (map[string]any, error) {
-	return c.invokeCryptexd(ctx, "read-personalization-id", map[string]any{}, nil)
-}
-
 // DDI build 27A9266e sets Cryptex1,NonceDomain to 4 (BuildManifest.plist,
 // DDI 27A9266e); pymobiledevice3 sends that value as nonce-domain-handle, not
 // nonce-domain (pymobiledevice3 9c33842,
@@ -244,11 +237,6 @@ func (c *Client) ddiCryptexInstalled(ctx context.Context) (bool, error) {
 // routine, including install (pymobiledevice3 9c33842,
 // pymobiledevice3/services/cryptexd.py:395-409,494-507).
 func (c *Client) invokeCryptexd(ctx context.Context, routine string, argv map[string]any, send func(conn *xpc.Conn) error) (map[string]any, error) {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
-		defer cancel()
-	}
 	conn, err := c.device.DialXPC(ctx, cryptexService)
 	if err != nil {
 		return nil, E.Cause(err, "imagemounter")

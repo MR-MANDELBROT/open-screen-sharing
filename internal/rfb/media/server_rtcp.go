@@ -234,5 +234,5 @@ func (l *serverLeg) senderReportLocked(now time.Time) ([]byte, bool) {
 	}
 	l.sentReports[l.sentNext] = sentReport{middle: uint32(ntp >> 16), at: now}
 	l.sentNext = (l.sentNext + 1) % len(l.sentReports)
-	return l.reports.protect(packet), true
+	return l.reports.appendProtected(nil, packet), true
 }

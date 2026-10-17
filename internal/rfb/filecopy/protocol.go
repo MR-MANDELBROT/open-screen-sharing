@@ -3,9 +3,7 @@ package filecopy
 import (
 	"encoding/binary"
 	"io/fs"
-	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
@@ -38,7 +36,6 @@ const (
 	commandCompressedData = 103
 	commandEnd            = 104
 	commandReceiverDone   = 200
-	commandReceiverStatus = 300
 )
 
 const (
@@ -56,15 +53,7 @@ const startSendImmediately = 1
 
 const itemInfoSingleFile = 1
 
-const (
-	nodeFlagLocked    = 0x0001
-	nodeFlagDirectory = 0x0010
-)
-
-type header struct {
-	command uint16
-	session uint32
-}
+const nodeFlagDirectory = 0x0010
 
 func appendHeader(message []byte, command uint16, session uint32, bodySize int) []byte {
 	message = append(message, MessageType, 0)
@@ -72,24 +61,6 @@ func appendHeader(message []byte, command uint16, session uint32, bodySize int) 
 	message = binary.BigEndian.AppendUint16(message, protocolVersion)
 	message = binary.BigEndian.AppendUint16(message, command)
 	return binary.BigEndian.AppendUint32(message, session)
-}
-
-func parseMessage(message []byte) (header, []byte, error) {
-	if len(message) < headerSize {
-		return header{}, nil, E.New("filecopy: message of ", len(message), " bytes is shorter than its ", headerSize, "-byte header")
-	}
-	if message[0] != MessageType {
-		return header{}, nil, E.New("filecopy: message type 0x", strconv.FormatUint(uint64(message[0]), 16), " is not 0x", strconv.FormatUint(MessageType, 16))
-	}
-	size := binary.BigEndian.Uint32(message[2:])
-	if uint64(size)+6 != uint64(len(message)) {
-		return header{}, nil, E.New("filecopy: message of ", len(message), " bytes has size field ", size, ", expected ", len(message)-6)
-	}
-	parsed := header{
-		command: binary.BigEndian.Uint16(message[8:]),
-		session: binary.BigEndian.Uint32(message[10:]),
-	}
-	return parsed, message[headerSize:], nil
 }
 
 func sessionStateMessage(command uint16, session uint32) []byte {
@@ -161,14 +132,9 @@ type wireItem struct {
 	textEncoding       uint32
 	name               string
 	linkTarget         string
-	attributes         []extendedAttribute
 }
 
 func newItemMessage(session uint32, item *wireItem) ([]byte, error) {
-	var attributes []byte
-	if len(item.attributes) > 0 {
-		attributes = encodeExtendedAttributes(item.attributes)
-	}
 	var linkLength uint16
 	if item.itemType == itemTypeLink {
 		if item.linkTarget == "" {
@@ -180,7 +146,7 @@ func newItemMessage(session uint32, item *wireItem) ([]byte, error) {
 		// 0x100003854..0x100003868).
 		linkLength = uint16(len(item.linkTarget) - 1)
 	}
-	bodySize := newItemBodySize + len(item.name) + 1 + len(item.linkTarget) + len(attributes)
+	bodySize := newItemBodySize + len(item.name) + 1 + len(item.linkTarget)
 	if headerSize-6+bodySize > maximumClientMessageSize {
 		return nil, E.New("filecopy: item record for ", strconv.Quote(item.name), " is ", headerSize-6+bodySize, " bytes, over the ", maximumClientMessageSize, "-byte limit")
 	}
@@ -201,8 +167,7 @@ func newItemMessage(session uint32, item *wireItem) ([]byte, error) {
 	message = binary.BigEndian.AppendUint16(message, linkLength)
 	message = append(message, item.name...)
 	message = append(message, 0)
-	message = append(message, item.linkTarget...)
-	return append(message, attributes...), nil
+	return append(message, item.linkTarget...), nil
 }
 
 func parseNewItem(body []byte) (*wireItem, error) {
@@ -240,11 +205,10 @@ func parseNewItem(body []byte) (*wireItem, error) {
 		rest = rest[item.dataSize:]
 	}
 	if len(rest) > 0 {
-		attributes, err := decodeExtendedAttributes(rest)
+		err := validateExtendedAttributes(rest)
 		if err != nil {
 			return nil, err
 		}
-		item.attributes = attributes
 	}
 	return item, nil
 }
@@ -305,13 +269,6 @@ func parseEnd(body []byte) int32 {
 	return int32(binary.LittleEndian.Uint32(body))
 }
 
-func parseReceiverStatus(body []byte) (float64, error) {
-	if len(body) < 8 {
-		return 0, E.New("filecopy: receiver status of ", len(body), " bytes is shorter than 8")
-	}
-	return math.Float64frombits(binary.BigEndian.Uint64(body)), nil
-}
-
 func parseReceiverDone(body []byte) (int16, string, error) {
 	if len(body) < 4 {
 		return 0, "", E.New("filecopy: receiver result of ", len(body), " bytes is shorter than 4")
@@ -349,62 +306,31 @@ func parseDate(data []byte) time.Time {
 	return time.Unix(int64(seconds)+carbonEpochUnix, nanoseconds)
 }
 
-type extendedAttribute struct {
-	name  string
-	value []byte
-}
-
 var attributesMagic = [4]byte{'e', 'x', 't', '1'}
 
-func encodeExtendedAttributes(attributes []extendedAttribute) []byte {
-	tableSize := 8 + 8*len(attributes)
-	for _, attribute := range attributes {
-		tableSize += len(attribute.name) + 1 + len(attribute.value)
-	}
-	block := append(make([]byte, 0, 10+tableSize), attributesMagic[:]...)
-	block = binary.BigEndian.AppendUint16(block, 0)
-	block = binary.BigEndian.AppendUint16(block, 1)
-	block = binary.BigEndian.AppendUint16(block, uint16(10+tableSize))
-	block = binary.BigEndian.AppendUint32(block, uint32(tableSize))
-	block = binary.BigEndian.AppendUint32(block, uint32(len(attributes)))
-	for _, attribute := range attributes {
-		block = binary.BigEndian.AppendUint32(block, uint32(len(attribute.name)+1))
-		block = binary.BigEndian.AppendUint32(block, uint32(len(attribute.value)))
-	}
-	for _, attribute := range attributes {
-		block = append(block, attribute.name...)
-		block = append(block, 0)
-		block = append(block, attribute.value...)
-	}
-	return block
-}
-
-func decodeExtendedAttributes(block []byte) ([]extendedAttribute, error) {
+func validateExtendedAttributes(block []byte) error {
 	if len(block) < 18 || [4]byte(block[:4]) != attributesMagic {
-		return nil, nil
+		return nil
 	}
 	blockLength := int(binary.BigEndian.Uint16(block[8:]))
 	if blockLength < 18 || blockLength > len(block) {
-		return nil, E.New("filecopy: extended attribute block length ", blockLength, " is not between 18 and ", len(block))
+		return E.New("filecopy: extended attribute block length ", blockLength, " is not between 18 and ", len(block))
 	}
 	table := block[10:blockLength]
 	count := int(binary.BigEndian.Uint32(table[4:]))
 	if count > (len(table)-8)/8 {
-		return nil, E.New("filecopy: ", count, " extended attributes do not fit in a table of ", len(table), " bytes")
+		return E.New("filecopy: ", count, " extended attributes do not fit in a table of ", len(table), " bytes")
 	}
 	data := table[8+8*count:]
-	attributes := make([]extendedAttribute, 0, count)
 	for i := range count {
 		nameLength := int(binary.BigEndian.Uint32(table[8+8*i:]))
 		valueLength := int(binary.BigEndian.Uint32(table[12+8*i:]))
 		if nameLength < 1 || valueLength < 0 || nameLength > len(data) || valueLength > len(data)-nameLength {
-			return nil, E.New("filecopy: extended attribute ", i, " with a ", nameLength, "-byte name and a ", valueLength, "-byte value does not fit in ", len(data), " bytes")
+			return E.New("filecopy: extended attribute ", i, " with a ", nameLength, "-byte name and a ", valueLength, "-byte value does not fit in ", len(data), " bytes")
 		}
-		name, _, _ := strings.Cut(string(data[:nameLength]), "\x00")
-		attributes = append(attributes, extendedAttribute{name: name, value: data[nameLength : nameLength+valueLength]})
 		data = data[nameLength+valueLength:]
 	}
-	return attributes, nil
+	return nil
 }
 
 func fileModeFromPOSIX(mode uint16) fs.FileMode {

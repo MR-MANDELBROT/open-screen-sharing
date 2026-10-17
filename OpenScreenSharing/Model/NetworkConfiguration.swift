@@ -1,9 +1,7 @@
-nonisolated enum NetworkQuality: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum NetworkQuality: String, Codable, Sendable {
     case localNetwork
     /// The mode-5 reply sets 6 Mbit/s maximum and 0.333 minimum (observed on iPad17,1, iPadOS 27.2 24B5099f).
     case internet
-
-    var id: Self { self }
 }
 
 nonisolated enum ChromaSampling: Sendable {

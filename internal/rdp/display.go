@@ -50,7 +50,6 @@ type displayChannel struct {
 func (d *displayChannel) OnOpen(send func([]byte) error) error {
 	d.access.Lock()
 	d.send = send
-	d.maxMonitors, d.maxArea = 0, 0
 	d.access.Unlock()
 	d.changed()
 	return nil

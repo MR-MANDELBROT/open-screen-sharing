@@ -5,6 +5,7 @@ import (
 	"math/bits"
 	"strconv"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -39,7 +40,7 @@ type riceBlock struct {
 	pixels       tilePixels
 }
 
-func (d *Decoder) decodePartial(update []byte, x, y, width, height int, target *Target) error {
+func (d *Decoder) decodePartial(update []byte, x, y, width, height int, target *bgra.Image) error {
 	if len(update) < 6 {
 		return E.New("mvs: partial update of ", len(update), " bytes, shorter than its 6-byte header")
 	}
@@ -47,8 +48,8 @@ func (d *Decoder) decodePartial(update []byte, x, y, width, height int, target *
 	if secondaryOffset < 6 || secondaryOffset > len(update) {
 		return E.New("mvs: invalid secondary stream offset ", secondaryOffset, " in partial update of ", len(update), " bytes")
 	}
-	primary := newBitReader(update[6:secondaryOffset])
-	secondary := newBitReader(update[secondaryOffset:])
+	primary := bitReader{data: update[6:secondaryOffset]}
+	secondary := bitReader{data: update[secondaryOffset:]}
 	luminanceLimit := update[1]
 	chrominanceLimit := update[2]
 	primary.read(1)

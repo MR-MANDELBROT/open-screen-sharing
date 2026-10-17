@@ -8,7 +8,6 @@ import (
 	"crypto/rc4"
 	"encoding/binary"
 	"encoding/hex"
-	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -64,8 +63,6 @@ type Options struct {
 	Workstation     string
 	TargetName      string
 	ChannelBindings []byte
-	Rand            io.Reader
-	Time            func() time.Time
 }
 
 type Client struct {
@@ -80,12 +77,6 @@ type Client struct {
 }
 
 func NewClient(options Options) *Client {
-	if options.Rand == nil {
-		options.Rand = rand.Reader
-	}
-	if options.Time == nil {
-		options.Time = time.Now
-	}
 	return &Client{options: options}
 }
 
@@ -166,23 +157,16 @@ func (c *Client) Authenticate(challenge []byte) ([]byte, error) {
 	if pairFlags != 0 {
 		pairs = appendPair(pairs, avFlags, binary.LittleEndian.AppendUint32(nil, pairFlags))
 	}
-	if c.options.ChannelBindings != nil {
-		bindingHash := md5.Sum(c.options.ChannelBindings)
-		pairs = appendPair(pairs, avChannelBindings, bindingHash[:])
-	}
-	if c.options.TargetName != "" {
-		pairs = appendPair(pairs, avTargetName, utf16le(c.options.TargetName))
-	}
+	bindingHash := md5.Sum(c.options.ChannelBindings)
+	pairs = appendPair(pairs, avChannelBindings, bindingHash[:])
+	pairs = appendPair(pairs, avTargetName, utf16le(c.options.TargetName))
 	pairs = appendPair(pairs, avEOL, nil)
 
 	random := make([]byte, 24)
-	_, err := io.ReadFull(c.options.Rand, random)
-	if err != nil {
-		return nil, E.Cause(err, "ntlm: read random")
-	}
+	_, _ = rand.Read(random)
 	clientChallenge, exportedSessionKey := random[:8], random[8:]
 	if !withMIC {
-		now := c.options.Time()
+		now := time.Now()
 		timestamp = binary.LittleEndian.AppendUint64(nil, uint64(now.Unix()+11644473600)*10000000+uint64(now.Nanosecond()/100))
 	}
 	passwordHash := md4.New()

@@ -47,7 +47,7 @@ type SessionHandler interface {
 
 	OnMediaStopped(errorCode int32, message string)
 
-	OnFileTransferProgress(transferID int64, transferred int64, total int64, item string)
+	OnFileTransferProgress(transferID int64, transferred int64, total int64)
 
 	OnFileTransferFinished(transferID int64, name string, errorCode int32, message string)
 
@@ -64,12 +64,11 @@ type Session struct {
 	access     sync.Mutex
 	remote     remote
 	cancel     context.CancelFunc
-	started    bool
 	resizing   bool
 	attached   *bgra.Image
 	prompts    map[int64]chan int32
 	nextPrompt int64
-	ending     atomic.Bool
+	ending     bool
 	finished   bool
 	setup      sessionSetup
 
@@ -80,9 +79,6 @@ type Session struct {
 }
 
 func NewSession(options *SessionOptions, handler SessionHandler) (*Session, error) {
-	if options == nil || handler == nil {
-		return nil, E.New("options and handler are required")
-	}
 	if options.Host == "" {
 		return nil, E.New("host is required")
 	}
@@ -211,9 +207,8 @@ func (s *Session) Connect() error {
 		if err != nil {
 			return err
 		}
-		options.Prepare = func(client *rfb.Client) error {
+		options.Prepare = func(client *rfb.Client) {
 			rfbRemote{Client: client, session: s}.apply(s.takeSetup())
-			return nil
 		}
 		dial = func(ctx context.Context) (remote, error) {
 			client, err := rfb.Dial(ctx, options, &sessionEvents{session: s})
@@ -225,12 +220,6 @@ func (s *Session) Connect() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.access.Lock()
-	if s.started {
-		s.access.Unlock()
-		cancel()
-		return E.New("session already started")
-	}
-	s.started = true
 	s.cancel = cancel
 	s.access.Unlock()
 	go s.run(ctx, dial)
@@ -246,15 +235,11 @@ func rfbOptions(o *SessionOptions) (rfb.Options, error) {
 		Quality:             rfb.Quality(o.Quality),
 		Mode:                rfb.Mode(o.Mode),
 		Clipboard:           o.SharedClipboard,
-		DisplayID:           uint32(o.DisplayID),
 		DecoderMaxPixelRate: o.DecoderMaxPixelRate,
 		MaximumFrameRate:    int(o.MaximumFrameRate),
 		AutomaticUpdates:    true,
 		UpdateInterval:      updateInterval(o.UpdateRate),
-		Dialect:             rfb.Dialect(o.Dialect),
 		Logger:              newLogger(),
-
-		AllowUnverifiedLogin: o.AllowUnverifiedLogin,
 	}
 	switch o.LoginType {
 	case LoginAccount:
@@ -364,7 +349,7 @@ func (s *Session) finish(err error) {
 	s.cancelPromptsLocked()
 	s.access.Unlock()
 	code, message := classifyError(err)
-	if s.ending.Load() && (code == ErrorNetwork || code == ErrorProtocol) {
+	if s.ending && (code == ErrorNetwork || code == ErrorProtocol) {
 		code, message = ErrorSessionEnded, ""
 	}
 	s.handler.OnStateChanged(StateDisconnected, code, message)
@@ -399,8 +384,7 @@ func classifyError(err error) (int32, string) {
 		return ErrorHostNotFound, err.Error()
 	}
 	var networkError net.Error
-	var operationError *net.OpError
-	if errors.As(err, &networkError) || errors.As(err, &operationError) {
+	if errors.As(err, &networkError) {
 		return ErrorNetwork, err.Error()
 	}
 	return ErrorProtocol, err.Error()
@@ -540,9 +524,6 @@ func (s *Session) PasteClipboard(clipboard *Clipboard) error {
 	if err != nil {
 		return err
 	}
-	if clipboard == nil {
-		clipboard = NewClipboard()
-	}
 	return client.PasteClipboard(clipboard)
 }
 
@@ -550,9 +531,6 @@ func (s *Session) SetClipboard(clipboard *Clipboard) error {
 	client, err := s.connectedRemote()
 	if err != nil {
 		return err
-	}
-	if clipboard == nil {
-		clipboard = NewClipboard()
 	}
 	return client.SetClipboard(clipboard)
 }
@@ -638,14 +616,6 @@ func updateInterval(rate int32) time.Duration {
 		return 0
 	}
 	return time.Second / time.Duration(rate)
-}
-
-func (s *Session) SetScale(factor float64) error {
-	client, err := s.connected()
-	if err != nil {
-		return err
-	}
-	return client.SetScale(factor)
 }
 
 func (s *Session) SetVirtualDisplay(width int32, height int32, density float64, maximumWidth int32, maximumHeight int32) error {
@@ -812,12 +782,11 @@ func (e *sessionEvents) KeyboardSourceChanged(source rfb.KeyboardSource) {
 
 func (e *sessionEvents) StatusReceived(status rfb.Status) {
 	switch status {
-	case rfb.StatusHeartbeat, rfb.StatusPasteboardChanged, rfb.StatusPasteboardNeedsData:
-		return
 	case rfb.StatusSessionEnding:
-		e.session.ending.Store(true)
+		e.session.ending = true
+	case rfb.StatusControlAllowed, rfb.StatusObserveOnly, rfb.StatusPointerHidden, rfb.StatusPointerShown:
+		e.session.handler.OnStatus(int32(status))
 	}
-	e.session.handler.OnStatus(int32(status))
 }
 
 func (e *sessionEvents) DeviceInfoReceived(info rfb.DeviceInfo) {
@@ -838,7 +807,7 @@ func (e *sessionEvents) DropDestinationReceived(id uint32, path string) {
 
 func (e *sessionEvents) ChooseSession(request rfb.SessionRequest) (rfb.SessionChoice, error) {
 	s := e.session
-	prompt := &Prompt{Kind: PromptChooseSession, ConsoleUser: request.ConsoleUser}
+	prompt := &Prompt{ConsoleUser: request.ConsoleUser}
 	for _, choice := range request.Choices {
 		switch choice {
 		case rfb.SessionShareConsole:

@@ -23,17 +23,13 @@ nonisolated final class DeviceServerEvents: NSObject, LibsharingDeviceServerHand
         deliver(DeviceServerStateChange(state: state, errorCode: errorCode, message: message ?? ""))
     }
 
-    func onDeviceInfo(_ name: String?, model: String?, osVersion: String?) {}
-
-    func onViewerConnected(_ viewerID: Int64, address: String?) {
+    func onViewerConnected(_ viewerID: Int64) {
         deliverViewer(viewerID, true)
     }
 
-    func onViewerDisconnected(_ viewerID: Int64, errorCode: Int32, message: String?) {
+    func onViewerDisconnected(_ viewerID: Int64) {
         deliverViewer(viewerID, false)
     }
-
-    func onStreaming(_ active: Bool) {}
 }
 
 nonisolated final class DiskImageImportEvents: NSObject, LibsharingDiskImageImportHandlerProtocol, @unchecked Sendable {

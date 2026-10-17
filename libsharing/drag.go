@@ -16,16 +16,10 @@ func (d *RemoteDrag) Len() int32 {
 }
 
 func (d *RemoteDrag) Path(index int32) string {
-	if index < 0 || int(index) >= len(d.items) {
-		return ""
-	}
 	return d.items[index].Path
 }
 
 func (d *RemoteDrag) IsFolder(index int32) bool {
-	if index < 0 || int(index) >= len(d.items) {
-		return false
-	}
 	return d.items[index].Folder
 }
 

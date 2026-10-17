@@ -29,13 +29,10 @@ type ServerVideoInfo struct {
 type ServerVideoSource interface {
 	Info() ServerVideoInfo
 	ReadPacket(ctx context.Context, buffer []byte) (n int, rtcp bool, err error)
+	PacketArrival() time.Time
 	WriteRTCP(packet []byte) error
 	RequestKeyFrame() error
 	Close() error
-}
-
-type ServerPacketArrival interface {
-	PacketArrival() time.Time
 }
 
 type ServerVideoOpener func(ctx context.Context, request ServerVideoRequest) (ServerVideoSource, error)
@@ -63,4 +60,4 @@ type ServerAudioSource interface {
 	Close() error
 }
 
-type ServerAudioOpener func(ctx context.Context) (ServerAudioSource, error)
+type ServerAudioOpener func() (ServerAudioSource, error)

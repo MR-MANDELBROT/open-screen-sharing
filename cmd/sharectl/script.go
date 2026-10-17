@@ -306,16 +306,12 @@ func runHighPerformance(client *rfb.Client, h *handler, argument string, wait fu
 	if len(parts) > 1 {
 		path = parts[1]
 	}
-	options := media.OfferOptions{Codecs: []media.Codec{media.CodecHEVC}, FrameRate60: true, Audio: media.AudioOff}
-	if len(parts) > 2 {
-		options = parseMediaOptions(parts[2:])
-	}
 	recorder, err := newMediaRecorder(h.logger, path)
 	if err != nil {
 		return err
 	}
 	defer recorder.close()
-	err = client.StartMediaStream(options, recorder)
+	err = client.StartMediaStream(parseMediaOptions(parts[min(len(parts), 2):]), recorder)
 	if err != nil {
 		return err
 	}
@@ -335,7 +331,7 @@ func logStreamStatistics(h *handler, client *rfb.Client) {
 		"access-units-received", statistics.VideoAccessUnitsReceived, "access-units", statistics.VideoAccessUnits,
 		"losses", statistics.VideoLosses, "auth-failures", statistics.AuthFailures, "keyframe-requests", statistics.KeyframeRequests,
 		"sender-reports", statistics.SenderReports, "video-hdr", statistics.Ports.Video.HDR,
-		"answer-ssrc", fmt.Sprintf("%#x", statistics.Answer.Video.SSRC), "canvas", fmt.Sprint(statistics.Answer.Video.Width, "x", statistics.Answer.Video.Height))
+		"answer-ssrc", fmt.Sprintf("%#x", statistics.Answer.SSRC), "canvas", fmt.Sprint(statistics.Answer.Width, "x", statistics.Answer.Height))
 }
 
 func parseMediaOptions(flags []string) media.OfferOptions {
@@ -370,7 +366,7 @@ func copyFile(ctx context.Context, client *rfb.Client, h *handler, upload bool, 
 	if upload {
 		transfer, err = client.FileCopy().Upload(ctx, filecopy.PathSource(source), destination, progress)
 	} else {
-		transfer, err = client.FileCopy().Download(ctx, source, filecopy.DirectoryReceiver(destination), progress)
+		transfer, err = client.FileCopy().Download(ctx, source, destination, progress)
 	}
 	if err != nil {
 		return err

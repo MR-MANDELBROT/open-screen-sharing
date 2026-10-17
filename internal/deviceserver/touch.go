@@ -111,11 +111,7 @@ func (m *touchMapper) busy() bool {
 	return m.finger != nil || m.scroll != nil || m.pinch != nil
 }
 
-func (m *touchMapper) set(ctx context.Context, points ...point) error {
-	return m.setFrom(ctx, hid.EdgeNone, points...)
-}
-
-func (m *touchMapper) setFrom(ctx context.Context, edge hid.Edge, points ...point) error {
+func (m *touchMapper) set(ctx context.Context, edge hid.Edge, points ...point) error {
 	return m.input.SetTouches(ctx, m.touches(points), edge)
 }
 
@@ -154,18 +150,18 @@ func (m *touchMapper) pointer(ctx context.Context, event rfb.ViewerPointer) erro
 		}
 		m.finger = &buttonFinger{button: button, downAt: time.Now()}
 		m.finger.move(at)
-		return m.setFrom(ctx, touchEdge(m.geometry, at), at)
+		return m.set(ctx, touchEdge(m.geometry, at), at)
 	case held&m.finger.button != 0:
 		if at == m.finger.at {
 			return nil
 		}
 		m.finger.move(at)
-		return m.set(ctx, at)
+		return m.set(ctx, hid.EdgeNone, at)
 	default:
 		finger := m.finger
 		m.finger = nil
 		if at != finger.at {
-			if err := m.set(ctx, at); err != nil {
+			if err := m.set(ctx, hid.EdgeNone, at); err != nil {
 				return err
 			}
 		}
@@ -197,7 +193,7 @@ func (m *touchMapper) flick(ctx context.Context, trail []trailPoint, low, high p
 		if index == flickSteps {
 			return m.lift(ctx, at)
 		}
-		if err := m.set(ctx, at); err != nil {
+		if err := m.set(ctx, hid.EdgeNone, at); err != nil {
 			return err
 		}
 	}
@@ -266,7 +262,7 @@ func fitDrag(start, direction, length, low, high float64) (float64, float64) {
 }
 
 func (m *touchMapper) drag(ctx context.Context, edge hid.Edge, from, to point, steps int, step, hold time.Duration) error {
-	if err := m.setFrom(ctx, edge, from); err != nil {
+	if err := m.set(ctx, edge, from); err != nil {
 		return err
 	}
 	for index := 1; index <= steps; index++ {
@@ -275,7 +271,7 @@ func (m *touchMapper) drag(ctx context.Context, edge hid.Edge, from, to point, s
 		}
 		fraction := float64(index) / float64(steps)
 		at := point{from.X + (to.X-from.X)*fraction, from.Y + (to.Y-from.Y)*fraction}
-		if err := m.set(ctx, at); err != nil {
+		if err := m.set(ctx, hid.EdgeNone, at); err != nil {
 			return err
 		}
 	}
@@ -309,7 +305,7 @@ func (m *touchMapper) continuousScroll(ctx context.Context, event rfb.ViewerScro
 		start := point{clamp(float64(event.X), left, right), clamp(float64(event.Y), top, bottom)}
 		m.scroll = &scrollFinger{start: start}
 		m.scroll.move(start)
-		if err := m.set(ctx, start); err != nil {
+		if err := m.set(ctx, hid.EdgeNone, start); err != nil {
 			return err
 		}
 	}
@@ -320,7 +316,7 @@ func (m *touchMapper) continuousScroll(ctx context.Context, event rfb.ViewerScro
 	next := point{m.scroll.at.X + dx, m.scroll.at.Y + dy}
 	clamped := point{clamp(next.X, left, right), clamp(next.Y, top, bottom)}
 	m.scroll.move(clamped)
-	if err := m.set(ctx, clamped); err != nil {
+	if err := m.set(ctx, hid.EdgeNone, clamped); err != nil {
 		return err
 	}
 	if clamped != next {
@@ -329,7 +325,7 @@ func (m *touchMapper) continuousScroll(ctx context.Context, event rfb.ViewerScro
 		}
 		m.scroll.trail = nil
 		m.scroll.move(m.scroll.start)
-		return m.set(ctx, m.scroll.start)
+		return m.set(ctx, hid.EdgeNone, m.scroll.start)
 	}
 	return nil
 }
@@ -380,7 +376,7 @@ func (m *touchMapper) gesture(ctx context.Context, event rfb.ViewerGesture) erro
 }
 
 func (m *touchMapper) tap(ctx context.Context, at point, hold time.Duration) error {
-	if err := m.set(ctx, at); err != nil {
+	if err := m.set(ctx, hid.EdgeNone, at); err != nil {
 		return err
 	}
 	if err := sleep(ctx, hold); err != nil {
@@ -438,7 +434,7 @@ func (m *touchMapper) pinchGesture(ctx context.Context, event rfb.ViewerGesture)
 	} else {
 		pinch.angle += event.Amount
 	}
-	return m.set(ctx, pinch.fingers(m.geometry)...)
+	return m.set(ctx, hid.EdgeNone, pinch.fingers(m.geometry)...)
 }
 
 func (p *pinchFingers) fingers(geometry screenGeometry) []point {

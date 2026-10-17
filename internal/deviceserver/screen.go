@@ -7,12 +7,15 @@ import (
 )
 
 type displayGeometry struct {
+	Width, Height             int
 	NativeWidth, NativeHeight int
 	Orientation               string
 }
 
 func geometryOf(info display.DisplayInfo) displayGeometry {
 	return displayGeometry{
+		Width:        info.Width,
+		Height:       info.Height,
 		NativeWidth:  info.NativeWidth,
 		NativeHeight: info.NativeHeight,
 		Orientation:  info.CurrentOrientation,
@@ -43,12 +46,6 @@ func primaryDisplay(displays []display.DisplayInfo) (display.DisplayInfo, bool) 
 		})
 	}
 	return info, info.Width > 0
-}
-
-// In mode 7 the device produced 2420×1668 visible video in a 2432×1680 coded frame;
-// mode 5 exposed the full 2432×1680 frame (observed on iPad17,1, iPadOS 27.2 24B5099f).
-func framebufferSize(info display.DisplayInfo) [2]int {
-	return [2]int{info.Width, info.Height}
 }
 
 func orientationTurns(orientation string) int {

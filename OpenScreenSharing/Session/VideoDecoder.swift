@@ -7,7 +7,6 @@ import os
 
 nonisolated final class VideoDecoder: @unchecked Sendable {
     private let queue = DispatchQueue(label: "io.nekohasekai.screensharing.video-decoder")
-    private let queueKey = DispatchSpecificKey<UInt8>()
     private var session: VTDecompressionSession?
     private var formatDescription: CMVideoFormatDescription?
     private var codec: VideoCodec?
@@ -26,7 +25,6 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     private var lastSubmittedFrameID: Int64?
     private var lastSubmissionEnded = true
     private var timeout: DispatchWorkItem?
-    private var timeoutID: UInt64 = 0
     private var rejections = 0
     private var reportedUnsupported = false
     private let completions = LockedState(initialState: [Completion]())
@@ -75,7 +73,6 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
         self.output = output
         self.failure = failure
         self.unsupported = unsupported
-        queue.setSpecific(key: queueKey, value: 1)
     }
 
     deinit {
@@ -85,16 +82,8 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
         }
     }
 
-    private func serialized(_ body: () -> Void) {
-        if DispatchQueue.getSpecific(key: queueKey) != nil {
-            body()
-        } else {
-            queue.sync(execute: body)
-        }
-    }
-
     func reset() {
-        serialized {
+        queue.sync {
             invalidateSession()
             formatDescription = nil
             parameterSets = []
@@ -103,7 +92,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     }
 
     func setFormat(_ format: VideoFormat) {
-        serialized {
+        queue.sync {
             let changed =
                 format.codec != codec || format.parameterSets != parameterSets || format.isHDR != isHDR
                 || format.bands != bands || format.canvasHeight != canvasHeight
@@ -131,7 +120,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     }
 
     func setSuspended(_ suspended: Bool) {
-        serialized {
+        queue.sync {
             guard suspended != self.suspended else { return }
             self.suspended = suspended
             if suspended {
@@ -141,7 +130,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     }
 
     func decode(_ unit: VideoAccessUnit) {
-        serialized { submit(unit) }
+        queue.sync { submit(unit) }
     }
 
     private func submit(_ unit: VideoAccessUnit) {
@@ -263,14 +252,12 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
             if pending[index].latestTickets[submission.band] == completion.ticket {
                 pending[index].strips[submission.band] = pixelBuffer
             }
-            guard completion.generation == generation else { continue }
             publishCompletedFrames()
         }
     }
 
     private func publishCompletedFrames() {
         while let first = pending.first, first.ended, first.remaining == 0 {
-            let epoch = generation
             for band in 0..<bands where first.submittedMask & (1 << band) != 0 {
                 guard let strip = first.strips[band] else {
                     recover()
@@ -299,7 +286,6 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
                         arrival: first.arrival, libraryHold: first.hold,
                         decode: max((first.completedAt ?? CACurrentMediaTime()) - first.startedAt, 0), capture: first.capture))
                 output(frame)
-                guard generation == epoch else { return }
             }
         }
         scheduleTimeout()
@@ -307,17 +293,12 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
 
     private func scheduleTimeout() {
         timeout?.cancel()
-        timeoutID &+= 1
-        let id = timeoutID
         let starts = [pending.first?.startedAt, baselineStartedAt].compactMap { $0 }
         guard let startedAt = starts.min() else {
             timeout = nil
             return
         }
-        let item = DispatchWorkItem { [weak self] in
-            guard let self, timeoutID == id else { return }
-            recover()
-        }
+        let item = DispatchWorkItem { [weak self] in self?.recover() }
         timeout = item
         queue.asyncAfter(deadline: .now() + max(0, startedAt + Self.assemblyTimeout - CACurrentMediaTime()), execute: item)
     }
@@ -344,7 +325,6 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
 
     private func invalidateSession() {
         generation &+= 1
-        timeoutID &+= 1
         timeout?.cancel()
         timeout = nil
         pending = []
@@ -378,7 +358,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
         session = created
     }
 
-    private static func makeFormatDescription(_ format: VideoFormat) throws -> CMVideoFormatDescription {
+    static func makeFormatDescription(_ format: VideoFormat) throws -> CMVideoFormatDescription {
         let buffers = format.parameterSets.map { [UInt8]($0) }
         guard !buffers.isEmpty else { throw MessageError("the \(format.codec.rawValue.uppercased()) stream came without parameter sets") }
         let copies = buffers.map { buffer -> UnsafeMutablePointer<UInt8> in
@@ -410,7 +390,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
         return description
     }
 
-    private static func makeSampleBuffer(_ payload: Data, time: CMTime, format: CMVideoFormatDescription) -> CMSampleBuffer? {
+    static func makeSampleBuffer(_ payload: Data, time: CMTime, format: CMVideoFormatDescription) -> CMSampleBuffer? {
         guard !payload.isEmpty else { return nil }
         var blockBuffer: CMBlockBuffer?
         let count = payload.count
@@ -435,48 +415,5 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
             ) == noErr
         else { return nil }
         return sampleBuffer
-    }
-}
-
-nonisolated extension VideoDecoder {
-    static let decodesFullChromaInHardware: Bool = {
-        let format = VideoFormat(
-            codec: .hevc,
-            parameterSets: [
-                "40010c01ffff0408000003009e2800000300001eba0240",
-                "4201010408000003009e2800000300001e90041020b2dd49265780b4040000030004000003000420",
-                "4401c172860c0224",
-            ].map(hexData),
-            bands: 1
-        )
-        guard let description = try? makeFormatDescription(format),
-            let sample = makeSampleBuffer(hexData("0000000c2801af78ebaefbfe7557cb4f"), time: .zero, format: description)
-        else { return false }
-        var created: VTDecompressionSession?
-        guard
-            VTDecompressionSessionCreate(
-                allocator: nil, formatDescription: description, decoderSpecification: DecoderCapabilities.hardwareSpecification as CFDictionary,
-                imageBufferAttributes: nil, outputCallback: nil, decompressionSessionOut: &created
-            ) == noErr, let session = created
-        else { return false }
-        defer { VTDecompressionSessionInvalidate(session) }
-        let decoded = LockedState(initialState: false)
-        let status = VTDecompressionSessionDecodeFrame(session, sampleBuffer: sample, flags: [], infoFlagsOut: nil) { status, _, imageBuffer, _, _ in
-            let succeeded = status == noErr && imageBuffer != nil
-            decoded.withLock { $0 = succeeded }
-        }
-        VTDecompressionSessionWaitForAsynchronousFrames(session)
-        return status == noErr && decoded.withLock { $0 }
-    }()
-
-    private static func hexData(_ hex: String) -> Data {
-        var data = Data(capacity: hex.count / 2)
-        var index = hex.startIndex
-        while index < hex.endIndex {
-            let next = hex.index(index, offsetBy: 2)
-            data.append(UInt8(hex[index..<next], radix: 16)!)
-            index = next
-        }
-        return data
     }
 }

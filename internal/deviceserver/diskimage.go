@@ -107,7 +107,7 @@ func (s *Server) diskImageFiles(ctx context.Context, directory string, variant i
 		return "", err
 	}
 	s.logger.Info("downloading the Developer Disk Image", "variant", variant, "directory", own)
-	_, err = imagemounter.Import(ctx, source, directory, func(received, _ int64) {
+	err = imagemounter.Import(ctx, source, directory, func(received, _ int64) {
 		s.notify(func(observer Observer) { observer.DiskImageProgress(received) })
 	})
 	if err != nil {

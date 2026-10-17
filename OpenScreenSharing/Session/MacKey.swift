@@ -46,7 +46,6 @@ nonisolated struct MacKey: Hashable, Sendable {
     // ScreensharingAgent 766.8, macOS 27.2 26B5101f, UUID D8791A89-6EDB-3A0A-A720-EC3F5FB1AD4F,
     // sub_100035484 0x10003552c..0x100035624, keyCode 0x39 jump table entry 0x100035640).
     static let capsLock = MacKey(keyCode: 57, keysym: 0)
-    static let function = MacKey(keyCode: 63, keysym: 0)
 
     private static let functionKeyCodes: [UInt16] = [
         122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113, 106, 64, 79, 80, 90,

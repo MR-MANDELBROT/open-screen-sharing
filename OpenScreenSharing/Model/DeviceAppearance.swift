@@ -26,10 +26,6 @@ nonisolated struct DeviceAppearance: Hashable, Sendable {
         color = Self.color(named: enclosureColor)
     }
 
-    var isTouchScreen: Bool {
-        kind == .iPhone || kind == .iPad
-    }
-
     var systemImage: String {
         switch kind {
         case .generic, .iMac: "desktopcomputer"

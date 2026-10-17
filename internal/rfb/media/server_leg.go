@@ -26,7 +26,7 @@ type serverActive struct {
 }
 
 type serverOutput struct {
-	srtp          srtpStream
+	replay        replayState
 	generation    uint64
 	offset        uint16
 	started       bool
@@ -110,34 +110,23 @@ func newServerLeg(name string, conn *net.UDPConn, clockRate float64, initial net
 	return leg
 }
 
-func (l *serverLeg) setKeys(stream *serverOfferStream, now time.Time) error {
+func (l *serverLeg) setKeys(stream *serverOfferStream, now time.Time) {
 	l.access.Lock()
 	defer l.access.Unlock()
 	if l.receiver != nil && l.clientKey == stream.clientKey && l.serverKey == stream.serverKey {
 		l.checkPendingLocked(now)
-		return nil
-	}
-	receiver, err := newSRTCPReceiver(stream.clientKey[:])
-	if err != nil {
-		return err
-	}
-	sender, err := newSRTPSender(stream.serverKey[:])
-	if err != nil {
-		return err
-	}
-	reports, err := newSRTCPSender(stream.serverKey[:])
-	if err != nil {
-		return err
+		return
 	}
 	l.clientKey, l.serverKey = stream.clientKey, stream.serverKey
-	l.receiver, l.sender, l.reports = receiver, sender, reports
+	l.receiver = newSRTCPReceiver(stream.clientKey[:])
+	l.sender = newSRTPSender(stream.serverKey[:])
+	l.reports = newSRTCPSender(stream.serverKey[:])
 	clear(l.outputs)
 	l.sentReports = [sentReportSlots]sentReport{}
 	l.clientRTT = 0
 	l.target, l.latched = l.initialTarget, false
 	l.lastHeard = time.Time{}
 	l.checkPendingLocked(now)
-	return nil
 }
 
 func (l *serverLeg) checkPendingLocked(now time.Time) {
@@ -219,11 +208,9 @@ func (l *serverLeg) activate(active *serverActive) {
 	l.access.Unlock()
 }
 
-func (l *serverLeg) deactivate(generation uint64) {
+func (l *serverLeg) deactivate() {
 	l.access.Lock()
-	if l.active != nil && l.active.generation == generation {
-		l.active = nil
-	}
+	l.active = nil
 	l.access.Unlock()
 }
 
@@ -261,11 +248,11 @@ func (l *serverLeg) protectLocked(packet []byte, header rtpPacket, generation ui
 	}
 	sequence := header.sequence + output.offset
 	binary.BigEndian.PutUint16(packet[2:], sequence)
-	index := output.srtp.estimateIndex(sequence)
-	if !output.srtp.replay.check(index) {
+	index := output.replay.estimateIndex(sequence)
+	if !output.replay.check(index) {
 		return nil, netip.AddrPort{}, false
 	}
-	output.srtp.replay.accept(index)
+	output.replay.accept(index)
 	if !output.based {
 		output.based = true
 		output.base = index

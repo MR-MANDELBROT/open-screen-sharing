@@ -14,7 +14,6 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/deviceserver"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
-	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
@@ -37,7 +36,6 @@ const (
 	DeviceErrorScreenInUse      int32 = 8
 	DeviceErrorPairing          int32 = 9
 	DeviceErrorLoopbackAddress  int32 = 10
-	DeviceErrorOther            int32 = 100
 )
 
 type DeviceServerOptions struct {
@@ -52,10 +50,8 @@ type DeviceServerOptions struct {
 
 type DeviceServerHandler interface {
 	OnStateChanged(state int32, errorCode int32, message string)
-	OnDeviceInfo(name string, model string, osVersion string)
-	OnViewerConnected(viewerID int64, address string)
-	OnViewerDisconnected(viewerID int64, errorCode int32, message string)
-	OnStreaming(active bool)
+	OnViewerConnected(viewerID int64)
+	OnViewerDisconnected(viewerID int64)
 }
 
 const defaultRemotePairingPort = 49152
@@ -63,12 +59,11 @@ const defaultRemotePairingPort = 49152
 const vpnProbeTimeout = 2 * time.Second
 
 type LoopbackAddress struct {
-	Address      string
 	LocalNetwork bool
 }
 
 func newLoopbackAddress(peer vpnpeer.Peer) *LoopbackAddress {
-	return &LoopbackAddress{Address: peer.Address.String(), LocalNetwork: peer.LocalNetwork}
+	return &LoopbackAddress{LocalNetwork: peer.LocalNetwork}
 }
 
 func DetectLoopbackAddress(remotePairingPort int32) *LoopbackAddress {
@@ -76,7 +71,7 @@ func DetectLoopbackAddress(remotePairingPort int32) *LoopbackAddress {
 	if port == 0 {
 		port = defaultRemotePairingPort
 	}
-	peer, err := vpnpeer.Find(context.Background(), vpnpeer.Candidates(), port, time.Second)
+	peer, err := vpnpeer.Find(context.Background(), port, time.Second)
 	if err != nil {
 		return nil
 	}
@@ -91,20 +86,13 @@ type DeviceServer struct {
 }
 
 func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) (*DeviceServer, error) {
-	if options == nil || handler == nil {
-		return nil, E.New("options and handler are required")
-	}
 	file, err := parsePairingFile(options.PairingRecord)
 	if err != nil {
 		return nil, err
 	}
-	var deviceName string
-	if file.remote != nil {
-		deviceName = file.remote.DeviceName
-	}
-	name := deviceName
-	if name == "" {
-		name = "iPhone"
+	name := "iPhone"
+	if file.remote != nil && file.remote.DeviceName != "" {
+		name = file.remote.DeviceName
 	}
 	logger := newLogger()
 	connectLogger := logger
@@ -119,7 +107,7 @@ func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) 
 			if file.lockdown != nil {
 				port = lockdown.Port
 			}
-			peer, err := vpnpeer.Find(ctx, vpnpeer.Candidates(), port, vpnProbeTimeout)
+			peer, err := vpnpeer.Find(ctx, port, vpnProbeTimeout)
 			if err != nil {
 				return nil, err
 			}
@@ -141,7 +129,7 @@ func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) 
 			})
 		},
 		Logger:   logger,
-		Observer: &deviceObserver{handler: handler, deviceName: deviceName},
+		Observer: &deviceObserver{handler: handler},
 		Listen:   net.JoinHostPort("::", strconv.Itoa(int(options.Port))),
 		RFB: rfb.ServerOptions{
 			Name:             name,
@@ -200,8 +188,7 @@ func (s *DeviceServer) Close() {
 }
 
 type deviceObserver struct {
-	handler    DeviceServerHandler
-	deviceName string
+	handler DeviceServerHandler
 }
 
 func (o *deviceObserver) StateChanged(state deviceserver.State, err error) {
@@ -209,31 +196,19 @@ func (o *deviceObserver) StateChanged(state deviceserver.State, err error) {
 	o.handler.OnStateChanged(stateCode(state), code, message)
 }
 
-func (o *deviceObserver) DeviceConnected(info coredevice.DeviceInfo) {
-	version := info.OSVersion
-	if info.BuildVersion != "" {
-		version += " (" + info.BuildVersion + ")"
-	}
-	o.handler.OnDeviceInfo(o.deviceName, info.ProductType, version)
-}
+func (o *deviceObserver) DeviceConnected(info coredevice.DeviceInfo) {}
 
 func (o *deviceObserver) DiskImageProgress(received int64) {}
 
 func (o *deviceObserver) ViewerConnected(session *rfb.ServerSession) {
-	o.handler.OnViewerConnected(int64(session.ID()), viewerAddress(session))
+	o.handler.OnViewerConnected(int64(session.ID()))
 }
 
 func (o *deviceObserver) ViewerDisconnected(session *rfb.ServerSession, err error) {
-	if err == nil {
-		o.handler.OnViewerDisconnected(int64(session.ID()), DeviceErrorNone, "")
-		return
-	}
-	o.handler.OnViewerDisconnected(int64(session.ID()), DeviceErrorOther, "viewer "+viewerAddress(session)+": "+err.Error())
+	o.handler.OnViewerDisconnected(int64(session.ID()))
 }
 
-func (o *deviceObserver) StreamingChanged(active bool) {
-	o.handler.OnStreaming(active)
-}
+func (o *deviceObserver) StreamingChanged(active bool) {}
 
 func stateCode(state deviceserver.State) int32 {
 	switch state {
@@ -254,8 +229,4 @@ func deviceError(err error) (int32, string) {
 		return DeviceErrorNone, ""
 	}
 	return int32(deviceserver.ProblemOf(err)), err.Error()
-}
-
-func viewerAddress(session *rfb.ServerSession) string {
-	return session.RemoteAddr().(*net.TCPAddr).AddrPort().Addr().Unmap().String()
 }

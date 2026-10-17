@@ -4,11 +4,8 @@ import UIKit
 enum BadgeDots {
     private static let itemForRequest = NSSelectorFromString("tabBarController:sidebar:itemForRequest:")
     private static var extendedClasses: Set<ObjectIdentifier> = []
-    private static var isInstalled = false
 
     static func install() {
-        guard !isInstalled else { return }
-        isInstalled = true
         colorTabBarBadges()
         if #available(iOS 18, *) {
             extendSidebarDelegates()

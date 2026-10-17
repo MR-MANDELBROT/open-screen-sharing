@@ -11,7 +11,7 @@ struct KeyboardAccessoryBar: View {
                     group {
                         key("Escape", text: "esc", key: .escape)
                         if !controller.usesHardwareKeyboard {
-                            key("Tab", systemImage: "arrow.right.to.line", key: .tab)
+                            key("Tab", systemImage: "arrow.right.to.line") { controller.typeKey(.tab) }
                         }
                         ForEach(controller.platform == .pc ? ModifierKey.pcOrder : ModifierKey.allCases, id: \.self) { modifier in
                             ModifierKeyButton(controller: controller, modifier: modifier)
@@ -19,10 +19,10 @@ struct KeyboardAccessoryBar: View {
                     }
                     if !controller.usesHardwareKeyboard {
                         group {
-                            key("Left Arrow", systemImage: "arrowtriangle.left.fill", key: .left)
-                            key("Up Arrow", systemImage: "arrowtriangle.up.fill", key: .up)
-                            key("Down Arrow", systemImage: "arrowtriangle.down.fill", key: .down)
-                            key("Right Arrow", systemImage: "arrowtriangle.right.fill", key: .right)
+                            key("Left Arrow", systemImage: "arrowtriangle.left.fill") { controller.typeKey(.left) }
+                            key("Up Arrow", systemImage: "arrowtriangle.up.fill") { controller.typeKey(.up) }
+                            key("Down Arrow", systemImage: "arrowtriangle.down.fill") { controller.typeKey(.down) }
+                            key("Right Arrow", systemImage: "arrowtriangle.right.fill") { controller.typeKey(.right) }
                         }
                     }
                     group {
@@ -56,10 +56,6 @@ struct KeyboardAccessoryBar: View {
         .glassEffectCompat(in: Capsule())
     }
 
-    private func key(_ title: String.LocalizationValue, systemImage: String, key: MacKey) -> some View {
-        self.key(title, systemImage: systemImage) { controller.typeKey(key) }
-    }
-
     private func key(_ title: String.LocalizationValue, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(String(localized: title), systemImage: systemImage)
@@ -86,11 +82,7 @@ struct KeyboardAccessoryBar: View {
 
     private var functionKeysMenu: some View {
         Menu {
-            ForEach(1...12, id: \.self) { number in
-                Button("F\(number)") {
-                    controller.typeKey(.function(number))
-                }
-            }
+            FunctionKeyItems(controller: controller)
         } label: {
             Text(verbatim: "F1–F12")
                 .font(.subheadline.weight(.semibold))
@@ -102,15 +94,11 @@ struct KeyboardAccessoryBar: View {
         .accessibilityShowsLargeContentViewer()
     }
 
-    private var moreKeysSymbol: String {
-        if #available(iOS 16, *) { "arrow.up.and.down.text.horizontal" } else { "ellipsis" }
-    }
-
     private var moreKeysMenu: some View {
         Menu {
             MoreKeyItems(controller: controller)
         } label: {
-            Label("More Keys", systemImage: moreKeysSymbol)
+            Label("More Keys", systemImage: SessionCommand.moreKeys.systemImage)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }

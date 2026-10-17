@@ -124,18 +124,6 @@ func (r *recordReader) Read(data []byte) (int, error) {
 	return n, nil
 }
 
-func (r *recordReader) ReadByte() (byte, error) {
-	for len(r.plaintext) == 0 {
-		err := r.next()
-		if err != nil {
-			return 0, err
-		}
-	}
-	value := r.plaintext[0]
-	r.plaintext = r.plaintext[1:]
-	return value, nil
-}
-
 func (r *recordReader) next() error {
 	var header [2]byte
 	_, err := io.ReadFull(r.source, header[:])

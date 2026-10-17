@@ -16,6 +16,7 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"slices"
 	"sync"
 
 	E "github.com/sagernet/sing/common/exceptions"
@@ -154,7 +155,7 @@ func authenticateAppleRSA(h *handshake) ([]byte, error) {
 		return nil, err
 	}
 	h.logger.Debug("server RSA key", "bits", publicKey.N.BitLen())
-	if !h.offersSecurity(SecurityAppleSRP) {
+	if !slices.Contains(h.info.SecurityTypes, SecurityAppleSRP) {
 		return authenticateAppleRSAPlain(h, publicKey)
 	}
 	identity := srpIdentityMessage(h.options.Username)
@@ -357,7 +358,7 @@ func runSRP(h *handshake, readMessage func() ([]byte, error), writeMessage func(
 		return value.FillBytes(make([]byte, width))
 	}
 
-	derived := passwordKey(h.options.Password, salt, int(iterations), 128)
+	derived := passwordKey(h.options.Password, salt, int(iterations))
 	passwordExponent := new(big.Int).SetBytes(srpHash(salt, srpHash([]byte(":"), derived)))
 	multiplier := new(big.Int).SetBytes(srpHash(modulusBytes, pad(generator)))
 	private := new(big.Int).SetBytes(randomBytes(64))
@@ -412,10 +413,10 @@ func runSRP(h *handshake, readMessage func() ([]byte, error), writeMessage func(
 // from the SRP challenge (ScreenSharing 776.27, macOS 27.0.1 26A434,
 // UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50, _srp_client_mech_step 0x1cc13a454..0x1cc13a490,
 // 0x1cc13ab60..0x1cc13ab98).
-func passwordKey(password string, salt []byte, iterations int, length int) []byte {
-	key := make([]byte, (length+sha512.Size-1)/sha512.Size*sha512.Size)
+func passwordKey(password string, salt []byte, iterations int) []byte {
+	key := make([]byte, 128)
 	var wait sync.WaitGroup
-	for offset := 0; offset < length; offset += sha512.Size {
+	for offset := 0; offset < len(key); offset += sha512.Size {
 		block := key[offset : offset+sha512.Size]
 		index := uint32(offset/sha512.Size + 1)
 		wait.Go(func() {
@@ -433,5 +434,5 @@ func passwordKey(password string, salt []byte, iterations int, length int) []byt
 		})
 	}
 	wait.Wait()
-	return key[:length]
+	return key
 }

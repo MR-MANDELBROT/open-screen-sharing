@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
 	E "github.com/sagernet/sing/common/exceptions"
 )
-
-const defaultInvokeTimeout = 15 * time.Second
 
 type Error struct {
 	Feature     string
@@ -71,11 +68,6 @@ func coreDeviceRequest(deviceIdentifier, feature, action string, input map[strin
 }
 
 func request(ctx context.Context, conn *xpc.Conn, message map[string]any) (map[string]any, error) {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultInvokeTimeout)
-		defer cancel()
-	}
 	reply, err := conn.Request(ctx, message)
 	if ctx.Err() != nil {
 		err = ctx.Err()

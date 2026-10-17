@@ -114,7 +114,7 @@ type Options struct {
 
 	RectangleObserver func(RawRectangle)
 
-	Prepare func(*Client) error
+	Prepare func(*Client)
 }
 
 type RawRectangle struct {

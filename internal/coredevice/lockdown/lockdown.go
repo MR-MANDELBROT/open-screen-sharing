@@ -20,7 +20,7 @@ const Port = 62078
 // go-ios opens CoreDeviceProxy through lockdownd, then exchanges CDTunnel
 // parameters over that connection (go-ios ca2c56d,
 // ios/tunnel/tunnel_lockdown.go:15-28; ios/tunnel/tunnel.go:266-305).
-const CoreDeviceProxy = "com.apple.internal.devicecompute.CoreDeviceProxy"
+const coreDeviceProxy = "com.apple.internal.devicecompute.CoreDeviceProxy"
 
 const progName = "open-screen-sharing"
 
@@ -64,7 +64,7 @@ func ParsePairRecord(data []byte) (*PairRecord, error) {
 
 type Dialer func(ctx context.Context, port uint16) (net.Conn, error)
 
-func DialService(ctx context.Context, record *PairRecord, dial Dialer, service string, logger *slog.Logger) (net.Conn, error) {
+func DialCoreDeviceProxy(ctx context.Context, record *PairRecord, dial Dialer, logger *slog.Logger) (net.Conn, error) {
 	tlsConfig := &tls.Config{
 		Certificates:       []tls.Certificate{record.Certificate},
 		InsecureSkipVerify: true,
@@ -100,29 +100,29 @@ func DialService(ctx context.Context, record *PairRecord, dial Dialer, service s
 		"Label":           progName,
 		"ProtocolVersion": "2",
 		"Request":         "StartService",
-		"Service":         service,
+		"Service":         coreDeviceProxy,
 	})
 	if err != nil {
-		return nil, E.Cause(err, "lockdown StartService ", service)
+		return nil, E.Cause(err, "lockdown StartService ", coreDeviceProxy)
 	}
 	if message, failed := reply["Error"]; failed {
-		return nil, E.New("lockdown StartService ", service, ": ", fmt.Sprint(message))
+		return nil, E.New("lockdown StartService ", coreDeviceProxy, ": ", fmt.Sprint(message))
 	}
 	port, _ := reply["Port"].(uint64)
 	if port == 0 || port > 65535 {
-		return nil, E.New("lockdown StartService ", service, ": no port in ", fmt.Sprint(reply))
+		return nil, E.New("lockdown StartService ", coreDeviceProxy, ": no port in ", fmt.Sprint(reply))
 	}
-	logger.Debug("started lockdown service", slog.String("service", service), slog.Uint64("port", port))
+	logger.Debug("started lockdown service", slog.String("service", coreDeviceProxy), slog.Uint64("port", port))
 	serviceConn, err := dial(ctx, uint16(port))
 	if err != nil {
-		return nil, E.Cause(err, "connect to ", service)
+		return nil, E.Cause(err, "connect to ", coreDeviceProxy)
 	}
 	if reply["EnableServiceSSL"] == true {
 		tlsConn := tls.Client(serviceConn, tlsConfig)
 		err = tlsConn.HandshakeContext(ctx)
 		if err != nil {
 			serviceConn.Close()
-			return nil, E.Cause(err, service, " TLS")
+			return nil, E.Cause(err, coreDeviceProxy, " TLS")
 		}
 		return tlsConn, nil
 	}

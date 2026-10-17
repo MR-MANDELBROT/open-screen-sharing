@@ -111,7 +111,15 @@ func appendReceiverReport(out []byte, sender uint32, sources map[uint32]*recepti
 // __RTCPParseVCPacket 0x1c0539ae4..0x1c0539c1c,
 // _RTCPReducedSizePackets 0x1c0534494..0x1c053449c).
 func appendKeyframeRequest(out []byte, sender uint32, sources map[uint32]*receptionStats, now time.Time) []byte {
-	return appendFullIntraRequest(appendReceiverReport(out, sender, sources, now), sender)
+	out = appendReceiverReport(out, sender, sources, now)
+	// AVConference RTPSendRTCP writes PT 192, length 1 and the sender SSRC when
+	// the legacy FIR entry count is zero (AVConference 2235.63.5.2, macOS 27.0.1
+	// 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+	// _RTPSendRTCP 0x1c0eba838..0x1c0eba870; AVConference 2260.14.1, macOS 27.2
+	// 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
+	// _RTPSendRTCP 0x1c0534f18..0x1c0534f50).
+	out = append(out, 0x80, rtcpFullIntraRequest, 0, 1)
+	return binary.BigEndian.AppendUint32(out, sender)
 }
 
 // iShareScreen sends the LTR acknowledgment as APP with a 32-bit value 5
@@ -122,17 +130,6 @@ func appendReferenceAcknowledgment(out []byte, sender uint32, order uint16) []by
 	out = binary.BigEndian.AppendUint32(out, sender)
 	out = binary.BigEndian.AppendUint32(out, 5)
 	return binary.BigEndian.AppendUint32(out, uint32(order))
-}
-
-func appendFullIntraRequest(out []byte, sender uint32) []byte {
-	// AVConference RTPSendRTCP writes PT 192, length 1 and the sender SSRC when
-	// the legacy FIR entry count is zero (AVConference 2235.63.5.2, macOS 27.0.1
-	// 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
-	// _RTPSendRTCP 0x1c0eba838..0x1c0eba870; AVConference 2260.14.1, macOS 27.2
-	// 26B5101f, UUID EDFB99EF-2F5E-35DD-8E63-089CBD102EFE,
-	// _RTPSendRTCP 0x1c0534f18..0x1c0534f50).
-	out = append(out, 0x80, rtcpFullIntraRequest, 0, 1)
-	return binary.BigEndian.AppendUint32(out, sender)
 }
 
 func rtcpPackets(compound []byte, fn func(packet []byte)) {

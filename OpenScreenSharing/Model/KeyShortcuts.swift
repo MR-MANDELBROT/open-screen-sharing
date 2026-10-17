@@ -150,15 +150,6 @@ struct KeyShortcut: Codable, Hashable {
         self.modifiers = modifiers.rawValue
     }
 
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        key = try container.decode(String.self, forKey: .key)
-        modifiers = try container.decode(Int.self, forKey: .modifiers)
-        guard key.count == 1 || isNamed else {
-            throw DecodingError.dataCorruptedError(forKey: .key, in: container, debugDescription: "unknown key \"\(key)\"")
-        }
-    }
-
     private struct SpecialKey {
         let name: String
         let equivalent: KeyEquivalent
@@ -464,12 +455,11 @@ final class KeyShortcuts: ObservableObject {
     @Published private(set) var pointerRelease: NSEvent.ModifierFlags
     #endif
 
-    private let store: PreferenceStore
+    private let store = PreferenceStore.shared
 
-    init(store: PreferenceStore = .shared) {
-        self.store = store
+    init() {
         assigned = store.value([String: KeyShortcut].self, for: Self.key) ?? [:]
-        mappings = Dictionary(uniqueKeysWithValues: MappingTarget.allCases.map { target in
+        mappings = Dictionary(uniqueKeysWithValues: MappingTarget.allCases.map { [store] target in
             (target, store.value([KeyMapping].self, for: Self.mappingsKey(target)) ?? [])
         })
         #if os(macOS)

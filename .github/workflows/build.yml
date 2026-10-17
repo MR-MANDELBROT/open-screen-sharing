@@ -28,7 +28,7 @@ jobs:
         id: outputs
         run: |-
           PREVIOUS=0
-          if git fetch --depth=1 origin tag nightly && [ "$(git cat-file -t nightly)" = tag ]; then
+          if git fetch --depth=1 origin tag nightly; then
             PREVIOUS=$(git tag -l --format='%(contents:subject)' nightly)
           fi
           echo "build_number=$((PREVIOUS + 1))"

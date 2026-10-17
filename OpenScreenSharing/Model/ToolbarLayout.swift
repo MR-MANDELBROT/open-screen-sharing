@@ -36,16 +36,14 @@ final class ToolbarLayout: ObservableObject {
 
     @Published private(set) var bar: [SessionCommand]
     @Published private(set) var isCustomized: Bool
-    private let store: PreferenceStore
+    private let store = PreferenceStore.shared
 
-    private init(platform: RemotePlatform, key: String, defaultBar: [SessionCommand], store: PreferenceStore = .shared) {
+    private init(platform: RemotePlatform, key: String, defaultBar: [SessionCommand]) {
         self.platform = platform
         self.key = key
         self.defaultBar = defaultBar
-        self.store = store
         if let stored = store.value([String].self, for: key) {
-            var seen = Set<SessionCommand>()
-            bar = stored.compactMap(SessionCommand.init(rawValue:)).filter { seen.insert($0).inserted }
+            bar = stored.compactMap(SessionCommand.init(rawValue:))
             isCustomized = true
         } else {
             bar = defaultBar

@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	EncodingMediaStream = 1010
-
 	ClientMessageMediaStream = 0x1c
 
 	// ScreenSharing copies 46 bytes for each negotiated SRTP key
@@ -82,8 +80,8 @@ const (
 	parameterSetsH264 = 1
 	parameterSetsHEVC = 14
 
-	defaultDeviceModel          = "Mac14,3"
-	defaultOSBuild              = "25G72"
+	endpointDeviceModel         = "Mac14,3"
+	endpointOSBuild             = "25G72"
 	endpointAVConferenceVersion = "2215.5.1"
 	endpointClientVersion       = 1
 	minimumVideoBitrate         = 5_000_000
@@ -160,7 +158,6 @@ const (
 	PixelFormat420Alpha           PixelFormats = 1 << 6
 	PixelFormat444Alpha16         PixelFormats = 1 << 7
 
-	PixelFormatsAll       PixelFormats = 0xff
 	PixelFormatsSDR420    PixelFormats = PixelFormat420FullRange | PixelFormat420VideoRange
 	PixelFormatsChroma420 PixelFormats = PixelFormat420FullRange | PixelFormat420VideoRange | PixelFormat420TenBit
 )
@@ -177,10 +174,6 @@ type OfferOptions struct {
 	VideoMode           VideoMode
 	Audio               AudioMode
 	ImmediatePlayout    bool
-	Width               int
-	Height              int
-	DeviceModel         string
-	OSBuild             string
 }
 
 type Offer struct {
@@ -200,14 +193,6 @@ type Offer struct {
 }
 
 func NewOffer(options OfferOptions) (*Offer, error) {
-	if len(options.Codecs) == 0 {
-		options.Codecs = []Codec{CodecHEVC}
-	}
-	for _, codec := range options.Codecs {
-		if codec != CodecHEVC && codec != CodecH264 {
-			return nil, E.New("media: unsupported codec ", codec)
-		}
-	}
 	if options.Audio < AudioFromServer || options.Audio > AudioToServer {
 		return nil, E.New("media: unsupported audio mode ", int(options.Audio))
 	}
@@ -235,12 +220,6 @@ func NewOffer(options OfferOptions) (*Offer, error) {
 	if options.MaximumBitrate < minimumVideoBitrate || options.MaximumBitrate > maximumVideoBitrate {
 		return nil, E.New("media: maximum bitrate ", options.MaximumBitrate, " bit/s is outside ", minimumVideoBitrate, " to ", maximumVideoBitrate, " bit/s")
 	}
-	if options.DeviceModel == "" {
-		options.DeviceModel = defaultDeviceModel
-	}
-	if options.OSBuild == "" {
-		options.OSBuild = defaultOSBuild
-	}
 	offer := &Offer{options: options, videoMode: negotiatorModeRemoteDesktopScreenSharing}
 	switch options.VideoMode {
 	case VideoModeAutomatic:
@@ -257,7 +236,6 @@ func NewOffer(options OfferOptions) (*Offer, error) {
 	default:
 		return nil, E.New("media: unsupported video mode ", int(options.VideoMode))
 	}
-	offer.UpdateVideoDimensions(options.Width, options.Height)
 	for _, buffer := range [][]byte{
 		offer.sessionID[:], offer.audioSend[:], offer.audioReceive[:],
 		offer.videoSend[:], offer.videoReceive[:],
@@ -367,11 +345,7 @@ func ntpTime(t time.Time) uint64 {
 }
 
 func (o *Offer) Message() []byte {
-	return o.message(time.Now())
-}
-
-func (o *Offer) message(now time.Time) []byte {
-	created := ntpTime(now)
+	created := ntpTime(time.Now())
 	audioMode := int64(negotiatorModeRemoteDesktopSystemAudio)
 	if o.options.Audio != AudioFromServer {
 		audioMode = negotiatorModeRemoteMic
@@ -420,9 +394,9 @@ func (o *Offer) streamOffer(mode int64, callID string, blob []byte) []byte {
 	var endpoint protoMessage
 	endpoint.addUint(1, 0)
 	endpoint.addUint(2, endpointClientVersion)
-	endpoint.addBytes(3, []byte(o.options.DeviceModel))
+	endpoint.addBytes(3, []byte(endpointDeviceModel))
 	endpoint.addBytes(4, []byte(endpointAVConferenceVersion))
-	endpoint.addBytes(5, []byte(o.options.OSBuild))
+	endpoint.addBytes(5, []byte(endpointOSBuild))
 	entries := []plistEntry{
 		{"avcMediaStreamOptionRemoteEndpointInfo", endpoint.encode()},
 		{"avcMediaStreamNegotiatorMode", mode},
@@ -524,10 +498,6 @@ func (o *Offer) videoBlob(created uint64) []byte {
 		payload.addBytes(3, []byte(features))
 		payload.addUint(4, parameterSets)
 		stream.addMessage(3, payload)
-	}
-	if o.options.Width > 0 && o.options.Height > 0 {
-		stream.addUint(4, uint64(o.options.Width))
-		stream.addUint(5, uint64(o.options.Height))
 	}
 	stream.addUint(6, uint64(o.options.TilesPerFrame))
 	stream.addUint(7, 1)

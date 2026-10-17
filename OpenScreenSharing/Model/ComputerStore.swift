@@ -39,14 +39,13 @@ struct ConnectionRecord {
 }
 
 final class ComputerStore: ObservableObject {
-    static let shared = ComputerStore(database: AppDatabase.shared)
+    static let shared = ComputerStore()
 
     @Published private(set) var computers: [Computer] = []
-    private let database: DatabaseQueue
+    private let database = AppDatabase.shared
     private var observation: AnyDatabaseCancellable?
 
-    private init(database: DatabaseQueue) {
-        self.database = database
+    private init() {
         observation = ValueObservation
             .tracking { try Computer.order(Column("createdAt")).fetchAll($0) }
             .start(in: database, scheduling: .immediate) { error in

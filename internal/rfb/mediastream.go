@@ -187,9 +187,6 @@ func (c *Client) startMediaSessionLocked(offer *media.Offer, sink media.Sink, pr
 		ports = previous.ports
 	}
 	c.access.Unlock()
-	if previous != nil && len(portsPayload) == 0 {
-		return nil, E.New("rfb: cannot retry media before receiving server ports")
-	}
 	remote := c.conn.RemoteAddr().(*net.TCPAddr).AddrPort().Addr()
 	local := c.conn.LocalAddr().(*net.TCPAddr).AddrPort().Addr()
 	session := &mediaSession{
@@ -267,7 +264,7 @@ func (c *Client) MediaStream() *media.Stream {
 	return c.media.stream
 }
 
-func (c *Client) receiveMediaStream(rectangle Rectangle) error {
+func (c *Client) receiveMediaStream() error {
 	// ScreenSharing dispatches media subtypes 1/2/3 as ports/answer/error
 	// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
 	// -[SSSession handleAVCMediaEncoding:] 0x1cc0e47b4..0x1cc0e47cc,

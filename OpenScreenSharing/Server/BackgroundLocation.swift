@@ -1,10 +1,9 @@
-import Combine
 import CoreLocation
 
-final class BackgroundLocation: NSObject, ObservableObject {
-    @Published private(set) var authorization: CLAuthorizationStatus
+final class BackgroundLocation: NSObject {
+    private(set) var authorization: CLAuthorizationStatus
 
-    @Published private(set) var isUpdating = false {
+    private(set) var isUpdating = false {
         didSet {
             guard isUpdating != oldValue else { return }
             onUpdatingChange?()

@@ -153,17 +153,8 @@ func endingZeros(data []byte, carried uint8) uint8 {
 }
 
 func (p *bandPositioner) readHeight(sps []byte) {
-	r := newBitReader(unescapeRBSP(sps))
-	r.bits(4)
-	maxSubLayersMinus1 := int(r.bits(3))
-	r.bits(1)
-	skipHEVCProfileTierLevel(r, maxSubLayersMinus1)
-	r.unsignedGolomb()
-	if r.unsignedGolomb() == 3 {
-		r.bits(1)
-	}
-	r.unsignedGolomb()
-	height := int(r.unsignedGolomb())
+	r := &bitReader{data: unescapeRBSP(sps)}
+	_, _, _, height := readHEVCSPSHeader(r)
 	if !r.overrun && height > 0 {
 		p.height = height
 	}

@@ -261,7 +261,7 @@ func (c *clipboardChannel) receive(kind, flags uint16, body []byte) (string, boo
 			return "", false, c.send(clipboardPDU(clipboardFormatDataResponse, clipboardResponseFail, nil))
 		}
 		text := strings.ReplaceAll(strings.ReplaceAll(c.localText, "\r\n", "\n"), "\n", "\r\n")
-		return "", false, c.send(clipboardPDU(clipboardFormatDataResponse, clipboardResponseOK, binary.LittleEndian.AppendUint16(utf16le(nil, text), 0)))
+		return "", false, c.send(clipboardPDU(clipboardFormatDataResponse, clipboardResponseOK, binary.LittleEndian.AppendUint16(utf16le(text), 0)))
 	case clipboardFormatDataResponse:
 		if !c.pending {
 			return "", false, nil

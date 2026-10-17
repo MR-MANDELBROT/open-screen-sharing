@@ -8,7 +8,6 @@ package hid
 import (
 	"context"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
@@ -23,17 +22,11 @@ const (
 	universalFeature = "com.apple.coredevice.feature.remote.universalhidservice"
 	buttonFeature    = "com.apple.coredevice.feature.remote.hid.button"
 	digitizerFeature = "com.apple.coredevice.feature.remote.hid.digitizer"
-
-	// idevice sends at most pointOne and pointTwo in an IndigoDigitizerEvent
-	// (idevice d32c818, idevice/src/services/core_device/hid.rs:601-632).
-	MaxTouches = 2
 )
 
 // idevice waits 300 ms after starting the display stream before sending
 // HID input (idevice d32c818, tools/src/hid.rs:429-449).
 const StreamWarmup = 300 * time.Millisecond
-
-const defaultRequestTimeout = 10 * time.Second
 
 type Touch struct {
 	X, Y float64
@@ -63,7 +56,6 @@ type Client struct {
 	device *coredevice.Device
 	logger *slog.Logger
 
-	access    sync.Mutex
 	universal *xpc.Conn
 	indigo    *xpc.Conn
 	touches   []Touch
@@ -71,7 +63,6 @@ type Client struct {
 	keyboard  uint64
 	pressed   [keyboardBitmapSize]byte
 	buttons   map[Button]struct{}
-	closed    bool
 }
 
 func New(device *coredevice.Device, logger *slog.Logger) *Client {
@@ -79,36 +70,15 @@ func New(device *coredevice.Device, logger *slog.Logger) *Client {
 }
 
 func (c *Client) SetTouches(ctx context.Context, touches []Touch, edge Edge) error {
-	if len(touches) > MaxTouches {
-		return E.New("hid: ", len(touches), " touches, at most ", MaxTouches)
-	}
-	c.access.Lock()
-	defer c.access.Unlock()
-	return c.setTouches(ctx, touches, edge)
-}
-
-func (c *Client) LiftTouches(ctx context.Context, touches []Touch) error {
-	if len(touches) > MaxTouches {
-		return E.New("hid: ", len(touches), " touches, at most ", MaxTouches)
-	}
-	c.access.Lock()
-	defer c.access.Unlock()
-	return c.liftTouches(ctx, touches)
-}
-
-func (c *Client) setTouches(ctx context.Context, touches []Touch, edge Edge) error {
 	eventType := uint64(digitizerPosition)
-	switch {
-	case len(touches) == 0:
-		return c.liftTouches(ctx, nil)
-	case len(c.touches) == 0:
+	if len(c.touches) == 0 {
 		eventType = digitizerStart
 		c.edge = edge
 	}
 	return c.sendTouches(ctx, eventType, touches)
 }
 
-func (c *Client) liftTouches(ctx context.Context, touches []Touch) error {
+func (c *Client) LiftTouches(ctx context.Context, touches []Touch) error {
 	if len(c.touches) == 0 {
 		return nil
 	}
@@ -118,6 +88,8 @@ func (c *Client) liftTouches(ctx context.Context, touches []Touch) error {
 	return c.sendTouches(ctx, digitizerEnd, touches)
 }
 
+// idevice sends at most pointOne and pointTwo in an IndigoDigitizerEvent
+// (idevice d32c818, idevice/src/services/core_device/hid.rs:601-632).
 func (c *Client) sendTouches(ctx context.Context, eventType uint64, touches []Touch) error {
 	payload := map[string]any{
 		"pointOne":  digitizerPoint(touches[0]),
@@ -146,9 +118,6 @@ func digitizerPoint(touch Touch) map[string]any {
 // idevice sends Indigo events without a reply flag (idevice d32c818,
 // idevice/src/services/core_device/hid.rs:524-541).
 func (c *Client) sendIndigo(ctx context.Context, messageType, feature string, payload map[string]any) error {
-	if c.closed {
-		return E.New("hid: send ", messageType, ": client closed")
-	}
 	if c.indigo == nil {
 		conn, err := c.device.DialXPC(ctx, indigoService)
 		if err != nil {
@@ -170,36 +139,23 @@ func (c *Client) sendIndigo(ctx context.Context, messageType, feature string, pa
 }
 
 func (c *Client) ReleaseAll(ctx context.Context) error {
-	c.access.Lock()
-	defer c.access.Unlock()
-	return c.releaseAll(ctx)
+	return E.Errors(c.LiftTouches(ctx, nil), c.releaseKeys(ctx), c.releaseButtons(ctx))
 }
 
-func (c *Client) releaseAll(ctx context.Context) error {
-	return E.Errors(c.setTouches(ctx, nil, EdgeNone), c.releaseKeys(ctx), c.releaseButtons(ctx))
-}
-
-func (c *Client) Close() error {
+func (c *Client) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	c.access.Lock()
-	defer c.access.Unlock()
-	if c.closed {
-		return nil
-	}
-	if err := c.releaseAll(ctx); err != nil {
+	if err := c.ReleaseAll(ctx); err != nil {
 		c.logger.Debug("release input on close", "error", err)
 	}
 	if err := c.removeKeyboard(); err != nil {
 		c.logger.Debug("remove keyboard on close", "error", err)
 	}
-	c.closed = true
 	c.closeUniversal()
 	if c.indigo != nil {
 		c.indigo.Close()
 		c.indigo = nil
 	}
-	return nil
 }
 
 func (c *Client) sendReport(ctx context.Context, serviceID uint64, report []byte) error {
@@ -228,9 +184,6 @@ func universalRequest(payload map[string]any) map[string]any {
 }
 
 func (c *Client) universalConn(ctx context.Context) (*xpc.Conn, error) {
-	if c.closed {
-		return nil, E.New("hid: client closed")
-	}
 	if c.universal == nil {
 		conn, err := c.device.DialXPC(ctx, universalService)
 		if err != nil {

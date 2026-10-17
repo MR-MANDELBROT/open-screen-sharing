@@ -86,7 +86,7 @@ func parseDisplayLayout(payload []byte) (*DisplayLayout, error) {
 	return layout, nil
 }
 
-func (c *Client) receiveDisplayLayout(rectangle Rectangle) error {
+func (c *Client) receiveDisplayLayout() error {
 	length, err := c.stream.u16()
 	if err != nil {
 		return err
@@ -145,10 +145,4 @@ func (c *Client) receiveDisplayInfo(rectangle Rectangle) error {
 		return c.resizeAndRefresh(rectangle.Width, rectangle.Height)
 	}
 	return nil
-}
-
-func (c *Client) Layout() *DisplayLayout {
-	c.access.Lock()
-	defer c.access.Unlock()
-	return c.layout
 }

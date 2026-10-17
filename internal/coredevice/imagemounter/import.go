@@ -23,18 +23,18 @@ type Source interface {
 
 const manifestLimit = 16 << 20
 
-func Import(ctx context.Context, src Source, dir string, progress func(received, total int64)) ([]Variant, error) {
+func Import(ctx context.Context, src Source, dir string, progress func(received, total int64)) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, E.Cause(err, "imagemounter")
+		return E.Cause(err, "imagemounter")
 	}
 	counter := &progressCounter{ctx: ctx, report: progress}
 	manifestData, err := readManifest(ctx, src, counter)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	manifest, err := parseManifest(manifestData)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var staged []*stagedVariant
 	defer func() {
@@ -57,7 +57,7 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 		case errors.As(err, &notInSource):
 			missing = E.Errors(missing, E.Cause(err, "import ", variant))
 		default:
-			return nil, err
+			return err
 		}
 	}
 	total := counter.received
@@ -69,24 +69,24 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 		total += variant.image.size
 	}
 	counter.setTotal(total)
-	var imported []Variant
+	imported := false
 	for _, variant := range staged {
 		err := finishVariant(ctx, src, dir, variant, manifestData, counter)
 		var notInSource *notInSourceError
 		switch {
 		case err == nil:
-			imported = append(imported, variant.variant)
+			imported = true
 		case errors.As(err, &notInSource):
 			missing = E.Errors(missing, E.Cause(err, "import ", variant.variant))
 		default:
-			return nil, err
+			return err
 		}
 	}
 	counter.flush()
-	if len(imported) == 0 {
-		return nil, E.Cause(missing, "imagemounter: ", src, " holds no usable Developer Disk Image")
+	if !imported {
+		return E.Cause(missing, "imagemounter: ", src, " holds no usable Developer Disk Image")
 	}
-	return imported, nil
+	return nil
 }
 
 func Present(dir string, variant Variant) (bool, error) {
@@ -271,11 +271,9 @@ func (c *progressCounter) Write(data []byte) (int, error) {
 		return 0, err
 	}
 	c.received += int64(len(data))
-	if c.report != nil {
-		if now := time.Now(); now.Sub(c.reported) >= 100*time.Millisecond {
-			c.reported = now
-			c.report(c.received, c.total)
-		}
+	if now := time.Now(); now.Sub(c.reported) >= 100*time.Millisecond {
+		c.reported = now
+		c.report(c.received, c.total)
 	}
 	return len(data), nil
 }
@@ -286,8 +284,6 @@ func (c *progressCounter) setTotal(total int64) {
 }
 
 func (c *progressCounter) flush() {
-	if c.report != nil {
-		c.reported = time.Now()
-		c.report(c.received, c.total)
-	}
+	c.reported = time.Now()
+	c.report(c.received, c.total)
 }

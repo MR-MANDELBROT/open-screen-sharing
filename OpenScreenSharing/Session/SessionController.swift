@@ -37,7 +37,7 @@ struct CredentialPrompt: Identifiable {
     var errorMessage = ""
 }
 
-struct FileTransfer: Identifiable, Equatable {
+struct FileTransfer {
     enum Direction: Equatable {
         case upload
         case download
@@ -55,17 +55,11 @@ struct FileTransfer: Identifiable, Equatable {
     var name: String
     var transferred: Int64 = 0
     var total: Int64 = 0
-    var currentItem: String?
     var state: State = .running
-    var localFolder: URL?
     var scopedURLs: [URL] = []
     var temporaryURLs: [URL] = []
 
     var isActive: Bool { state == .running }
-
-    var fraction: Double {
-        total > 0 ? min(1, Double(transferred) / Double(total)) : 0
-    }
 }
 
 struct RemoteDragOffer {
@@ -140,7 +134,6 @@ final class SessionController: ObservableObject, Identifiable {
     @Published private(set) var resolutionScale = VirtualDisplayMode.defaultResolutionScale
     @Published private(set) var hdrEnabled = false
     @Published var displaySupportsHDR = false
-    @Published private(set) var remotePointerVisible = true
     @Published private(set) var remoteAudio: RemoteAudio = .fromMac
     @Published var scaleMode: ScaleMode = .fit
     @Published var isFullScreen = false
@@ -164,14 +157,14 @@ final class SessionController: ObservableObject, Identifiable {
     @Published private(set) var computerID: UUID?
     @Published var alert: AlertState?
     @Published private(set) var isClosing = false
-    @Published private(set) var transfers: [FileTransfer] = [] {
-        didSet { updateTransferTask() }
-    }
     @Published private(set) var dropTarget: DropTarget?
     @Published var isShowingResolution = false
     @Published var isCustomizingToolbar = false
-    @Published private(set) var lastRemoteText: String?
     let debugInfo = DebugInfoMonitor()
+    private var transfers: [FileTransfer] = [] {
+        didSet { updateTransferTask() }
+    }
+    private var remotePointerVisible = true
     private var lastRemoteClipboard: ClipboardContent?
     private var syncedClipboardChangeCount = ClipboardAccess.changeCount
     private var reportedClipboardNotRestored = false
@@ -261,24 +254,22 @@ final class SessionController: ObservableObject, Identifiable {
     @Published private(set) var hasPicture = false
     private var isScrollGliding = false
 
-    private var isRestoring = false
     private var server: ServerAuthentication?
     private var probeTask: Task<Void, Never>?
     private var trustedFingerprint = ""
     private var passwordUpdate = PasswordUpdate.keep
     private var usedSavedPassword = false
     private var device: DeviceInfo?
-    private var deviceType: DeviceType? {
+    @Published private var deviceType: DeviceType? {
         didSet {
-            isIOS = deviceType?.isIOS ?? false
-            isPhone = deviceType == .iPhone
             if isIOS {
                 virtualDisplayRequests.stopWaiting()
             }
         }
     }
-    @Published private var isIOS = false
-    @Published private var isPhone = false
+
+    private var isIOS: Bool { deviceType?.isIOS ?? false }
+    private var isPhone: Bool { deviceType == .iPhone }
 
     var platform: RemotePlatform {
         isIOS ? .iOS : info.platform
@@ -293,8 +284,6 @@ final class SessionController: ObservableObject, Identifiable {
         device = route.model.map { DeviceInfo(model: $0, enclosureColor: "") }
         highPerformance = route.remoteProtocol == .vnc ? route.usesHighPerformance : false
         deviceType = route.deviceType ?? route.model.flatMap(DeviceType.init(model:))
-        isIOS = deviceType?.isIOS ?? false
-        isPhone = deviceType == .iPhone
         windowSize = route.computerID.flatMap { store.stored($0) }?.memory.windowSize
         virtualDisplayRequests.onIdle = { [weak self] in self?.virtualDisplayDidSettle() }
         #if os(iOS)
@@ -395,7 +384,6 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     private func restore(_ memory: SessionMemory) {
-        isRestoring = true
         quality = memory.quality
         mode = memory.observes ? .observe : .control
         clipboardSharing = memory.sharesClipboard
@@ -405,7 +393,6 @@ final class SessionController: ObservableObject, Identifiable {
         hdrEnabled = memory.usesHDR && DecoderCapabilities.current.supportsHDR
         remoteAudio = memory.remoteAudio
         windowSize = memory.windowSize
-        isRestoring = false
     }
 
     private var memory: SessionMemory {
@@ -423,7 +410,7 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     private func rememberState() {
-        guard !isRestoring, let computerID else { return }
+        guard let computerID else { return }
         save { try $0.remember(memory, for: computerID) }
     }
 
@@ -457,7 +444,7 @@ final class SessionController: ObservableObject, Identifiable {
         do {
             try body(store)
         } catch {
-            showError(String(localized: "Couldn’t Save “\(title)”"), error: error)
+            alert = AlertState(String(localized: "Couldn’t Save “\(title)”"), error: error)
         }
     }
 
@@ -520,7 +507,6 @@ final class SessionController: ObservableObject, Identifiable {
             platform: route.knownPlatform,
             trustedFingerprint: trustedFingerprint,
             keyboardLayout: WindowsKeyboardLayout.current,
-            displayName: route.name,
             clientName: route.remoteProtocol == .rdp || credentials.username.isEmpty ? Self.deviceName : credentials.username,
             credentials: credentials,
             quality: quality,
@@ -530,10 +516,9 @@ final class SessionController: ObservableObject, Identifiable {
             updateRate: screenRefreshRate,
             networkConfiguration: networkConfiguration
         )
-        let session = LibsharingRemoteSession(configuration: configuration)
         let sink = SessionEventSink(controller: self, pipeline: pipeline)
+        let session = LibsharingRemoteSession(configuration: configuration, delegate: sink)
         sink.session = session
-        session.prepare(delegate: sink)
         if sceneInBackground {
             sink.setSceneInBackground(true)
         }
@@ -648,7 +633,9 @@ final class SessionController: ObservableObject, Identifiable {
         stopScrollMomentum()
         updateMicrophone()
         sink?.setSceneInBackground(true)
+        #if os(iOS)
         screen?.backgroundStateDidChange()
+        #endif
         if phase == .connected {
             beginBackgroundTask()
         }
@@ -663,7 +650,9 @@ final class SessionController: ObservableObject, Identifiable {
         returnedFromBackground = ProcessInfo.processInfo.systemUptime
         endBackgroundTask()
         sink?.setSceneInBackground(false)
+        #if os(iOS)
         screen?.backgroundStateDidChange()
+        #endif
         updateMicrophone()
         let wasActive = activeWhenBackgrounded
         activeWhenBackgrounded = false
@@ -759,7 +748,7 @@ final class SessionController: ObservableObject, Identifiable {
     private func restartHighPerformance() {
         guard usesHighPerformance, phase == .connected, !isVideo else { return }
         if needsReconnectToRestartStream {
-            reconnectToRestartStream()
+            reconnectNow()
         } else {
             highPerformanceStartPending = true
             startHighPerformanceIfDisplayReady()
@@ -941,7 +930,7 @@ final class SessionController: ObservableObject, Identifiable {
 
     fileprivate func handle(info: SessionInfo) {
         var updated = info
-        updated.keyboardSource = self.info.keyboardSource ?? info.keyboardSource
+        updated.keyboardSource = self.info.keyboardSource
         updated.secureInput = self.info.secureInput
         if self.info != updated {
             self.info = updated
@@ -981,7 +970,6 @@ final class SessionController: ObservableObject, Identifiable {
         guard !content.isEmpty else { return }
         ClipboardAccess.shared.write(content)
         syncedClipboardChangeCount = ClipboardAccess.changeCount
-        lastRemoteText = content.lazy.compactMap { $0[UTType.utf8PlainText.identifier].flatMap { String(data: $0, encoding: .utf8) } }.first
     }
 
     fileprivate func handle(cursorMovedTo point: CGPoint) {
@@ -1023,30 +1011,18 @@ final class SessionController: ObservableObject, Identifiable {
             #else
             NSSound.beep()
             #endif
-        case .displaysAsleep, .displaysAwake, .userSessionChanged, .sessionEnding, .controlAllowed, .busy:
-            break
         case .pointerVisible(let visible):
-            if remotePointerVisible != visible {
-                remotePointerVisible = visible
-            }
+            remotePointerVisible = visible
             pipeline.setCursorPosition(pointerPosition, visible: visible)
         case .clipboardUnreadable(let message):
-            showError(String(localized: "Couldn’t Receive the Clipboard"), error: MessageError(message))
+            alert = AlertState(String(localized: "Couldn’t Receive the Clipboard"), error: MessageError(message))
         case .clipboardNotRestored(let message):
             guard !reportedClipboardNotRestored else { return }
             reportedClipboardNotRestored = true
-            showError(String(localized: "Couldn’t Receive the Clipboard"), error: MessageError(message))
+            alert = AlertState(String(localized: "Couldn’t Receive the Clipboard"), error: MessageError(message))
         }
     }
 
-
-    static var downloadsFolder: URL {
-        #if os(iOS)
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        #else
-        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-        #endif
-    }
 
     private static var deviceName: String {
         #if os(iOS)
@@ -1056,30 +1032,20 @@ final class SessionController: ObservableObject, Identifiable {
         #endif
     }
 
-    func uploadFiles(_ urls: [URL], to remoteFolder: String, temporary: Bool = false) {
-        guard let session else {
-            for url in urls {
-                reportSendFailure(url.lastPathComponent, error: MessageError("not connected"))
-                if temporary {
-                    try? FileManager.default.removeItem(at: url)
-                }
-            }
-            return
-        }
-        for url in urls {
-            let scoped = !temporary && url.startAccessingSecurityScopedResource()
-            do {
-                let id = try session.uploadFile(url, remoteFolder: remoteFolder)
-                transfers.append(
-                    FileTransfer(
-                        id: id, direction: .upload, name: url.lastPathComponent,
-                        scopedURLs: scoped ? [url] : [], temporaryURLs: temporary ? [url] : []
-                    ))
-            } catch {
-                if scoped { url.stopAccessingSecurityScopedResource() }
-                if temporary { try? FileManager.default.removeItem(at: url) }
-                reportSendFailure(url.lastPathComponent, error: error)
-            }
+    private func uploadFile(_ url: URL, to remoteFolder: String, temporary: Bool) {
+        let scoped = !temporary && url.startAccessingSecurityScopedResource()
+        do {
+            guard let session else { throw MessageError("not connected") }
+            let id = try session.uploadFile(url, remoteFolder: remoteFolder)
+            transfers.append(
+                FileTransfer(
+                    id: id, direction: .upload, name: url.lastPathComponent,
+                    scopedURLs: scoped ? [url] : [], temporaryURLs: temporary ? [url] : []
+                ))
+        } catch {
+            if scoped { url.stopAccessingSecurityScopedResource() }
+            if temporary { try? FileManager.default.removeItem(at: url) }
+            reportSendFailure(url.lastPathComponent, error: error)
         }
     }
 
@@ -1135,8 +1101,7 @@ final class SessionController: ObservableObject, Identifiable {
         return id
     }
 
-    @discardableResult
-    func drop(files: [URL], loading count: Int = 0) -> @MainActor (URL?, String, (any Error)?) -> Void {
+    func drop(files: [URL], loading count: Int) -> @MainActor (URL?, String, (any Error)?) -> Void {
         let id = endDrop(loading: files.count + count)
         for url in files {
             droppedFileLoaded(url, temporary: false, name: url.lastPathComponent, error: nil, dragID: id)
@@ -1179,7 +1144,7 @@ final class SessionController: ObservableObject, Identifiable {
     private func droppedFileLoaded(_ url: URL?, temporary: Bool, name: String, error: (any Error)?, dragID: Int64?) {
         guard let dragID, var delivery = drops[dragID] else {
             if let url {
-                uploadFiles([url], to: "~/Desktop", temporary: temporary)
+                uploadFile(url, to: "~/Desktop", temporary: temporary)
             } else {
                 reportSendFailure(name, error: error)
             }
@@ -1190,7 +1155,7 @@ final class SessionController: ObservableObject, Identifiable {
             if delivery.discards {
                 if temporary { try? FileManager.default.removeItem(at: url) }
             } else if let destination = delivery.destination {
-                uploadFiles([url], to: destination, temporary: temporary)
+                uploadFile(url, to: destination, temporary: temporary)
             } else {
                 delivery.waiting.append((url, temporary))
             }
@@ -1204,7 +1169,7 @@ final class SessionController: ObservableObject, Identifiable {
         guard var delivery = drops[id], !delivery.isSettled else { return }
         delivery.destination = path
         for file in delivery.waiting {
-            uploadFiles([file.url], to: path, temporary: file.temporary)
+            uploadFile(file.url, to: path, temporary: file.temporary)
         }
         delivery.waiting = []
         drops[id] = delivery.loading == 0 ? nil : delivery
@@ -1221,22 +1186,6 @@ final class SessionController: ObservableObject, Identifiable {
         }
     }
 
-    @discardableResult
-    func downloadFile(_ remotePath: String, to destination: URL = SessionController.downloadsFolder) -> Int64? {
-        do {
-            guard let session else { throw MessageError("not connected") }
-            let id = try session.downloadFile(remotePath, localFolder: destination)
-            transfers.append(
-                FileTransfer(
-                    id: id, direction: .download, name: (remotePath as NSString).lastPathComponent, localFolder: destination
-                ))
-            return id
-        } catch {
-            showError(String(localized: "Couldn’t Get “\((remotePath as NSString).lastPathComponent)”"), error: error)
-            return nil
-        }
-    }
-
     private struct PromisedFile {
         let folder: URL
         let progress: Progress
@@ -1244,10 +1193,17 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     func downloadFile(_ remotePath: String, into folder: URL, progress: Progress, completion: @escaping (Result<URL, any Error>) -> Void) {
-        guard let id = downloadFile(remotePath, to: folder) else {
+        let name = (remotePath as NSString).lastPathComponent
+        let id: Int64
+        do {
+            guard let session else { throw MessageError("not connected") }
+            id = try session.downloadFile(remotePath, localFolder: folder)
+        } catch {
+            alert = AlertState(String(localized: "Couldn’t Get “\(name)”"), error: error)
             completion(.failure(CocoaError(.fileWriteUnknown)))
             return
         }
+        transfers.append(FileTransfer(id: id, direction: .download, name: name))
         progress.cancellationHandler = { [weak self] in
             Task { @MainActor in self?.session?.cancelTransfer(id) }
         }
@@ -1284,14 +1240,6 @@ final class SessionController: ObservableObject, Identifiable {
         release(.primary)
     }
 
-    func cancelTransfer(_ transfer: FileTransfer) {
-        session?.cancelTransfer(transfer.id)
-    }
-
-    func clearFinishedTransfers() {
-        transfers.removeAll { !$0.isActive }
-    }
-
     private func abandonTransfers() {
         var interruption = FileTransferError(.connection)
         interruption.message = interruption.summary
@@ -1310,12 +1258,12 @@ final class SessionController: ObservableObject, Identifiable {
         promisedFiles = [:]
         guard !isClosing, let transfer = abandoned.first else { return }
         if abandoned.count == 1 {
-            showError(
+            alert = AlertState(
                 transfer.direction == .upload
                     ? String(localized: "Couldn’t Send “\(transfer.name)”") : String(localized: "Couldn’t Get “\(transfer.name)”"),
                 error: interruption)
         } else {
-            showError(String(localized: "Couldn’t Finish Transferring Files"), error: MessageError(abandoned.map(\.name).joined(separator: "\n")))
+            alert = AlertState(String(localized: "Couldn’t Finish Transferring Files"), error: MessageError(abandoned.map(\.name).joined(separator: "\n")))
         }
     }
 
@@ -1339,7 +1287,7 @@ final class SessionController: ObservableObject, Identifiable {
             task.onExpire = { [weak self] in
                 guard let self else { return }
                 for transfer in self.transfers where transfer.isActive {
-                    self.cancelTransfer(transfer)
+                    self.session?.cancelTransfer(transfer.id)
                 }
             }
             task.submit(title: activity, subtitle: title)
@@ -1356,7 +1304,7 @@ final class SessionController: ObservableObject, Identifiable {
         body(&transfers[index])
     }
 
-    fileprivate func handleTransferProgress(id: Int64, transferred: Int64, total: Int64, item: String?) {
+    fileprivate func handleTransferProgress(id: Int64, transferred: Int64, total: Int64) {
         if let progress = promisedFiles[id]?.progress {
             progress.totalUnitCount = total
             progress.completedUnitCount = transferred
@@ -1364,7 +1312,6 @@ final class SessionController: ObservableObject, Identifiable {
         update(id) { transfer in
             transfer.transferred = transferred
             transfer.total = total
-            transfer.currentItem = item
         }
     }
 
@@ -1396,7 +1343,7 @@ final class SessionController: ObservableObject, Identifiable {
         }
         guard let transfer = transfers.first(where: { $0.id == id }) else { return }
         if case .failed(let error) = transfer.state {
-            showError(
+            alert = AlertState(
                 transfer.direction == .upload
                     ? String(localized: "Couldn’t Send “\(transfer.name)”") : String(localized: "Couldn’t Get “\(transfer.name)”"),
                 error: error)
@@ -1447,14 +1394,6 @@ final class SessionController: ObservableObject, Identifiable {
         hasStartedHighPerformance && !usesDynamicResolution && phase == .connected
     }
 
-    private func reconnectToRestartStream() {
-        guard let credentials else { return }
-        releaseAllKeys()
-        teardown()
-        connect(with: credentials)
-        phase = .reconnecting(attempt: 1)
-    }
-
     var networkSupportsHDR: Bool {
         networkConfiguration.chroma.pixelFormats(available: DecoderCapabilities.current.pixelFormats) & (1 << 5) != 0
     }
@@ -1471,19 +1410,15 @@ final class SessionController: ObservableObject, Identifiable {
         rememberState()
     }
 
-    fileprivate func hdrDecodingFailed(_ error: any Error) {
-        guard hdrEnabled else {
-            videoDecodingFailed(error)
+    fileprivate func videoDecodingFailed(_ error: any Error, hdr: Bool) {
+        guard hdr, hdrEnabled else {
+            failHighPerformance(MediaFailure(.undecodable, message: error.localizedDescription))
             return
         }
         hdrEnabled = false
         session?.setHDR(false)
         rememberState()
-        showError(String(localized: "This Device Can’t Show HDR"), error: error)
-    }
-
-    fileprivate func videoDecodingFailed(_ error: any Error) {
-        failHighPerformance(MediaFailure(.undecodable, message: error.localizedDescription))
+        alert = AlertState(String(localized: "This Device Can’t Show HDR"), error: error)
     }
 
     func setRemoteAudio(_ audio: RemoteAudio) {
@@ -1491,7 +1426,7 @@ final class SessionController: ObservableObject, Identifiable {
         remoteAudio = audio
         rememberState()
         if changed, capabilities.contains(.audio) ? phase == .connected : isVideo && needsReconnectToRestartStream {
-            reconnectToRestartStream()
+            reconnectNow()
             return
         }
         session?.setRemoteAudio(audio)
@@ -1550,13 +1485,13 @@ final class SessionController: ObservableObject, Identifiable {
                             guard let self, let microphone = self.microphone else { return }
                             microphone.stop()
                             self.microphone = nil
-                            self.showError(String(localized: "Can’t Use the Microphone"), error: error)
+                            self.alert = AlertState(String(localized: "Can’t Use the Microphone"), error: error)
                         }
                     })
                 try sender.start()
                 microphone = sender
             } catch {
-                showError(String(localized: "Can’t Use the Microphone"), error: error)
+                alert = AlertState(String(localized: "Can’t Use the Microphone"), error: error)
             }
         }
     }
@@ -1568,7 +1503,11 @@ final class SessionController: ObservableObject, Identifiable {
             session?.setClipboardSharing(enabled)
             return
         }
-        guard !sendChangedClipboard(completion: { [weak self] _ in self?.shareClipboardAfterReading() }) else { return }
+        let sendsClipboard = sendChangedClipboard { [weak self] _ in
+            guard let self else { return }
+            session?.setClipboardSharing(clipboardSharing)
+        }
+        guard !sendsClipboard else { return }
         readingClipboard = true
         Task {
             let explanation = await ClipboardAccess.shared.check()
@@ -1576,12 +1515,8 @@ final class SessionController: ObservableObject, Identifiable {
             if let explanation {
                 alert = explanation
             }
-            shareClipboardAfterReading()
+            session?.setClipboardSharing(clipboardSharing)
         }
-    }
-
-    private func shareClipboardAfterReading() {
-        session?.setClipboardSharing(clipboardSharing)
     }
 
     func setUsesDynamicResolution(_ uses: Bool) {
@@ -1643,7 +1578,7 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     func sendClipboardToMac() {
-        let content = Self.localClipboard()
+        let content = ClipboardAccess.readClipboard().content
         guard !content.isEmpty else { return }
         sendClipboard(content)
     }
@@ -1670,7 +1605,7 @@ final class SessionController: ObservableObject, Identifiable {
     func pasteFromDevice() {
         guard isControlling else { return }
         commandTapPending = false
-        let content = Self.localClipboard()
+        let content = ClipboardAccess.readClipboard().content
         guard !content.isEmpty, sendClipboard(content, pasting: true) else { return }
         textCursorMayHaveMoved()
     }
@@ -1684,13 +1619,9 @@ final class SessionController: ObservableObject, Identifiable {
             lastRemoteClipboard = content
             return true
         } catch {
-            showError(String(localized: "Couldn’t Send the Clipboard"), error: error)
+            alert = AlertState(String(localized: "Couldn’t Send the Clipboard"), error: error)
             return false
         }
-    }
-
-    private static func localClipboard() -> ClipboardContent {
-        ClipboardAccess.readClipboard().content
     }
 
     func getClipboardFromMac() {
@@ -1699,12 +1630,12 @@ final class SessionController: ObservableObject, Identifiable {
             guard let session else { throw MessageError("not connected") }
             try session.requestClipboard()
         } catch {
-            showError(String(localized: "Couldn’t Receive the Clipboard"), error: error)
+            alert = AlertState(String(localized: "Couldn’t Receive the Clipboard"), error: error)
         }
     }
 
     fileprivate func audioFailed(_ error: any Error) {
-        showError(platform != .pc ? String(localized: "Can’t Play the Mac’s Sound") : String(localized: "Can’t Play the Computer’s Sound"), error: error)
+        alert = AlertState(platform != .pc ? String(localized: "Can’t Play the Mac’s Sound") : String(localized: "Can’t Play the Computer’s Sound"), error: error)
     }
 
     func sendChord(_ chord: KeyChord) {
@@ -1766,12 +1697,8 @@ final class SessionController: ObservableObject, Identifiable {
         return [toolbarHandleFrame, toolbarBarFrame].contains { $0?.insetBy(dx: -16, dy: -16).contains(location) == true }
     }
 
-    private func showError(_ failure: String, error: (any Error)? = nil) {
-        alert = AlertState(failure, error: error)
-    }
-
-    func reportSendFailure(_ name: String, error: (any Error)?) {
-        showError(String(localized: "Couldn’t Send “\(name)”"), error: error)
+    private func reportSendFailure(_ name: String, error: (any Error)?) {
+        alert = AlertState(String(localized: "Couldn’t Send “\(name)”"), error: error)
     }
 
 
@@ -1817,7 +1744,7 @@ final class SessionController: ObservableObject, Identifiable {
         if wanted {
             assistCursorShown = true
             let point = serverPoint(pointerPosition)
-            session?.setAssistCursor(x: Int(point.x), y: Int(point.y), pointer: .highlight, pressed: !pointerButtons.isEmpty)
+            session?.setAssistCursor(x: Int(point.x), y: Int(point.y), pressed: !pointerButtons.isEmpty)
         } else {
             pointerLeftScreen()
         }
@@ -2206,7 +2133,7 @@ final class SessionController: ObservableObject, Identifiable {
             do {
                 if !typed.isEmpty { try session?.sendText(typed) }
             } catch {
-                showError(String(localized: "Some Characters Can’t Be Typed on “\(title)”"), error: error)
+                alert = AlertState(String(localized: "Some Characters Can’t Be Typed on “\(title)”"), error: error)
                 return false
             }
             if !typable {
@@ -2221,7 +2148,7 @@ final class SessionController: ObservableObject, Identifiable {
             do {
                 try session?.pasteText(text)
             } catch {
-                showError(String(localized: "Some Characters Can’t Be Typed on “\(title)”"), error: error)
+                alert = AlertState(String(localized: "Some Characters Can’t Be Typed on “\(title)”"), error: error)
                 return false
             }
         }
@@ -2675,7 +2602,7 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
                 self.showedLife()
             },
             failure: { [weak self] in self?.session?.requestKeyframe() },
-            unsupported: { [weak self] hdr, error in self?.onMain { hdr ? $0.hdrDecodingFailed(error) : $0.videoDecodingFailed(error) } }
+            unsupported: { [weak self] hdr, error in self?.onMain { $0.videoDecodingFailed(error, hdr: hdr) } }
         )
     }
 
@@ -2849,8 +2776,8 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         onMain { $0.handle(event: event) }
     }
 
-    func sessionFileTransferProgress(id: Int64, transferred: Int64, total: Int64, item: String?) {
-        onMain { $0.handleTransferProgress(id: id, transferred: transferred, total: total, item: item) }
+    func sessionFileTransferProgress(id: Int64, transferred: Int64, total: Int64) {
+        onMain { $0.handleTransferProgress(id: id, transferred: transferred, total: total) }
     }
 
     func sessionFileTransferFinished(id: Int64, name: String?, error: FileTransferError?) {

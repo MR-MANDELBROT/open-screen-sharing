@@ -1,7 +1,7 @@
 #if os(macOS)
 import Foundation
 
-nonisolated enum UpdateTrack: String, CaseIterable, Codable, Sendable {
+nonisolated enum UpdateTrack: String, Codable, Sendable {
     case stable
     case nightly
 

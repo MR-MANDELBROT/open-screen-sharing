@@ -112,13 +112,7 @@ nonisolated enum RemoteAudio: String, Codable, CaseIterable, Identifiable, Senda
 
 nonisolated enum SessionEvent: Sendable {
     case bell
-    case displaysAsleep
-    case displaysAwake
-    case userSessionChanged
-    case sessionEnding
-    case busy(Bool)
     case pointerVisible(Bool)
-    case controlAllowed(Bool)
     case clipboardUnreadable(String)
     case clipboardNotRestored(String)
 }
@@ -184,7 +178,6 @@ nonisolated struct SessionConfiguration: Sendable {
     var platform: RemotePlatform?
     var trustedFingerprint: String
     var keyboardLayout: Int
-    var displayName: String
     var clientName: String
     var credentials: SessionCredentials
     var quality: SessionQuality
@@ -259,13 +252,6 @@ nonisolated enum GesturePhase: Sendable {
     case cancelled
 }
 
-nonisolated enum SwipeDirection: Sendable {
-    case back
-    case forward
-    case up
-    case down
-}
-
 nonisolated enum SystemCommand: CaseIterable, Identifiable, Sendable {
     case missionControl
     case appWindows
@@ -282,11 +268,6 @@ nonisolated enum SystemCommand: CaseIterable, Identifiable, Sendable {
         case .launchpad: .launchpad
         }
     }
-}
-
-nonisolated enum AssistPointer: Sendable {
-    case highlight
-    case arrow
 }
 
 nonisolated enum VideoCodec: String, Codable, Sendable {

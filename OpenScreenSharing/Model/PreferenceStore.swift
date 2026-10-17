@@ -3,7 +3,7 @@ import GRDB
 import os
 
 final class PreferenceStore {
-    static let shared = PreferenceStore(database: AppDatabase.shared)
+    static let shared = PreferenceStore()
 
     private nonisolated struct Item: Codable, FetchableRecord, PersistableRecord {
         static let databaseTableName = "preferences"
@@ -12,11 +12,9 @@ final class PreferenceStore {
         var data: Data
     }
 
-    private let database: DatabaseQueue
+    private let database = AppDatabase.shared
 
-    private init(database: DatabaseQueue) {
-        self.database = database
-    }
+    private init() {}
 
     func value<T: Decodable>(_ type: T.Type, for name: String) -> T? {
         let item: Item?
@@ -48,14 +46,11 @@ final class PreferenceStore {
         }
     }
 
-    @discardableResult
-    func remove(_ name: String) -> Bool {
+    func remove(_ name: String) {
         do {
             _ = try database.write { try Item.deleteOne($0, key: name) }
-            return true
         } catch {
             StorageNotice.shared.report("Couldn’t Save Settings", error: error)
-            return false
         }
     }
 }

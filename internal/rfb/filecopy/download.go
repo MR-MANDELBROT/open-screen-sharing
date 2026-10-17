@@ -3,7 +3,6 @@ package filecopy
 import (
 	"compress/zlib"
 	"context"
-	"fmt"
 	"io"
 	"io/fs"
 	"strconv"
@@ -21,36 +20,13 @@ const (
 	Link
 )
 
-func (k Kind) String() string {
-	switch k {
-	case File:
-		return "file"
-	case Folder:
-		return "folder"
-	case Link:
-		return "link"
-	default:
-		return fmt.Sprint("kind(", int(k), ")")
-	}
-}
-
 type Item struct {
-	Path               string
-	Kind               Kind
-	Size               int64
-	ResourceForkSize   int64
-	Mode               fs.FileMode
-	Created            time.Time
-	Modified           time.Time
-	Accessed           time.Time
-	Locked             bool
-	LinkTarget         string
-	ExtendedAttributes map[string][]byte
-}
-
-type Receiver interface {
-	Item(item Item) (io.WriteCloser, error)
-	Finish(err error) error
+	Path       string
+	Kind       Kind
+	Mode       fs.FileMode
+	Modified   time.Time
+	Accessed   time.Time
+	LinkTarget string
 }
 
 const maximumUncompressedSize = 16 << 20
@@ -63,7 +39,7 @@ type received struct {
 type download struct {
 	transfer *Transfer
 	source   string
-	receiver Receiver
+	receiver *directoryReceiver
 	messages chan received
 
 	folders           []string
@@ -76,16 +52,13 @@ type download struct {
 	output            []byte
 }
 
-func (m *Manager) Download(ctx context.Context, source string, receiver Receiver, onProgress func(Progress)) (*Transfer, error) {
+func (m *Manager) Download(ctx context.Context, source string, directory string, onProgress func(Progress)) (*Transfer, error) {
 	if !strings.HasPrefix(source, "/") {
 		return nil, E.New("filecopy: source ", strconv.Quote(source), " is not an absolute path")
 	}
-	if receiver == nil {
-		return nil, E.New("filecopy: no receiver")
-	}
 	job := &download{
 		source:   source,
-		receiver: receiver,
+		receiver: &directoryReceiver{directory: directory},
 		messages: make(chan received, 32),
 		folders:  []string{""},
 	}
@@ -144,7 +117,7 @@ func (d *download) receive() error {
 				return err
 			}
 		case <-d.transfer.stop:
-			return d.transfer.stopReason()
+			return d.transfer.stopError
 		}
 	}
 }
@@ -210,17 +183,13 @@ func (d *download) newItem(body []byte) error {
 	}
 	item := Item{
 		Mode:     fileModeFromPOSIX(wire.mode),
-		Created:  wire.created,
 		Modified: wire.modified,
 		Accessed: wire.accessed,
-		Locked:   wire.nodeFlags&nodeFlagLocked != 0,
 	}
 	name := wire.name
 	switch wire.itemType {
 	case itemTypeFile:
 		item.Kind = File
-		item.Size = int64(wire.dataSize)
-		item.ResourceForkSize = int64(wire.resourceForkSize)
 		name = carbonName(name)
 	case itemTypeFolder:
 		item.Kind = Folder
@@ -249,12 +218,6 @@ func (d *download) newItem(body []byte) error {
 	if level == 0 {
 		d.rootName = name
 	}
-	if len(wire.attributes) > 0 {
-		item.ExtendedAttributes = make(map[string][]byte, len(wire.attributes))
-		for _, attribute := range wire.attributes {
-			item.ExtendedAttributes[attribute.name] = attribute.value
-		}
-	}
 	d.itemPath = item.Path
 	var linkSize int64
 	if item.Kind == Link {
@@ -263,16 +226,12 @@ func (d *download) newItem(body []byte) error {
 	d.transfer.update(func(progress *Progress) {
 		progress.Item = item.Path
 		progress.Transferred += linkSize
-		progress.Stored = progress.Transferred
 	})
 	writer, err := d.receiver.Item(item)
 	if err != nil {
 		return err
 	}
 	if item.Kind != File {
-		if writer != nil {
-			return writer.Close()
-		}
 		return nil
 	}
 	d.writer = writer
@@ -290,16 +249,14 @@ func (d *download) write(data []byte) error {
 		switch {
 		case d.dataRemaining > 0:
 			n := min(uint64(len(data)), d.dataRemaining)
-			if d.writer != nil {
-				_, err := d.writer.Write(data[:n])
-				if err != nil {
-					return err
-				}
+			_, err := d.writer.Write(data[:n])
+			if err != nil {
+				return err
 			}
 			d.dataRemaining -= n
 			data = data[n:]
 			if d.dataRemaining == 0 {
-				err := d.closeWriter()
+				err = d.closeWriter()
 				if err != nil {
 					return err
 				}
@@ -314,15 +271,11 @@ func (d *download) write(data []byte) error {
 	}
 	d.transfer.update(func(progress *Progress) {
 		progress.Transferred += int64(length)
-		progress.Stored = progress.Transferred
 	})
 	return nil
 }
 
 func (d *download) closeWriter() error {
-	if d.writer == nil {
-		return nil
-	}
 	err := d.writer.Close()
 	d.writer = nil
 	return err

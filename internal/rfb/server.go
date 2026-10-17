@@ -45,7 +45,7 @@ type ServerHandler interface {
 	HandleEvent(session *ServerSession, event ViewerEvent)
 	Clipboard(ctx context.Context) (*Clipboard, error)
 	OpenVideo(ctx context.Context, request media.ServerVideoRequest) (media.ServerVideoSource, error)
-	OpenAudio(ctx context.Context) (media.ServerAudioSource, error)
+	OpenAudio() (media.ServerAudioSource, error)
 	SessionEnded(session *ServerSession, err error)
 }
 
@@ -296,7 +296,6 @@ func (s *Server) mediaTakenBy(session *ServerSession) bool {
 func (s *Server) serveConn(conn net.Conn, id uint64) {
 	tcpConn, isTCP := conn.(*net.TCPConn)
 	if isTCP {
-		_ = tcpConn.SetNoDelay(true)
 		_ = tcpConn.SetKeepAliveConfig(net.KeepAliveConfig{
 			Enable:   true,
 			Idle:     5 * time.Second,

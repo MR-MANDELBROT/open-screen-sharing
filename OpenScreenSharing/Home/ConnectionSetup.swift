@@ -55,7 +55,7 @@ struct ConnectionSetupView: View {
                 .transition(Self.pushTransition)
             } else {
                 NavigationStackCompat {
-                    ConnectToView(close: close, signIn: signIn, signedIn: configure)
+                    ConnectToView(close: { dismiss() }, signIn: signIn, signedIn: configure)
                         .navigationDestinationCompat(isPresented: $isSigningIn) {
                             if let signingIn {
                                 SetupSignInView(computer: signingIn, next: configure)
@@ -87,10 +87,6 @@ struct ConnectionSetupView: View {
             detent = .large
             signedIn = computer
         }
-    }
-
-    private func close() {
-        dismiss()
     }
 }
 
@@ -211,12 +207,9 @@ struct SetupSignInView: View {
 struct SetupProblem {
     var summary: String
     var error = ""
+}
 
-    init(summary: String, error: String = "") {
-        self.summary = summary
-        self.error = error
-    }
-
+extension SetupProblem {
     init(_ failure: SessionFailure, host: String, asksForUsername: Bool) {
         switch failure.kind {
         case .authenticationFailed:

@@ -32,9 +32,6 @@ type UDPConn struct {
 	conn   *tun.GoUDPConn
 	port   uint16
 	queue  *datagramQueue
-
-	closeOnce sync.Once
-	closeErr  error
 }
 
 func (t *Tunnel) ListenUDP(port uint16) (*UDPConn, error) {
@@ -101,21 +98,17 @@ func (c *UDPConn) CloseRead() {
 }
 
 func (c *UDPConn) Close() error {
-	c.closeOnce.Do(func() {
-		t := c.tunnel
-		t.udpAccess.Lock()
-		if t.udpConns[c.port] == c {
-			delete(t.udpConns, c.port)
-		}
-		t.udpAccess.Unlock()
-		c.queue.close(net.ErrClosed)
-		c.closeErr = c.conn.Close()
-		if dropped := c.queue.droppedCount(); dropped > 0 {
-			t.logger.Debug("dropped datagrams that found the queue full",
-				slog.Int("port", int(c.port)), slog.Uint64("count", dropped))
-		}
-	})
-	return c.closeErr
+	t := c.tunnel
+	t.udpAccess.Lock()
+	delete(t.udpConns, c.port)
+	t.udpAccess.Unlock()
+	c.queue.close(net.ErrClosed)
+	err := c.conn.Close()
+	if dropped := c.queue.droppedCount(); dropped > 0 {
+		t.logger.Debug("dropped datagrams that found the queue full",
+			slog.Int("port", int(c.port)), slog.Uint64("count", dropped))
+	}
+	return err
 }
 
 func (t *Tunnel) deliverDirect(packet []byte, arrived time.Time) bool {

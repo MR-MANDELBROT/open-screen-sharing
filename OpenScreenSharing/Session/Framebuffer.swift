@@ -43,25 +43,15 @@ nonisolated final class Framebuffer: @unchecked Sendable {
 nonisolated enum PixelBufferImage {
     private static let context = CIContext(options: [.cacheIntermediates: false])
     private static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+    private static let thumbnailWidth: CGFloat = 1280
 
-    static func makeImage(_ pixelBuffer: CVPixelBuffer, turns: PictureTurns) -> CGImage? {
-        let image = CIImage(cvPixelBuffer: pixelBuffer).oriented(turns.imageOrientation)
-        return context.createCGImage(image, from: image.extent, format: .BGRA8, colorSpace: colorSpace)
+    static func makeThumbnail(_ pixelBuffer: CVPixelBuffer, turns: PictureTurns) -> Data? {
+        thumbnail(of: CIImage(cvPixelBuffer: pixelBuffer).oriented(turns.imageOrientation))
     }
 
-    static func compose(strips: [CVPixelBuffer?], stripHeight: Int, canvasHeight: Int, turns: PictureTurns) -> CGImage? {
-        guard let image = composed(strips: strips, stripHeight: stripHeight, canvasHeight: canvasHeight)?.oriented(turns.imageOrientation)
-        else { return nil }
-        return context.createCGImage(image, from: image.extent, format: .BGRA8, colorSpace: colorSpace)
-    }
-
-    static func makeThumbnail(_ pixelBuffer: CVPixelBuffer, turns: PictureTurns, maxWidth: CGFloat) -> Data? {
-        thumbnail(of: CIImage(cvPixelBuffer: pixelBuffer).oriented(turns.imageOrientation), maxWidth: maxWidth)
-    }
-
-    static func makeThumbnail(strips: [CVPixelBuffer?], stripHeight: Int, canvasHeight: Int, turns: PictureTurns, maxWidth: CGFloat) -> Data? {
+    static func makeThumbnail(strips: [CVPixelBuffer?], stripHeight: Int, canvasHeight: Int, turns: PictureTurns) -> Data? {
         guard let image = composed(strips: strips, stripHeight: stripHeight, canvasHeight: canvasHeight) else { return nil }
-        return thumbnail(of: image.oriented(turns.imageOrientation), maxWidth: maxWidth)
+        return thumbnail(of: image.oriented(turns.imageOrientation))
     }
 
     private static func composed(strips: [CVPixelBuffer?], stripHeight: Int, canvasHeight: Int) -> CIImage? {
@@ -76,9 +66,9 @@ nonisolated enum PixelBufferImage {
         return image.cropped(to: CGRect(x: 0, y: 0, width: width, height: canvasHeight))
     }
 
-    private static func thumbnail(of image: CIImage, maxWidth: CGFloat) -> Data? {
+    private static func thumbnail(of image: CIImage) -> Data? {
         guard image.extent.width > 0, image.extent.height > 0 else { return nil }
-        let scale = min(1, maxWidth / image.extent.width)
+        let scale = min(1, thumbnailWidth / image.extent.width)
         let scaled = image.applyingFilter("CILanczosScaleTransform", parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
         guard let colorSpace else { return nil }
         return context.jpegRepresentation(

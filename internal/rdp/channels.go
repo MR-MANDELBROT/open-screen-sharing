@@ -19,9 +19,6 @@ const (
 	channelFlagShowProtocol = 0x00000010
 	channelFlagSuspend      = 0x00000020
 	channelFlagResume       = 0x00000040
-	channelPacketCompressed = 0x00200000
-	channelPacketAtFront    = 0x00400000
-	channelPacketFlushed    = 0x00800000
 
 	channelChunkLength = 1600
 	maxChannelMessage  = 64 << 20
@@ -111,7 +108,7 @@ func (r *channelRegistry) receive(id uint16, payload []byte) error {
 	if flags&(channelFlagSuspend|channelFlagResume) != 0 || channel.closed.Load() {
 		return nil
 	}
-	message, err := channel.reassemble(r.mcs, flags, total, data)
+	message, err := channel.reassemble(flags, total, data)
 	if err == nil && message != nil {
 		err = channel.handler.OnData(message)
 	}
@@ -124,14 +121,7 @@ func (r *channelRegistry) receive(id uint16, payload []byte) error {
 	return nil
 }
 
-func (c *staticChannel) reassemble(m *mcsLayer, flags, total uint32, data []byte) ([]byte, error) {
-	if flags&(channelPacketCompressed|channelPacketAtFront|channelPacketFlushed) != 0 {
-		var err error
-		data, err = m.bulk.Decompress(data, byte(flags>>16))
-		if err != nil {
-			return nil, E.Cause(err, "rdp: decompress ", c.name, " channel data")
-		}
-	}
+func (c *staticChannel) reassemble(flags, total uint32, data []byte) ([]byte, error) {
 	if total > maxChannelMessage {
 		return nil, E.New("rdp: virtual channel ", c.name, " message of ", total, " bytes exceeds ", maxChannelMessage, " bytes")
 	}

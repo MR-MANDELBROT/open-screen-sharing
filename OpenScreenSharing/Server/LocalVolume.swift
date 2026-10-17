@@ -6,13 +6,12 @@ final class LocalVolume {
     nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "server")
     private static let savedKey = "serverSavedVolume"
 
-    private let store: PreferenceStore
+    private let store = PreferenceStore.shared
     private let volumeView = MPVolumeView(frame: CGRect(x: -100, y: -100, width: 1, height: 1))
     private var isReady = false
     private var watched = false
 
-    init(store: PreferenceStore = .shared) {
-        self.store = store
+    init() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
             isReady = true
@@ -23,10 +22,6 @@ final class LocalVolume {
     func setWatched(_ watched: Bool) {
         self.watched = watched
         update()
-    }
-
-    func restore() {
-        setWatched(false)
     }
 
     private func update() {

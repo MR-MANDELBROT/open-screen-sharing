@@ -1,6 +1,7 @@
 package rdp
 
 import (
+	"encoding/binary"
 	"image"
 	"log/slog"
 	"sync"
@@ -124,7 +125,7 @@ type graphics struct {
 	framebuffer       *bgra.Image
 
 	bulk         *bulk.Decompressor
-	host         graphicsHost
+	client       *Client
 	pointerCache [pointerCacheSize]*bgra.Cursor
 	palette      [paletteSize]uint32
 	hasPalette   bool
@@ -139,13 +140,8 @@ type graphics struct {
 	dirty        image.Rectangle
 }
 
-type graphicsHost interface {
-	acknowledgeFrame(id uint32) error
-	scheduleRefresh()
-}
-
-func newGraphics(events Events, logger *slog.Logger, width, height int, host graphicsHost, decompressor *bulk.Decompressor) *graphics {
-	g := &graphics{events: events, logger: logger, bulk: decompressor, host: host, rfx: rfx.NewDecoder()}
+func newGraphics(events Events, logger *slog.Logger, width, height int, client *Client) *graphics {
+	g := &graphics{events: events, logger: logger, bulk: new(bulk.Decompressor), client: client, rfx: rfx.NewDecoder()}
 	g.width.Store(int32(width))
 	g.height.Store(int32(height))
 	return g
@@ -187,6 +183,7 @@ func (g *graphics) resize(width, height int) error {
 	if err != nil {
 		return err
 	}
+	g.client.refreshInfo()
 	if !validFramebuffer(framebuffer, width, height) {
 		return E.New("rdp: the application supplied an invalid framebuffer for the ", width, "x", height, " desktop")
 	}
@@ -230,7 +227,7 @@ func (g *graphics) close() {
 
 func (g *graphics) dropUpdate(err error) {
 	g.logger.Debug("drop graphics update", "error", err)
-	g.host.scheduleRefresh()
+	g.client.scheduleRefresh()
 }
 
 func (g *graphics) beginFrame() {
@@ -493,7 +490,7 @@ func (g *graphics) processSurfaceCommands(data []byte) error {
 				g.beginFrame()
 			case surfaceFrameEnd:
 				g.endFrame()
-				err := g.host.acknowledgeFrame(frameID)
+				err := g.client.session.sendData(pduFrameAcknowledge, binary.LittleEndian.AppendUint32(nil, frameID))
 				if err != nil {
 					return err
 				}

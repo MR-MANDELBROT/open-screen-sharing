@@ -38,12 +38,9 @@ type DiskImageImport struct {
 	cancel    context.CancelFunc
 }
 
-func NewDiskImageImport(directory string, handler DiskImageImportHandler) (*DiskImageImport, error) {
-	if directory == "" || handler == nil {
-		return nil, E.New("a directory and a handler are required")
-	}
+func NewDiskImageImport(directory string, handler DiskImageImportHandler) *DiskImageImport {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &DiskImageImport{directory: directory, handler: handler, ctx: ctx, cancel: cancel}, nil
+	return &DiskImageImport{directory: directory, handler: handler, ctx: ctx, cancel: cancel}
 }
 
 func (i *DiskImageImport) Download(url string) error {
@@ -77,15 +74,8 @@ type MacImportOptions struct {
 }
 
 func (i *DiskImageImport) ImportFromMac(options *MacImportOptions) error {
-	if options == nil {
-		return E.New("no options")
-	}
-	port := options.Port
-	if port == 0 {
-		port = 22
-	}
 	source, err := imagemounter.DialSSH(i.ctx, imagemounter.SSHOptions{
-		Address:    net.JoinHostPort(options.Host, strconv.Itoa(int(port))),
+		Address:    net.JoinHostPort(options.Host, strconv.Itoa(int(options.Port))),
 		User:       options.Username,
 		Password:   options.Password,
 		PrivateKey: options.PrivateKey,
@@ -107,7 +97,7 @@ func (i *DiskImageImport) Cancel() {
 }
 
 func (i *DiskImageImport) run(source imagemounter.Source) error {
-	_, err := imagemounter.Import(i.ctx, source, filepath.Clean(i.directory), i.handler.OnProgress)
+	err := imagemounter.Import(i.ctx, source, filepath.Clean(i.directory), i.handler.OnProgress)
 	return i.result(err)
 }
 

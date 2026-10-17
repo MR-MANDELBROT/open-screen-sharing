@@ -12,14 +12,12 @@ import (
 type handler struct {
 	logger  *slog.Logger
 	session rfb.SessionChoice
-	client  *rfb.Client
 
 	access     sync.Mutex
 	cursor     *rfb.Cursor
 	updates    int
 	pixels     int64
 	clipboards chan *rfb.Clipboard
-	layouts    chan *rfb.DisplayLayout
 
 	drag         *rfb.RemoteDrag
 	dropID       uint32
@@ -32,7 +30,6 @@ func newHandler(logger *slog.Logger, session rfb.SessionChoice) *handler {
 		logger:     logger,
 		session:    session,
 		clipboards: make(chan *rfb.Clipboard, 16),
-		layouts:    make(chan *rfb.DisplayLayout, 16),
 
 		destinations: make(chan dropDestination, 16),
 	}
@@ -76,10 +73,6 @@ func (h *handler) DisplaysChanged(layout *rfb.DisplayLayout) {
 	for _, display := range layout.Displays {
 		h.logger.Info("display", "id", display.ID, "density", display.Density, "scale", display.Scale,
 			"logical", display.Logical.String(), "backing", display.Backing.String(), "flags", fmt.Sprintf("%#x", display.Flags))
-	}
-	select {
-	case h.layouts <- layout:
-	default:
 	}
 }
 

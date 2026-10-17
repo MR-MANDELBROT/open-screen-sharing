@@ -57,6 +57,6 @@ func (h *viewerHandler) OpenVideo(ctx context.Context, request media.ServerVideo
 	return h.server().openVideo(ctx, request)
 }
 
-func (h *viewerHandler) OpenAudio(context.Context) (media.ServerAudioSource, error) {
+func (h *viewerHandler) OpenAudio() (media.ServerAudioSource, error) {
 	return h.server().openAudio()
 }

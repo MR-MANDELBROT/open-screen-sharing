@@ -31,12 +31,11 @@ const (
 )
 
 type transport struct {
-	conn     net.Conn
-	reader   *bufio.Reader
-	buffer   []byte
-	protocol uint32
-	written  atomic.Uint64
-	read     atomic.Uint64
+	conn    net.Conn
+	reader  *bufio.Reader
+	buffer  []byte
+	written uint64
+	read    atomic.Uint64
 }
 
 func newTransport(conn net.Conn) *transport {
@@ -54,16 +53,12 @@ func (t *transport) upgrade(config *tls.Config) (*x509.Certificate, error) {
 	}
 	t.conn = conn
 	t.reader.Reset(conn)
-	certificates := conn.ConnectionState().PeerCertificates
-	if len(certificates) == 0 {
-		return nil, E.New("rdp: TLS server did not provide a certificate")
-	}
-	return certificates[0], nil
+	return conn.ConnectionState().PeerCertificates[0], nil
 }
 
 func (t *transport) write(packet []byte) error {
 	n, err := t.conn.Write(packet)
-	t.written.Add(uint64(n))
+	t.written += uint64(n)
 	return err
 }
 

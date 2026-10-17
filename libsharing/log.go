@@ -19,10 +19,6 @@ type logTarget struct {
 var currentLogTarget atomic.Pointer[logTarget]
 
 func SetLogHandler(handler LogHandler, minimumLevel int32) {
-	if handler == nil {
-		currentLogTarget.Store(nil)
-		return
-	}
 	currentLogTarget.Store(&logTarget{handler: handler, minimum: slog.Level(minimumLevel)})
 }
 

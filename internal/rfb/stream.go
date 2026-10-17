@@ -8,7 +8,6 @@ import (
 )
 
 type stream struct {
-	conn    net.Conn
 	raw     *bufio.Reader
 	source  io.Reader
 	records *recordReader
@@ -20,7 +19,7 @@ type stream struct {
 
 func newStream(conn net.Conn) *stream {
 	raw := bufio.NewReaderSize(conn, 256*1024)
-	return &stream{conn: conn, raw: raw, source: raw}
+	return &stream{raw: raw, source: raw}
 }
 
 func (s *stream) startRecords(keys recordKeys) error {

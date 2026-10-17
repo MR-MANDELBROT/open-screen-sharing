@@ -44,7 +44,7 @@ final class ServerController: ObservableObject {
 
     let remotePairing = RemotePairingBrowser()
     let pairingSession = PairingSession()
-    private(set) lazy var location: BackgroundLocation = {
+    private lazy var location: BackgroundLocation = {
         let location = BackgroundLocation()
         location.onUpdatingChange = { [weak self] in
             self?.updateIdleTimer()
@@ -141,7 +141,7 @@ final class ServerController: ObservableObject {
     }
 
     func resume() {
-        volume.restore()
+        volume.setWatched(false)
         guard settings.isEnabled else { return }
         start()
     }
@@ -156,7 +156,6 @@ final class ServerController: ObservableObject {
         generation += 1
         let generation = generation
         phase = .starting
-        setBrowsing(true)
         startTask = Task {
             await remotePairing.waitForPort(timeout: 2)
             guard generation == self.generation else { return }
@@ -284,7 +283,7 @@ final class ServerController: ObservableObject {
     private func phaseChanged() {
         if !phase.isActive {
             viewers.removeAll()
-            volume.restore()
+            volume.setWatched(false)
         }
         updateBackground()
         setBrowsing(phase.isActive)
@@ -328,11 +327,8 @@ final class ServerController: ObservableObject {
             localNetworkDenied = false
             return
         }
-        guard !advertiser.isPublishing else { return }
         let errorCode = advertiser.start(name: name, type: "_rfb._tcp", port: settings.port, txt: ["model": Self.model])
-        if errorCode == kDNSServiceErr_NoError {
-            localNetworkDenied = false
-        } else {
+        if errorCode != kDNSServiceErr_NoError {
             advertisingFailed(errorCode)
         }
     }

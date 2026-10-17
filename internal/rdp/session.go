@@ -95,7 +95,7 @@ type session struct {
 	suppressed atomic.Bool
 	loggedOn   atomic.Bool
 	inputFlags atomic.Uint32
-	serverCaps map[uint16][]byte
+	serverCaps map[uint16]bool
 	errorInfo  uint32
 }
 
@@ -111,7 +111,7 @@ func clientInfo(opts Options) []byte {
 		flags |= infoRemoteConsoleAudio
 	}
 	b = binary.LittleEndian.AppendUint32(b, flags)
-	fields := [][]byte{utf16le(nil, opts.Domain), utf16le(nil, opts.Username), utf16le(nil, opts.Password), nil, nil}
+	fields := [][]byte{utf16le(opts.Domain), utf16le(opts.Username), utf16le(opts.Password), nil, nil}
 	for _, s := range fields {
 		b = binary.LittleEndian.AppendUint16(b, uint16(len(s)))
 	}
@@ -121,7 +121,7 @@ func clientInfo(opts Options) []byte {
 	}
 	b = binary.LittleEndian.AppendUint16(b, addressFamilyINET)
 	for _, value := range []string{"0.0.0.0", clientDirectory} {
-		field := binary.LittleEndian.AppendUint16(utf16le(nil, value), 0)
+		field := binary.LittleEndian.AppendUint16(utf16le(value), 0)
 		b = binary.LittleEndian.AppendUint16(b, uint16(len(field)))
 		b = append(b, field...)
 	}
@@ -236,7 +236,7 @@ func (s *session) demandActive(source uint16, payload []byte) error {
 	count := int(caps.u16())
 	caps.take(2)
 	width, height := int(s.graphics.width.Load()), int(s.graphics.height.Load())
-	serverCaps := make(map[uint16][]byte, count)
+	serverCaps := make(map[uint16]bool, count)
 	for range count {
 		kind := caps.u16()
 		length := int(caps.u16())
@@ -247,7 +247,7 @@ func (s *session) demandActive(source uint16, payload []byte) error {
 		if caps.err != nil {
 			return caps.err
 		}
-		serverCaps[kind] = append([]byte(nil), data...)
+		serverCaps[kind] = true
 		switch kind {
 		case capabilityBitmap:
 			if len(data) < 12 {
@@ -326,7 +326,7 @@ func (s *session) receiveData(payload []byte) error {
 			return E.New("rdp: compressed share data declares ", compressedLength, " bytes, got ", len(data)+shareControlHeaderLength+shareDataHeaderLength)
 		}
 		var err error
-		data, err = s.mcs.bulk.Decompress(data, compressedType)
+		data, err = s.graphics.bulk.Decompress(data, compressedType)
 		if err != nil {
 			return E.Cause(err, "rdp: decompress share data")
 		}

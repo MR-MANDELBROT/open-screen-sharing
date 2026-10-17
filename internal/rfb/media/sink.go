@@ -46,8 +46,7 @@ type AudioFormat struct {
 }
 
 type AudioPacket struct {
-	Data       []byte
-	Timestamp  int64
-	Lost       int
-	ReceivedAt time.Time
+	Data      []byte
+	Timestamp int64
+	Lost      int
 }

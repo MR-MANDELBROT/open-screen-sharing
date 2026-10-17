@@ -111,11 +111,7 @@ func (d *decoders) decode(input *stream, framebuffer *bgra.Image, rectangle Rect
 		if err != nil {
 			return err
 		}
-		if d.mvs == nil {
-			d.resetMVS(framebuffer.Width, framebuffer.Height)
-		}
-		target := mvs.Target{Pix: framebuffer.Pix, Stride: framebuffer.Stride, Width: framebuffer.Width, Height: framebuffer.Height}
-		return d.mvs.Decode(payload, x, y, width, height, &target)
+		return d.mvs.Decode(payload, x, y, width, height, framebuffer)
 	default:
 		return E.New("rfb: not a pixel encoding")
 	}

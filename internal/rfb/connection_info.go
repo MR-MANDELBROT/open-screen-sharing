@@ -11,9 +11,5 @@ type ConnectionInfo struct {
 }
 
 func (c *Client) ConnectionInfo() (ConnectionInfo, bool) {
-	conn, isTCP := c.conn.(*net.TCPConn)
-	if !isTCP {
-		return ConnectionInfo{}, false
-	}
-	return tcpConnectionInfo(conn)
+	return tcpConnectionInfo(c.conn.(*net.TCPConn))
 }

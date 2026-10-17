@@ -21,7 +21,6 @@ type mediaRecorder struct {
 	videoBytes   int
 	audioPackets int
 	audioLost    int
-	stopped      error
 }
 
 func newMediaRecorder(logger *slog.Logger, path string) (*mediaRecorder, error) {
@@ -97,9 +96,6 @@ func (r *mediaRecorder) AudioPacket(packet media.AudioPacket) {
 }
 
 func (r *mediaRecorder) StreamStopped(err error) {
-	r.access.Lock()
-	r.stopped = err
-	r.access.Unlock()
 	r.logger.Info("media stream stopped", "error", err)
 }
 

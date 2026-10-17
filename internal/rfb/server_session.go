@@ -372,13 +372,9 @@ func (s *ServerSession) send(message []byte) {
 	}
 }
 
-func (s *ServerSession) emit(event ViewerEvent) {
-	s.server.handler.HandleEvent(s, event)
-}
-
 func (s *ServerSession) emitInput(event ViewerEvent) {
 	if s.mode != ModeObserve {
-		s.emit(event)
+		s.server.handler.HandleEvent(s, event)
 	}
 }
 
@@ -410,7 +406,7 @@ func (s *ServerSession) dispatch(message []byte) error {
 		}
 	case clientSetMode:
 		s.mode = Mode(binary.BigEndian.Uint16(message[2:]))
-		s.emit(ViewerMode{Mode: s.mode})
+		s.server.handler.HandleEvent(s, ViewerMode{Mode: s.mode})
 	case clientFetchPasteboard:
 		s.fetchPasteboard(binary.BigEndian.Uint32(message[4:]))
 	case clientEncryptedEvent:
@@ -426,7 +422,7 @@ func (s *ServerSession) dispatch(message []byte) error {
 		s.access.Lock()
 		s.clipboardSharing = enabled
 		s.access.Unlock()
-		s.emit(ViewerClipboardSharing{Enabled: enabled})
+		s.server.handler.HandleEvent(s, ViewerClipboardSharing{Enabled: enabled})
 	case clientEvent:
 		event, err := parseEventMessage(message)
 		if err != nil {
@@ -456,17 +452,13 @@ func (s *ServerSession) dispatch(message []byte) error {
 	return nil
 }
 
-func (s *ServerSession) declaredLocked(encoding Encoding) bool {
-	return slices.Contains(s.encodings, encoding)
-}
-
 func (s *ServerSession) layoutLocked(screen ServerScreen) []serverRectangle {
 	var rectangles []serverRectangle
 	framebuffer := scaledFramebuffer(screen, s.viewerScale)
-	if framebuffer != s.framebuffer && s.declaredLocked(EncodingDesktopSize) {
+	if framebuffer != s.framebuffer && slices.Contains(s.encodings, EncodingDesktopSize) {
 		rectangles = append(rectangles, newRectangle(0, 0, framebuffer[0], framebuffer[1], EncodingDesktopSize, nil))
 	}
-	if s.declaredLocked(EncodingDisplayLayout) {
+	if slices.Contains(s.encodings, EncodingDisplayLayout) {
 		rectangles = append(rectangles, displayLayoutRectangle(screen, s.viewerScale, s.server.options.DisplayFlags))
 	}
 	s.screen = screen
@@ -500,7 +492,7 @@ func (s *ServerSession) deviceLocked(screen ServerScreen) []serverRectangle {
 		model = screen.Model
 	}
 	switch {
-	case !s.declaredLocked(EncodingDeviceInfo):
+	case !slices.Contains(s.encodings, EncodingDeviceInfo):
 		s.modelSent = ""
 	case model != "" && model != s.modelSent:
 		s.modelSent = model
@@ -508,7 +500,7 @@ func (s *ServerSession) deviceLocked(screen ServerScreen) []serverRectangle {
 	}
 	commands := s.server.options.SystemCommands
 	switch {
-	case !s.declaredLocked(EncodingVendorKeysyms):
+	case !slices.Contains(s.encodings, EncodingVendorKeysyms):
 		s.commandsSent = false
 	case len(commands) > 0 && !s.commandsSent:
 		s.commandsSent = true
@@ -516,9 +508,9 @@ func (s *ServerSession) deviceLocked(screen ServerScreen) []serverRectangle {
 	}
 	var encoding Encoding
 	switch {
-	case s.declaredLocked(EncodingCursorImage):
+	case slices.Contains(s.encodings, EncodingCursorImage):
 		encoding = EncodingCursorImage
-	case s.declaredLocked(EncodingRichCursor):
+	case slices.Contains(s.encodings, EncodingRichCursor):
 		encoding = EncodingRichCursor
 	}
 	switch {
@@ -541,12 +533,12 @@ func (s *ServerSession) setEncodings(encodings []Encoding) {
 	s.access.Lock()
 	s.encodings = encodings
 	var rectangles []serverRectangle
-	if !s.layoutSent && s.declaredLocked(EncodingDisplayLayout) {
+	if !s.layoutSent && slices.Contains(s.encodings, EncodingDisplayLayout) {
 		s.layoutSent = true
 		rectangles = s.layoutLocked(screen)
 	}
 	rectangles = append(rectangles, s.deviceLocked(screen)...)
-	wanted := s.declaredLocked(EncodingMediaStream)
+	wanted := slices.Contains(s.encodings, EncodingMediaStream)
 	start := wanted && !s.mediaWanted
 	stop := !wanted && s.mediaWanted
 	s.mediaWanted = wanted
@@ -576,15 +568,11 @@ func (s *ServerSession) letStandardViewerGo() {
 	_ = s.conn.Close()
 }
 
-func (s *ServerSession) sendMedia(payload []byte) {
-	s.send(mediaStreamUpdate(payload))
-}
-
 func (s *ServerSession) startMedia() {
 	if !s.server.claimMedia(s) {
 		s.logger.Info("media stream refused: another viewer has it")
 		s.mediaWanted = false
-		s.sendMedia(media.ErrorMessage(media.ServerErrorBusy, media.ServerErrorBusySubCode))
+		s.send(mediaStreamUpdate(media.ErrorMessage(media.ServerErrorBusy, media.ServerErrorBusySubCode)))
 		return
 	}
 	config := s.server.options.Media
@@ -602,7 +590,7 @@ func (s *ServerSession) startMedia() {
 		s.server.releaseMedia(s)
 		s.mediaWanted = false
 		s.logger.Warn("media stream", "error", err)
-		s.sendMedia(media.ErrorMessage(media.ServerErrorBadConfiguration, 0))
+		s.send(mediaStreamUpdate(media.ErrorMessage(media.ServerErrorBadConfiguration, 0)))
 		return
 	}
 	s.access.Lock()
@@ -610,7 +598,7 @@ func (s *ServerSession) startMedia() {
 	s.access.Unlock()
 	audio, video := stream.Ports()
 	s.logger.Info("media stream ports", "video", video, "audio", audio)
-	s.sendMedia(stream.PortsMessage())
+	s.send(mediaStreamUpdate(stream.PortsMessage()))
 }
 
 func (s *ServerSession) stopMedia() {
@@ -632,10 +620,10 @@ func (s *ServerSession) handleOffer(message []byte) {
 	s.access.Unlock()
 	if stream == nil {
 		if s.server.mediaTakenBy(s) {
-			s.sendMedia(media.ErrorMessage(media.ServerErrorBusy, media.ServerErrorBusySubCode))
+			s.send(mediaStreamUpdate(media.ErrorMessage(media.ServerErrorBusy, media.ServerErrorBusySubCode)))
 		} else {
 			s.logger.Debug("media offer without a media stream")
-			s.sendMedia(media.ErrorMessage(media.ServerErrorBadConfiguration, 0))
+			s.send(mediaStreamUpdate(media.ErrorMessage(media.ServerErrorBadConfiguration, 0)))
 		}
 		return
 	}
@@ -694,7 +682,7 @@ func (s *ServerSession) receiveClipboard(clipboard *Clipboard) {
 	s.access.Lock()
 	s.viewerClipboard = clipboard
 	s.access.Unlock()
-	s.emit(ViewerClipboard{Clipboard: clipboard})
+	s.server.handler.HandleEvent(s, ViewerClipboard{Clipboard: clipboard})
 }
 
 func (s *ServerSession) fetchPasteboard(echo uint32) {

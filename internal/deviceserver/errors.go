@@ -111,11 +111,3 @@ func unreachable(err error) bool {
 	operationError, ok := errors.AsType[*net.OpError](err)
 	return ok && operationError.Op == "dial"
 }
-
-func permanent(err error) bool {
-	switch ProblemOf(err) {
-	case ProblemPairingRejected, ProblemUnsupported, ProblemLoopbackAddress:
-		return true
-	}
-	return false
-}

@@ -36,9 +36,7 @@ type Stream struct {
 
 	lastRTCP atomic.Int64
 
-	closeOnce sync.Once
-	closeErr  error
-	done      chan struct{}
+	done chan struct{}
 }
 
 func newStream(client *Client, info StreamInfo, conn *tunnel.UDPConn, control *xpc.Conn) *Stream {
@@ -200,19 +198,16 @@ func (s *Stream) startKeepalive() {
 }
 
 func (s *Stream) Close() error {
-	s.closeOnce.Do(func() {
-		close(s.done)
-		s.conn.CloseRead()
-		ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
-		defer cancel()
-		stopped, err := s.client.stop(ctx, s.info.SSRC)
-		if err != nil {
-			s.closeErr = E.Cause(err, "stop ", string(s.info.Type), " stream")
-		} else {
-			s.client.logger.Debug("display stream stopped", "ssrc", s.info.SSRC, "stopped", stopped)
-		}
-		_ = s.control.Close()
-		_ = s.conn.Close()
-	})
-	return s.closeErr
+	close(s.done)
+	s.conn.CloseRead()
+	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
+	defer cancel()
+	stopped, err := s.client.stop(ctx, s.info.SSRC)
+	_ = s.control.Close()
+	_ = s.conn.Close()
+	if err != nil {
+		return E.Cause(err, "stop ", string(s.info.Type), " stream")
+	}
+	s.client.logger.Debug("display stream stopped", "ssrc", s.info.SSRC, "stopped", stopped)
+	return nil
 }

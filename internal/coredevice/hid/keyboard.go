@@ -70,11 +70,6 @@ func (c *Client) createKeyboard(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
-		defer cancel()
-	}
 	reply, err := conn.Request(ctx, universalRequest(createKeyboardPayload()))
 	if err == nil && ctx.Err() != nil {
 		err = ctx.Err()
@@ -128,8 +123,6 @@ func (c *Client) KeyUp(ctx context.Context, usage uint8) error {
 }
 
 func (c *Client) changeKey(ctx context.Context, usage uint8, down bool) error {
-	c.access.Lock()
-	defer c.access.Unlock()
 	pressed := c.pressed
 	if down {
 		pressed[usage/8] |= 1 << (usage % 8)

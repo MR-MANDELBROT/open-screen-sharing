@@ -1,22 +1,5 @@
 import SwiftUI
 
-struct KeyboardButton: View {
-    @ObservedObject var controller: SessionController
-    var action: () -> Void = {}
-
-    var body: some View {
-        Button {
-            controller.toggleKeyboard()
-            action()
-        } label: {
-            Label(
-                controller.isKeyboardVisible ? "Hide Keyboard" : "Show Keyboard",
-                systemImage: controller.isKeyboardVisible ? "keyboard.chevron.compact.down" : "keyboard"
-            )
-        }
-    }
-}
-
 struct ToolbarDock: Equatable {
     enum Edge {
         case left

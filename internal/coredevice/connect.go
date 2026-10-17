@@ -103,7 +103,7 @@ func ConnectLockdown(ctx context.Context, options LockdownOptions) (*Device, err
 }
 
 func connectLockdown(ctx context.Context, record *lockdown.PairRecord, dial lockdown.Dialer, identity uuid.UUID, logger *slog.Logger) (*Device, error) {
-	conn, err := lockdown.DialService(ctx, record, dial, lockdown.CoreDeviceProxy, logger)
+	conn, err := lockdown.DialCoreDeviceProxy(ctx, record, dial, logger)
 	if err != nil {
 		return nil, err
 	}

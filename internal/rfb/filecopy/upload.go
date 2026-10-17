@@ -71,10 +71,9 @@ func (m *Manager) Upload(ctx context.Context, source Source, destination string,
 }
 
 func (u *upload) plan() error {
-	if u.source.fsys == nil || !fs.ValidPath(u.source.name) || u.source.name == "." {
+	if !fs.ValidPath(u.source.name) || u.source.name == "." {
 		return E.New("filecopy: invalid source ", strconv.Quote(u.source.name))
 	}
-	linkFS, readsLinks := u.source.fsys.(fs.ReadLinkFS)
 	root := u.source.name
 	rootName := path.Base(root)
 	err := fs.WalkDir(u.source.fsys, root, func(name string, entry fs.DirEntry, err error) error {
@@ -102,9 +101,9 @@ func (u *upload) plan() error {
 				name:      carbonName(path.Base(displayPath)),
 			}, info.ModTime())
 			u.info.folders++
-		case entry.Type()&fs.ModeSymlink != 0 && readsLinks:
+		case entry.Type()&fs.ModeSymlink != 0:
 			var target string
-			target, err = linkFS.ReadLink(name)
+			target, err = fs.ReadLink(u.source.fsys, name)
 			if err != nil {
 				return err
 			}
@@ -117,17 +116,18 @@ func (u *upload) plan() error {
 				linkTarget: target,
 			}, info.ModTime())
 			u.info.files++
-		case entry.Type()&fs.ModeSymlink != 0:
-			var followed fs.FileInfo
-			followed, err = fs.Stat(u.source.fsys, name)
-			if err != nil {
-				return err
-			}
-			if followed.Mode().IsRegular() {
-				u.addFile(name, displayPath, level, followed.Size(), followed.Mode(), followed.ModTime())
-			}
 		case info.Mode().IsRegular():
-			u.addFile(name, displayPath, level, info.Size(), info.Mode(), info.ModTime())
+			size := uint64(info.Size())
+			u.addItem(name, displayPath, wireItem{
+				itemType: itemTypeFile,
+				level:    uint16(level),
+				mode:     posixMode(info.Mode(), itemTypeFile),
+				dataSize: size,
+				name:     carbonName(path.Base(displayPath)),
+			}, info.ModTime())
+			u.info.files++
+			u.info.logical += size
+			u.info.physical += (size + 4095) &^ 4095
 		}
 		return nil
 	})
@@ -139,19 +139,6 @@ func (u *upload) plan() error {
 	}
 	u.info.singleFile = u.items[0].wire.itemType != itemTypeFolder
 	return nil
-}
-
-func (u *upload) addFile(sourcePath, displayPath string, level int, size int64, mode fs.FileMode, modified time.Time) {
-	u.addItem(sourcePath, displayPath, wireItem{
-		itemType: itemTypeFile,
-		level:    uint16(level),
-		mode:     posixMode(mode, itemTypeFile),
-		dataSize: uint64(size),
-		name:     carbonName(path.Base(displayPath)),
-	}, modified)
-	u.info.files++
-	u.info.logical += uint64(size)
-	u.info.physical += (uint64(size) + 4095) &^ 4095
 }
 
 func (u *upload) addItem(sourcePath, displayPath string, item wireItem, modified time.Time) {
@@ -231,7 +218,7 @@ func (u *upload) send() (Result, error) {
 	case remote := <-u.remote:
 		return remote.result()
 	case <-u.transfer.stop:
-		return Result{}, u.transfer.stopReason()
+		return Result{}, u.transfer.stopError
 	}
 }
 
@@ -300,29 +287,15 @@ func (r remoteResult) result() (Result, error) {
 }
 
 func (u *upload) handle(command uint16, body []byte) {
-	switch command {
-	case commandReceiverStatus:
-		fraction, err := parseReceiverStatus(body)
-		if err != nil {
-			return
-		}
-		fraction = min(max(fraction, 0), 1)
-		u.transfer.update(func(progress *Progress) {
-			progress.Stored = int64(fraction * float64(progress.Total))
-		})
-	case commandReceiverDone:
-		status, name, err := parseReceiverDone(body)
-		if err != nil {
-			status = -1
-		}
-		if status == 0 {
-			u.transfer.update(func(progress *Progress) {
-				progress.Stored = progress.Total
-			})
-		}
-		select {
-		case u.remote <- remoteResult{status: status, name: name}:
-		default:
-		}
+	if command != commandReceiverDone {
+		return
+	}
+	status, name, err := parseReceiverDone(body)
+	if err != nil {
+		status = -1
+	}
+	select {
+	case u.remote <- remoteResult{status: status, name: name}:
+	default:
 	}
 }

@@ -23,13 +23,11 @@ type SSHOptions struct {
 	Password   string
 	PrivateKey []byte
 	Passphrase string
-	Directory  string
 }
 
 type SSHSource struct {
-	client    *ssh.Client
-	address   string
-	directory string
+	client  *ssh.Client
+	address string
 }
 
 func DialSSH(ctx context.Context, options SSHOptions) (*SSHSource, error) {
@@ -77,11 +75,7 @@ func DialSSH(ctx context.Context, options SSHOptions) (*SSHSource, error) {
 		}
 		return nil, E.Cause(err, "imagemounter: connect to ", options.Address)
 	}
-	directory := options.Directory
-	if directory == "" {
-		directory = XcodeDirectory
-	}
-	return &SSHSource{client: ssh.NewClient(clientConn, channels, requests), address: options.Address, directory: directory}, nil
+	return &SSHSource{client: ssh.NewClient(clientConn, channels, requests), address: options.Address}, nil
 }
 
 func ParsePrivateKey(key []byte, passphrase string) (ssh.Signer, error) {
@@ -102,7 +96,7 @@ func ParsePrivateKey(key []byte, passphrase string) (ssh.Signer, error) {
 var ErrPassphraseNeeded = E.New("imagemounter: the private key needs its passphrase")
 
 func (s *SSHSource) String() string {
-	return s.address + ":" + s.directory
+	return s.address + ":" + XcodeDirectory
 }
 
 func (s *SSHSource) Close() error {
@@ -110,7 +104,7 @@ func (s *SSHSource) Close() error {
 }
 
 func (s *SSHSource) path(name string) (string, error) {
-	file := s.directory + "/" + name
+	file := XcodeDirectory + "/" + name
 	for _, character := range file {
 		if !(character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || strings.ContainsRune("/._-,", character)) {
 			return "", E.New("imagemounter: unexpected file name ", strconv.Quote(name))

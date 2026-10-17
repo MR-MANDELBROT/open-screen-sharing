@@ -72,10 +72,8 @@ type Observer interface {
 	StreamingChanged(active bool)
 }
 
-type ConnectFunc func(ctx context.Context) (*coredevice.Device, error)
-
 type Options struct {
-	Connect  ConnectFunc
+	Connect  func(ctx context.Context) (*coredevice.Device, error)
 	Logger   *slog.Logger
 	Observer Observer
 
@@ -114,7 +112,6 @@ type Server struct {
 	attachWake   chan struct{}
 	screen       rfb.ServerScreen
 	display      displayGeometry
-	displaySize  [2]int
 	videoProblem error
 
 	listener net.Listener
@@ -284,7 +281,7 @@ func (s *Server) run() {
 			return
 		}
 		if err != nil {
-			if permanent(err) {
+			if stopping(err) {
 				s.fail(err)
 				return
 			}
@@ -398,11 +395,7 @@ func (s *Server) serveDevice(device *coredevice.Device) error {
 	if rerouted != nil {
 		return rerouted
 	}
-	err = device.Err()
-	if err == nil {
-		err = E.New("the device closed the connection")
-	}
-	return &Error{Problem: ProblemNoTunnel, Err: E.Cause(err, "device connection lost")}
+	return &Error{Problem: ProblemNoTunnel, Err: E.Cause(device.Err(), "device connection lost")}
 }
 
 func (s *Server) watchRoute(device *coredevice.Device) error {
@@ -437,11 +430,7 @@ func (s *Server) watchRoute(device *coredevice.Device) error {
 func lostOr(device *coredevice.Device, err error) error {
 	select {
 	case <-device.Done():
-		lost := device.Err()
-		if lost == nil {
-			lost = err
-		}
-		return &Error{Problem: ProblemNoTunnel, Err: E.Cause(lost, "device connection lost")}
+		return &Error{Problem: ProblemNoTunnel, Err: E.Cause(device.Err(), "device connection lost")}
 	default:
 		return err
 	}
@@ -512,11 +501,9 @@ func (s *Server) attach(a *attachment) *attachment {
 
 func (s *Server) detach(a *attachment) {
 	s.access.Lock()
-	if s.attached == a {
-		s.attached = nil
-		close(s.attachWake)
-		s.attachWake = make(chan struct{})
-	}
+	s.attached = nil
+	close(s.attachWake)
+	s.attachWake = make(chan struct{})
 	s.access.Unlock()
 	a.cancel()
 	s.clip.update()
@@ -593,14 +580,14 @@ func (s *Server) checkDisplay() {
 }
 
 func (s *Server) updateDisplay(info display.DisplayInfo) {
-	size := framebufferSize(info)
 	s.access.Lock()
 	previous := s.display
 	s.display = geometryOf(info)
-	changed := size != s.displaySize
-	s.displaySize = size
+	changed := previous.Width != info.Width || previous.Height != info.Height
 	if changed {
-		screen := rfb.ServerScreen{Width: size[0], Height: size[1], Scale: float64(max(info.PointScale, 1)), Model: s.screen.Model}
+		// In mode 7 the device produced 2420×1668 visible video in a 2432×1680 coded frame;
+		// mode 5 exposed the full 2432×1680 frame (observed on iPad17,1, iPadOS 27.2 24B5099f).
+		screen := rfb.ServerScreen{Width: info.Width, Height: info.Height, Scale: float64(max(info.PointScale, 1)), Model: s.screen.Model}
 		changed = screen != s.screen
 		s.screen = screen
 	}
@@ -609,7 +596,7 @@ func (s *Server) updateDisplay(info display.DisplayInfo) {
 		s.logger.Info("screen orientation", "orientation", info.CurrentOrientation, "size", fmt.Sprintf("%dx%d", info.Width, info.Height))
 	}
 	if changed {
-		s.logger.Info("screen size changed", "width", size[0], "height", size[1])
+		s.logger.Info("screen size changed", "width", info.Width, "height", info.Height)
 		s.rfb.ScreenChanged()
 	}
 }
@@ -704,7 +691,7 @@ func (n *notifier) run() {
 
 func (n *notifier) close(last func()) {
 	n.access.Lock()
-	if !n.closed && last != nil {
+	if last != nil {
 		n.queue = append(n.queue, last)
 	}
 	n.closed = true

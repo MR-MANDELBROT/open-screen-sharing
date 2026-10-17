@@ -1,10 +1,9 @@
 import AVFoundation
-import Combine
 import UIKit
 import os
 
-final class BackgroundAudio: ObservableObject {
-    @Published private(set) var isPlaying = false {
+final class BackgroundAudio {
+    private(set) var isPlaying = false {
         didSet {
             guard isPlaying != oldValue else { return }
             onPlayingChange?()

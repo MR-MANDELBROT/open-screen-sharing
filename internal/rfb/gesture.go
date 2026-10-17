@@ -115,8 +115,8 @@ func eventMessage(version, subtype uint16, body []byte) []byte {
 }
 
 func appendPosition(body []byte, x, y int) []byte {
-	body = binary.BigEndian.AppendUint16(body, uint16(clampInt(x, 0, math.MaxUint16)))
-	return binary.BigEndian.AppendUint16(body, uint16(clampInt(y, 0, math.MaxUint16)))
+	body = binary.BigEndian.AppendUint16(body, clampUint16(x))
+	return binary.BigEndian.AppendUint16(body, clampUint16(y))
 }
 
 func gestureBoundaryMessage(subtype uint16, seriesType uint32, x, y int) []byte {

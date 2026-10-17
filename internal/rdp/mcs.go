@@ -8,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/outbox"
-	"github.com/nekohasekai/open-screen-sharing/internal/rdp/codec/bulk"
 
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -88,7 +87,6 @@ var (
 type mcsLayer struct {
 	transport *transport
 	outbox    *outbox.Outbox
-	bulk      *bulk.Decompressor
 	userID    uint16
 	global    uint16
 	joined    []uint16
@@ -159,7 +157,7 @@ func readBER(r *reader, expected ...byte) *reader {
 	return r.sub(n)
 }
 
-func clientUserData(opts Options, protocol uint32, channels []*staticChannel) []byte {
+func clientUserData(opts Options, channels []*staticChannel) []byte {
 	core := binary.LittleEndian.AppendUint32(nil, rdpVersion5Plus)
 	core = binary.LittleEndian.AppendUint16(core, uint16(opts.Width))
 	core = binary.LittleEndian.AppendUint16(core, uint16(opts.Height))
@@ -180,7 +178,7 @@ func clientUserData(opts Options, protocol uint32, channels []*staticChannel) []
 	core = binary.LittleEndian.AppendUint16(core, earlySupportErrorInfo|earlyWant32BPP|earlyValidConnectionType|earlySupportDynamicGFX)
 	core = zeros(core, clientDigitalProductIDLength)
 	core = append(core, connectionTypeLAN, 0)
-	core = binary.LittleEndian.AppendUint32(core, protocol)
+	core = binary.LittleEndian.AppendUint32(core, protocolHybrid)
 	core = binary.LittleEndian.AppendUint32(core, 0)
 	core = binary.LittleEndian.AppendUint32(core, 0)
 	core = binary.LittleEndian.AppendUint16(core, 0)
@@ -207,7 +205,7 @@ func (m *mcsLayer) connect(opts Options, channels []*staticChannel) error {
 	b = append(b, domainParameters(mcsTargetDomain)...)
 	b = append(b, domainParameters(mcsMinimumDomain)...)
 	b = append(b, domainParameters(mcsMaximumDomain)...)
-	b = append(b, berValue([]byte{berTagOctetString}, clientUserData(opts, m.transport.protocol, channels))...)
+	b = append(b, berValue([]byte{berTagOctetString}, clientUserData(opts, channels))...)
 	err := m.outbox.Push(tpkt(berValue(mcsConnectInitial, b)), false)
 	if err != nil {
 		return err

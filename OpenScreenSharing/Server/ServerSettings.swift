@@ -45,10 +45,9 @@ final class ServerSettings: ObservableObject {
         didSet { store.set(password, for: Key.password) }
     }
 
-    private let store: PreferenceStore
+    private let store = PreferenceStore.shared
 
-    init(store: PreferenceStore = .shared) {
-        self.store = store
+    init() {
         isEnabled = store.value(Bool.self, for: Key.enabled) ?? false
         port = store.value(Int.self, for: Key.port) ?? Self.defaultPort
         authenticates = store.value(Bool.self, for: Key.authenticates) ?? false
@@ -67,9 +66,7 @@ final class ServerSettings: ObservableObject {
     }
 }
 
-enum ServerBackgroundMode: String, Codable, CaseIterable, Identifiable {
+enum ServerBackgroundMode: String, Codable {
     case location
     case audio
-
-    var id: Self { self }
 }

@@ -36,8 +36,7 @@ const (
 	personalizedImageType = "Personalized"
 	personalizedDDIType   = "DeveloperDiskImage"
 
-	defaultRequestTimeout = 30 * time.Second
-	uploadTimeout         = 5 * time.Minute
+	uploadTimeout = 5 * time.Minute
 )
 
 var (
@@ -113,7 +112,7 @@ func (c *Client) ecid(ctx context.Context) (uint64, error) {
 	if !c.device.HasService(cryptexService) {
 		return 0, E.New("imagemounter: the device's ECID is unknown")
 	}
-	chip, err := c.readPersonalizationID(ctx)
+	chip, err := c.invokeCryptexd(ctx, "read-personalization-id", map[string]any{}, nil)
 	if err != nil {
 		return 0, E.Cause(err, "imagemounter: read the ECID")
 	}
