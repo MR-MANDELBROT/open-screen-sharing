@@ -359,6 +359,16 @@ private struct KeyMappingEditor: View {
         !trigger.isUnset && !steps.isEmpty && steps.allSatisfy(\.isComplete)
     }
 
+    private func binding(for step: Step) -> Binding<Step> {
+        Binding(
+            get: { steps.first { $0.id == step.id } ?? step },
+            set: { value in
+                guard let index = steps.firstIndex(where: { $0.id == step.id }) else { return }
+                steps[index] = value
+            }
+        )
+    }
+
     var body: some View {
         NavigationStackCompat {
             Form {
@@ -372,7 +382,8 @@ private struct KeyMappingEditor: View {
                     }
                 }
                 Section("Sends") {
-                    ForEach($steps) { $step in
+                    ForEach(steps) { step in
+                        let binding = self.binding(for: step)
                         HStack {
                             #if os(macOS)
                             Button {
@@ -389,10 +400,10 @@ private struct KeyMappingEditor: View {
                             #endif
                             if step.sendsText {
                                 if #available(iOS 16, *) {
-                                    TextField("Text", text: $step.text, prompt: Text("Text"), axis: .vertical)
+                                    TextField("Text", text: binding.text, prompt: Text("Text"), axis: .vertical)
                                         .labelsHidden()
                                 } else {
-                                    TextField("Text", text: $step.text)
+                                    TextField("Text", text: binding.text)
                                 }
                             } else {
                                 ForEach(modifiers, id: \.label) { modifier in
@@ -401,7 +412,7 @@ private struct KeyMappingEditor: View {
                                         set: { on in
                                             var flags = step.shortcut.eventModifiers
                                             if on { flags.insert(modifier.flag) } else { flags.remove(modifier.flag) }
-                                            step.shortcut = KeyShortcut(key: step.shortcut.key, modifiers: flags)
+                                            binding.wrappedValue.shortcut = KeyShortcut(key: step.shortcut.key, modifiers: flags)
                                         }
                                     )) {
                                         Text(verbatim: modifier.label)
@@ -409,7 +420,7 @@ private struct KeyMappingEditor: View {
                                     .toggleStyle(.button)
                                     .accessibilityLabel(Text(verbatim: modifier.title))
                                 }
-                                keyControl($step)
+                                keyControl(binding)
                                 Spacer(minLength: 0)
                             }
                             #if os(macOS)
