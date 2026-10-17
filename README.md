@@ -8,7 +8,16 @@ Open Screen Sharing aims to develop superior servers and clients based on the pr
 
 ### iOS
 
-Add the source to SideStore or AltStore:
+[![Download on the App Store](assets/readme/app-store-badge.svg)](https://apps.apple.com/us/app/open-screen-sharing/id6818992574)
+
+The App Store version is **\$1 through October 31, 2026**, then **\$2**. Your purchase supports my work.
+
+The App Store version excludes the following features due to App Store restrictions:
+
+* **Apple VNC server:** relies on background keep-alive mechanisms and a lockdown exploit.
+* **Dragging files directly from a remote Mac into other iOS/iPadOS apps:** relies on a private API.
+
+To use these features, sideload the app by adding the source to SideStore or AltStore:
 
 ```
 https://github.com/nekohasekai/open-screen-sharing/releases/latest/download/altstore.json
@@ -52,7 +61,8 @@ You can also switch to the Nightly track in the App settings of the macOS app an
 
 * [x] Add support for macOS
 * [x] Add support for RDP
-* [ ] Publish to iOS App Store
+* [x] Publish to iOS App Store
+* [ ] Publish to Homebrew
 * [ ] Add support for other operating systems, such as Android, Windows, and Linux
 * [ ] Add a jailbreak version to provide numerous privilege-based improvements
 * [ ] Create a protocol extension to support high refresh rates on Mac, touch passthrough on Mac (similar to Sidecar), Smaller scaling at native quality on Mac, multi-touch support on iOS, and further protocol optimizations
