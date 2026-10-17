@@ -119,7 +119,7 @@ var variants = []variant{
 		devices: []string{"iphone", "ipad"},
 		settings: []string{
 			"SWIFT_ACTIVE_COMPILATION_CONDITIONS=SIDELOAD DEMO",
-			"INFOPLIST_PREPROCESSOR_DEFINITIONS=SIDELOAD=1",
+			"APP_INFOPLIST_FILE=OpenScreenSharing/Info-Server.plist",
 			"EXCLUDED_SOURCE_FILE_NAMES=",
 		},
 	},

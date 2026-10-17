@@ -334,16 +334,16 @@ private struct KeyMappingEditor: View {
     }
 
     private static let appleModifiers: [(flag: EventModifiers, label: String, title: String)] = [
-        (.control, "⌃", String(localized: "Control Key", defaultValue: "Control")),
-        (.option, "⌥", String(localized: "Option Key", defaultValue: "Option")),
-        (.shift, "⇧", String(localized: "Shift Key", defaultValue: "Shift")),
-        (.command, "⌘", String(localized: "Command Key", defaultValue: "Command")),
+        (.control, "⌃", String(localized: "Control Key")),
+        (.option, "⌥", String(localized: "Option Key")),
+        (.shift, "⇧", String(localized: "Shift Key")),
+        (.command, "⌘", String(localized: "Command Key")),
     ]
 
     private static let pcModifiers: [(flag: EventModifiers, label: String, title: String)] = [
         (.control, "Ctrl", String(localized: "Ctrl Key")),
         (.option, "Alt", String(localized: "Alt Key")),
-        (.shift, "Shift", String(localized: "Shift Key", defaultValue: "Shift")),
+        (.shift, "Shift", String(localized: "Shift Key")),
         (.command, "Win", String(localized: "Windows Key")),
     ]
 
