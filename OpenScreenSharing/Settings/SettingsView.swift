@@ -67,7 +67,7 @@ private struct AppSettingsView: View {
                     )
                 }
             }
-            Section {
+            Section("Cache") {
                 LabeledContentCompat {
                     if let cacheSize {
                         Text(cacheSize.formatted(.byteCount(style: .file)))
@@ -79,7 +79,12 @@ private struct AppSettingsView: View {
                     Button(role: .destructive) {
                         Task { await clearCache() }
                     } label: {
-                        Label("Clear Cache", systemImage: "trash")
+                        Label {
+                            Text("Clear Cache")
+                        } icon: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
                     }
                     .formRowButtonStyleCompat()
                 }
