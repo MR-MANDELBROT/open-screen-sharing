@@ -11,8 +11,15 @@ struct UpdateSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("A New Build Is Available")
-                    .font(.headline)
+                Group {
+                    switch update.track {
+                    case .stable:
+                        Text("A New Release Is Available")
+                    case .nightly:
+                        Text("A New Nightly Build Is Available")
+                    }
+                }
+                .font(.headline)
                 Text(verbatim: "\(update.version) (\(update.build))")
                     .foregroundStyle(.secondary)
             }
@@ -34,7 +41,9 @@ struct UpdateSheet: View {
                     .progressViewStyle(.linear)
             }
             HStack {
-                Button("View Release") { openURL(update.page) }
+                if update.track == .stable {
+                    Button("View Release") { openURL(update.page) }
+                }
                 Spacer()
                 Group {
                     Button("Cancel", role: .cancel) { dismiss() }

@@ -98,7 +98,7 @@ final class UpdateManager: ObservableObject {
         phase = .downloading
         progress = 0
         do {
-            let package = try await UpdateChecker.download(update, track: track, token: githubToken) { progress in
+            let package = try await UpdateChecker.download(update, token: githubToken) { progress in
                 DispatchQueue.main.async { self.progress = progress }
             }
             phase = .installing

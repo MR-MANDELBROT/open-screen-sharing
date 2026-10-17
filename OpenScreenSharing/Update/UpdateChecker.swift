@@ -16,6 +16,7 @@ nonisolated enum UpdateTrack: String, Codable, Sendable {
 }
 
 nonisolated struct AvailableUpdate: Identifiable, Sendable {
+    let track: UpdateTrack
     let version: String
     let build: Int
     let notes: String
@@ -69,10 +70,10 @@ nonisolated enum UpdateChecker {
             return nil
         }
         return AvailableUpdate(
-            version: metadata.version, build: metadata.build, notes: release.body ?? "", page: release.htmlURL, package: package.url, size: package.size)
+            track: track, version: metadata.version, build: metadata.build, notes: release.body ?? "", page: release.htmlURL, package: package.url, size: package.size)
     }
 
-    static func download(_ update: AvailableUpdate, track: UpdateTrack, token: String, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+    static func download(_ update: AvailableUpdate, token: String, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
         let cached = downloads.appending(path: "Screen Sharing \(update.build).pkg")
         if (try? cached.resourceValues(forKeys: [.fileSizeKey]).fileSize) == update.size {
             progress(1)
@@ -82,7 +83,7 @@ nonisolated enum UpdateChecker {
         var (location, response) = try await URLSession.shared.download(
             for: request(update.package, token: token, accept: "application/octet-stream"), delegate: DownloadProgress(report: progress))
         defer { try? FileManager.default.removeItem(at: location) }
-        if (response as? HTTPURLResponse)?.statusCode == 404, let latest = try await check(track: track, token: token) {
+        if (response as? HTTPURLResponse)?.statusCode == 404, let latest = try await check(track: update.track, token: token) {
             try? FileManager.default.removeItem(at: location)
             update = latest
             (location, response) = try await URLSession.shared.download(

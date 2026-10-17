@@ -4561,306 +4561,610 @@
         }
       }
     },
-    "A New Build Is Available" : {
+    "A New Nightly Build Is Available" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تتوفر بنية جديدة"
+            "value" : "تتوفر بنية ليلية جديدة"
           }
         },
         "bg" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Налична е нова компилация"
+            "value" : "Налична е нова нощна компилация"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "নতুন বিল্ড উপলভ্য"
+            "value" : "নতুন নাইটলি বিল্ড উপলভ্য"
           }
         },
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hi ha una compilació nova disponible"
+            "value" : "Hi ha una compilació nocturna nova disponible"
           }
         },
         "cs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Je k dispozici nové sestavení"
+            "value" : "Je k dispozici nové noční sestavení"
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Et nyt build er tilgængeligt"
+            "value" : "Et nyt natligt build er tilgængeligt"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ein neuer Build ist verfügbar"
+            "value" : "Ein neuer Nightly-Build ist verfügbar"
           }
         },
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Διατίθεται νέο build"
+            "value" : "Διατίθεται νέο νυχτερινό build"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hay una nueva compilación disponible"
+            "value" : "Hay una nueva compilación nocturna disponible"
           }
         },
         "es-419" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hay una nueva compilación disponible"
+            "value" : "Hay una nueva compilación nocturna disponible"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Uusi koontiversio on saatavilla"
+            "value" : "Uusi yöversio on saatavilla"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un nouveau build est disponible"
+            "value" : "Un nouveau build Nightly est disponible"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un nouveau build est disponible"
+            "value" : "Un nouveau build Nightly est disponible"
           }
         },
         "gu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "નવું બિલ્ડ ઉપલબ્ધ છે"
+            "value" : "નવું નાઇટલી બિલ્ડ ઉપલબ્ધ છે"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Build חדש זמין"
+            "value" : "Build לילי חדש זמין"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "नया बिल्ड उपलब्ध है"
+            "value" : "नया नाइटली बिल्ड उपलब्ध है"
           }
         },
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dostupan je novi build"
+            "value" : "Dostupan je novi noćni build"
           }
         },
         "hu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Új build érhető el"
+            "value" : "Új éjszakai build érhető el"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Build Baru Tersedia"
+            "value" : "Build Nightly Baru Tersedia"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "È disponibile una nuova build"
+            "value" : "È disponibile una nuova build Nightly"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新しいビルドがあります"
+            "value" : "新しいナイトリービルドがあります"
           }
         },
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Жаңа құрастыру қолжетімді"
+            "value" : "Жаңа түнгі құрастыру қолжетімді"
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ಹೊಸ ಬಿಲ್ಡ್ ಲಭ್ಯವಿದೆ"
+            "value" : "ಹೊಸ ನೈಟ್ಲಿ ಬಿಲ್ಡ್ ಲಭ್ಯವಿದೆ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "새로운 빌드 사용 가능"
+            "value" : "새로운 나이틀리 빌드 사용 가능"
           }
         },
         "lt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yra naujas darinys"
+            "value" : "Yra naujas naktinis darinys"
           }
         },
         "ml" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "പുതിയ ബിൽഡ് ലഭ്യമാണ്"
+            "value" : "പുതിയ നൈറ്റ്ലി ബിൽഡ് ലഭ്യമാണ്"
           }
         },
         "mr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "नवीन बिल्ड उपलब्ध आहे"
+            "value" : "नवीन नाइटली बिल्ड उपलब्ध आहे"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Binaan Baharu Tersedia"
+            "value" : "Binaan Nightly Baharu Tersedia"
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Et nytt bygg er tilgjengelig"
+            "value" : "Et nytt nattlig bygg er tilgjengelig"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Er is een nieuwe build beschikbaar"
+            "value" : "Er is een nieuwe nightly build beschikbaar"
           }
         },
         "or" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ନୂଆ ବିଲ୍ଡ୍ ଉପଲବ୍ଧ"
+            "value" : "ନୂଆ ନାଇଟ୍‌ଲି ବିଲ୍ଡ୍ ଉପଲବ୍ଧ"
           }
         },
         "pa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ਨਵਾਂ ਬਿਲਡ ਉਪਲਬਧ ਹੈ"
+            "value" : "ਨਵਾਂ ਨਾਈਟਲੀ ਬਿਲਡ ਉਪਲਬਧ ਹੈ"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dostępna jest nowa kompilacja"
+            "value" : "Dostępna jest nowa kompilacja nocna"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nova Compilação Disponível"
+            "value" : "Nova Compilação Noturna Disponível"
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Está disponível uma nova compilação"
+            "value" : "Está disponível uma nova compilação noturna"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Este disponibilă o compilare nouă"
+            "value" : "Este disponibilă o compilare nocturnă nouă"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Доступна новая сборка"
+            "value" : "Доступна новая ночная сборка"
           }
         },
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "K dispozícii je nové zostavenie"
+            "value" : "K dispozícii je nové nočné zostavenie"
           }
         },
         "sl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Na voljo je nova gradnja"
+            "value" : "Na voljo je nova nočna gradnja"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ett nytt bygge finns tillgängligt"
+            "value" : "Ett nytt nattligt bygge finns tillgängligt"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "புதிய பில்ட் கிடைக்கிறது"
+            "value" : "புதிய நைட்லி பில்ட் கிடைக்கிறது"
           }
         },
         "te" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "కొత్త బిల్డ్ అందుబాటులో ఉంది"
+            "value" : "కొత్త నైట్లీ బిల్డ్ అందుబాటులో ఉంది"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "มีบิลด์ใหม่ให้ใช้งาน"
+            "value" : "มีบิลด์ไนท์ลีใหม่ให้ใช้งาน"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yeni Bir Derleme Var"
+            "value" : "Yeni Bir Gecelik Derleme Var"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Доступна нова збірка"
+            "value" : "Доступна нова нічна збірка"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "نیا بلڈ دستیاب ہے"
+            "value" : "نیا نائٹلی بلڈ دستیاب ہے"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Đã có bản dựng mới"
+            "value" : "Đã có bản dựng hằng đêm mới"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "有新的构建版本"
+            "value" : "有新的每夜版"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "有新的建置版本"
+            "value" : "有新的每夜版"
           }
         },
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "有新的建置版本"
+            "value" : "有新的每夜版"
+          }
+        }
+      }
+    },
+    "A New Release Is Available" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتوفر إصدار جديد"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Налично е ново издание"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "নতুন রিলিজ উপলভ্য"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hi ha una publicació nova disponible"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je k dispozici nové vydání"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En ny udgivelse er tilgængelig"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein neues Release ist verfügbar"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Διατίθεται νέα έκδοση"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay una nueva publicación disponible"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay una nueva publicación disponible"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uusi julkaisu on saatavilla"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une nouvelle publication est disponible"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une nouvelle publication est disponible"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "નવી રિલીઝ ઉપલબ્ધ છે"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מהדורה חדשה זמינה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नई रिलीज़ उपलब्ध है"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dostupno je novo izdanje"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Új kiadás érhető el"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rilis Baru Tersedia"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "È disponibile una nuova release"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新しいリリースがあります"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Жаңа шығарылым қолжетімді"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಹೊಸ ರಿಲೀಸ್ ಲಭ್ಯವಿದೆ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새로운 릴리즈 사용 가능"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yra naujas leidimas"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "പുതിയ റിലീസ് ലഭ്യമാണ്"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नवीन रिलीज उपलब्ध आहे"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keluaran Baharu Tersedia"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En ny utgivelse er tilgjengelig"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er is een nieuwe release beschikbaar"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ନୂଆ ରିଲିଜ୍ ଉପଲବ୍ଧ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਨਵੀਂ ਰਿਲੀਜ਼ ਉਪਲਬਧ ਹੈ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dostępne jest nowe wydanie"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Novo Lançamento Disponível"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Está disponível um novo lançamento"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este disponibilă o lansare nouă"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступен новый релиз"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "K dispozícii je nové vydanie"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Na voljo je nova izdaja"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En ny utgåva finns tillgänglig"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "புதிய வெளியீடு கிடைக்கிறது"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "కొత్త రిలీజ్ అందుబాటులో ఉంది"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "มีรีลีสใหม่ให้ใช้งาน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yeni Bir Sürüm Var"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступний новий реліз"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نئی ریلیز دستیاب ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã có bản phát hành mới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有新版本"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有新版本"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有新版本"
           }
         }
       }
