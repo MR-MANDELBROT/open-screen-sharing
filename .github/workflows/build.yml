@@ -336,10 +336,10 @@ jobs:
           path: dist
       - name: Publish
         run: |-
-          if git rev-parse -q --verify refs/tags/nightly > /dev/null; then
-            NOTES=$(git log --format='* %s' nightly..)
+          if RELEASE=$(gh release view --json tagName --jq .tagName); then
+            NOTES=$(git log --format='* %s' "$RELEASE..")
           else
-            NOTES=$(git log -1 --format='* %s')
+            NOTES=$(git log --format='* %s')
           fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" tag -a -f nightly -m "$BUILD_NUMBER" "$GITHUB_SHA"
           git push -f origin refs/tags/nightly
