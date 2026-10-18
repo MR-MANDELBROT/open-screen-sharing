@@ -33,7 +33,11 @@ func (s *Server) LockScreen() error {
 // Home wakes an already-locked display without toggling an ongoing video wake
 // back off, as a second power-button event would.
 func (s *Server) WakeScreen() error {
-	return s.pressButton(hid.ButtonHome, 1)
+	button := hid.ButtonHome
+	// Back-to-back down/up woke ActiveOn from AOD on iPhone18,2 / 24B5110a
+	// (RE/24B5110a/dtuhidd/unlock-timing-20261017/buttons-zero.jsonl).
+	button.Hold = 0
+	return s.pressButton(button, 1)
 }
 
 func (s *Server) pressButton(button hid.Button, count int) error {
