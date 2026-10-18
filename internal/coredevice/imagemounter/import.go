@@ -24,6 +24,9 @@ type Source interface {
 const manifestLimit = 16 << 20
 
 func Import(ctx context.Context, src Source, dir string, progress func(received, total int64)) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return E.Cause(err, "imagemounter")
 	}
@@ -44,6 +47,9 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 	}()
 	var missing error
 	for _, variant := range []Variant{Cryptex, Personalized} {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		identity, err := variant.identity(manifest)
 		if err != nil {
 			missing = E.Errors(missing, E.Cause(err, "import ", variant))
@@ -71,6 +77,9 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 	counter.setTotal(total)
 	imported := false
 	for _, variant := range staged {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		err := finishVariant(ctx, src, dir, variant, manifestData, counter)
 		var notInSource *notInSourceError
 		switch {
@@ -82,6 +91,9 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 			return err
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	counter.flush()
 	if !imported {
 		return E.Cause(missing, "imagemounter: ", src, " holds no usable Developer Disk Image")
@@ -91,7 +103,7 @@ func Import(ctx context.Context, src Source, dir string, progress func(received,
 
 func Present(dir string, variant Variant) (bool, error) {
 	dir = filepath.Join(dir, variant.String())
-	manifest, err := loadManifest(dir)
+	manifest, err := loadManifest(context.Background(), dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
@@ -125,8 +137,14 @@ func readManifest(ctx context.Context, src Source, counter *progressCounter) ([]
 		return nil, err
 	}
 	defer file.Close()
+	stop := context.AfterFunc(ctx, func() { file.Close() })
+	defer stop()
 	var data bytes.Buffer
-	if _, err = io.Copy(io.MultiWriter(&data, counter), io.LimitReader(file, manifestLimit)); err != nil {
+	_, err = io.Copy(io.MultiWriter(&data, counter), io.LimitReader(&contextReader{ctx: ctx, reader: file}, manifestLimit))
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err != nil {
 		return nil, E.Cause(err, "imagemounter: read ", manifestName)
 	}
 	return data.Bytes(), nil
@@ -160,6 +178,9 @@ type sourceFile struct {
 }
 
 func stageVariant(ctx context.Context, src Source, dir string, variant Variant, identity buildIdentity, counter *progressCounter) (*stagedVariant, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	staging, err := os.MkdirTemp(dir, "."+variant.String()+".*")
 	if err != nil {
 		return nil, E.Cause(err, "imagemounter")
@@ -182,6 +203,10 @@ func stageVariant(ctx context.Context, src Source, dir string, variant Variant, 
 	}
 	image := files[len(files)-1]
 	for index, name := range image.names {
+		if err := ctx.Err(); err != nil {
+			os.RemoveAll(staging)
+			return nil, err
+		}
 		size, err := src.Size(ctx, name)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
@@ -202,7 +227,7 @@ func finishVariant(ctx context.Context, src Source, dir string, variant *stagedV
 	if err := copyEntry(ctx, src, variant.staging, variant.image, counter); err != nil {
 		return err
 	}
-	err := writeFile(filepath.Join(variant.staging, manifestName), func(file *os.File) error {
+	err := writeFile(ctx, filepath.Join(variant.staging, manifestName), func(file *os.File) error {
 		_, err := file.Write(manifestData)
 		return err
 	})
@@ -211,6 +236,9 @@ func finishVariant(ctx context.Context, src Source, dir string, variant *stagedV
 	}
 	if err = os.Chmod(variant.staging, 0o755); err != nil {
 		return E.Cause(err, "imagemounter")
+	}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	target := filepath.Join(dir, variant.variant.String())
 	if err = os.RemoveAll(target); err != nil {
@@ -226,6 +254,9 @@ func copyEntry(ctx context.Context, src Source, staging string, entry sourceFile
 	file := resolvedFile{key: entry.key, path: filepath.Join(staging, fixedNames[entry.key]), digest: entry.digest}
 	var mismatch error
 	for _, name := range entry.names {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		err := copyFile(ctx, src, name, file, counter)
 		var mismatchErr *mismatchError
 		if errors.Is(err, fs.ErrNotExist) {
@@ -246,9 +277,15 @@ func copyFile(ctx context.Context, src Source, name string, file resolvedFile, c
 		return err
 	}
 	defer input.Close()
-	return writeFile(file.path, func(output *os.File) error {
+	stop := context.AfterFunc(ctx, func() { input.Close() })
+	defer stop()
+	return writeFile(ctx, file.path, func(output *os.File) error {
 		hash := sha512.New384()
-		if _, err := io.Copy(io.MultiWriter(output, hash, counter), input); err != nil {
+		_, err := io.Copy(io.MultiWriter(output, hash, counter), &contextReader{ctx: ctx, reader: input})
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil {
 			return E.Cause(err, "imagemounter: read ", name, " from ", src)
 		}
 		if sum := hash.Sum(nil); !bytes.Equal(sum, file.digest) {

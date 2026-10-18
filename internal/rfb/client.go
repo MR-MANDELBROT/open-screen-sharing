@@ -86,6 +86,8 @@ type Client struct {
 	writer  *outbox.Writer
 	info    ServerInfo
 	wrapKey [16]byte
+	ctx     context.Context
+	cancel  context.CancelCauseFunc
 
 	decoders     decoders
 	cursors      map[uint32]*Cursor
@@ -121,7 +123,6 @@ type Client struct {
 	scrollRemainderY      float64
 	layout                *DisplayLayout
 	clipboardEcho         uint32
-	fetchInProgress       bool
 	virtualDisplay        *virtualDisplayRequest
 	heldDisplay           []heldDisplayChange
 	hdr                   bool
@@ -150,10 +151,10 @@ func Dial(ctx context.Context, options Options, handler Handler) (*Client, error
 	if options.ClientName == "" {
 		options.ClientName = options.Username
 	}
-	if options.DialTimeout == 0 {
-		options.DialTimeout = 15 * time.Second
-	}
+	lifetime, cancelLifetime := context.WithCancelCause(context.Background())
 	client := &Client{
+		ctx:             lifetime,
+		cancel:          cancelLifetime,
 		options:         options,
 		handler:         handler,
 		logger:          logger,
@@ -168,6 +169,7 @@ func Dial(ctx context.Context, options Options, handler Handler) (*Client, error
 	handler.StateChanged(StateConnecting)
 	conn, err := dial(ctx, options)
 	if err != nil {
+		cancelLifetime(err)
 		return nil, err
 	}
 	client.conn = conn
@@ -179,6 +181,10 @@ func Dial(ctx context.Context, options Options, handler Handler) (*Client, error
 		err = E.Errors(ctx.Err(), err)
 	}
 	if err != nil {
+		cancelLifetime(err)
+		if client.outbox != nil {
+			client.outbox.Abort(err)
+		}
 		conn.Close()
 		client.abandonMedia()
 		return nil, err
@@ -202,7 +208,6 @@ func (c *Client) abandonMedia() {
 func (c *Client) setup() error {
 	c.stream = newStream(c.conn)
 	h := &handshake{conn: c.conn, stream: c.stream, options: &c.options, logger: c.logger}
-	c.conn.SetDeadline(time.Now().Add(c.options.DialTimeout))
 	err := h.negotiateVersion()
 	if err != nil {
 		return err
@@ -210,7 +215,6 @@ func (c *Client) setup() error {
 	c.handler.StateChanged(StateAuthenticating)
 	h.selected = func(securityType SecurityType) {
 		if securityType == SecurityAskControl || securityType == SecurityAskObserve {
-			c.conn.SetDeadline(time.Time{})
 			c.handler.StateChanged(StateWaitingForApproval)
 		}
 	}
@@ -218,7 +222,6 @@ func (c *Client) setup() error {
 	if err != nil {
 		return err
 	}
-	c.conn.SetDeadline(time.Now().Add(c.options.DialTimeout))
 	err = h.initialize()
 	if err != nil {
 		return err
@@ -230,12 +233,10 @@ func (c *Client) setup() error {
 		return err
 	}
 	if c.info.Dialect == DialectApple && c.info.Flags&ServerFlagSessionSelect != 0 {
-		c.conn.SetDeadline(time.Time{})
 		err = c.selectSession()
 		if err != nil {
 			return err
 		}
-		c.conn.SetDeadline(time.Now().Add(c.options.DialTimeout))
 	}
 	c.outbox = outbox.New()
 	c.writer = outbox.NewWriter(c.conn)
@@ -247,9 +248,8 @@ func (c *Client) setup() error {
 	if err != nil {
 		return err
 	}
-	c.conn.SetDeadline(time.Time{})
 	go func() {
-		c.writerError = c.writer.Run(c.outbox)
+		c.writerError = c.writer.Run(c.ctx, c.outbox)
 		if c.writerError != nil {
 			c.conn.Close()
 		}
@@ -409,7 +409,7 @@ func (c *Client) watch(done <-chan struct{}) {
 		c.access.Lock()
 		mediaStream := c.mediaStream
 		video := c.media != nil && c.media.videoArrived.Load()
-		quiet := (mediaStream && (pixels || video)) || c.fetchInProgress
+		quiet := mediaStream && (pixels || video)
 		pushing := c.pushing && !c.downloading
 		c.access.Unlock()
 		if quiet {
@@ -440,6 +440,9 @@ func (c *Client) Run() error {
 		err = c.receiveMessage()
 	}
 	closing := c.closed.Load()
+	if !closing {
+		c.abort(err)
+	}
 	c.Close()
 	closedAt := time.Now()
 	c.mediaLifecycle.Lock()
@@ -462,7 +465,7 @@ func (c *Client) Run() error {
 	if closing && E.IsClosed(err) {
 		err = nil
 	}
-	writerFailed := !closing && c.writerError != nil && !errors.Is(c.writerError, net.ErrClosed)
+	writerFailed := c.writerError != nil && !errors.Is(c.writerError, net.ErrClosed)
 	if writerFailed && (err == nil || errors.Is(err, net.ErrClosed)) {
 		err = c.writerError
 	}
@@ -478,15 +481,30 @@ func (c *Client) Close() error {
 		if fileCopy != nil {
 			fileCopy.Close(net.ErrClosed)
 		}
+		if err := c.SetMediaStream(false); err != nil {
+			c.logger.Debug("stop media stream while closing", "error", err)
+		}
 		c.mediaLifecycle.Lock()
 		c.closed.Store(true)
 		c.mediaLifecycle.Unlock()
 		c.outbox.Close(net.ErrClosed)
-		c.writer.FinishWithin(2 * time.Second)
 		<-c.writerDone
 		c.conn.Close()
+		c.cancel(nil)
 	})
+	return c.writerError
+}
+
+func (c *Client) Abort() error {
+	c.abort(context.Canceled)
 	return nil
+}
+
+func (c *Client) abort(err error) {
+	c.closed.Store(true)
+	c.cancel(err)
+	c.outbox.Abort(err)
+	c.conn.Close()
 }
 
 func (c *Client) send(message []byte) error {
@@ -495,6 +513,10 @@ func (c *Client) send(message []byte) error {
 
 func (c *Client) SendMessage(message []byte) error {
 	return c.outbox.PushWait(message)
+}
+
+func (c *Client) QueueMessage(message []byte) error {
+	return c.outbox.Push(message, false)
 }
 
 func (c *Client) resizeLocked(width, height int) (bool, error) {
@@ -649,9 +671,9 @@ func (c *Client) afterUpdate() error {
 		return nil
 	}
 	c.access.Lock()
-	pushing, mediaStream, fetching := c.pushing && !c.downloading, c.mediaStream, c.fetchInProgress
+	pushing, mediaStream := c.pushing && !c.downloading, c.mediaStream
 	c.access.Unlock()
-	if pushing || mediaStream || fetching {
+	if pushing || mediaStream {
 		return nil
 	}
 	return c.send(framebufferUpdateRequestMessage(true, c.width, c.height))

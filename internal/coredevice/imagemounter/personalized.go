@@ -20,9 +20,7 @@ import (
 // manifest before requesting a ticket from TSS (pymobiledevice3 9c33842,
 // pymobiledevice3/services/mobile_image_mounter.py:396-406).
 func (c *Client) MountPersonalized(ctx context.Context, dir string) error {
-	ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
-	defer cancel()
-	manifest, err := loadManifest(dir)
+	manifest, err := loadManifest(ctx, dir)
 	if err != nil {
 		return err
 	}
@@ -49,10 +47,10 @@ func (c *Client) MountPersonalized(ctx context.Context, dir string) error {
 		if image, err = identity.resolve(dir, "PersonalizedDMG"); err != nil {
 			return err
 		}
-		if trustCache, err = identity.readFile(dir, "LoadableTrustCache"); err != nil {
+		if trustCache, err = identity.readFile(ctx, dir, "LoadableTrustCache"); err != nil {
 			return err
 		}
-		if err = image.verify(); err != nil {
+		if err = image.verify(ctx); err != nil {
 			return err
 		}
 		// pymobiledevice3 uses the image SHA-384 for QueryPersonalizationManifest
@@ -76,7 +74,7 @@ func (c *Client) MountPersonalized(ctx context.Context, dir string) error {
 				return err
 			}
 		}
-		if err := conn.upload(image, ticket); err != nil {
+		if err := conn.upload(ctx, image, ticket); err != nil {
 			return err
 		}
 		if err := conn.mount(ticket, trustCache); err != nil {
@@ -237,12 +235,17 @@ func (m *mounterConn) nonce() ([]byte, error) {
 	return nonce, nil
 }
 
-func (m *mounterConn) upload(image resolvedFile, ticket []byte) error {
+func (m *mounterConn) upload(ctx context.Context, image resolvedFile, ticket []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	file, err := os.Open(image.path)
 	if err != nil {
 		return E.Cause(err, "imagemounter")
 	}
 	defer file.Close()
+	stop := context.AfterFunc(ctx, func() { file.Close() })
+	defer stop()
 	info, err := file.Stat()
 	if err != nil {
 		return E.Cause(err, "imagemounter")
@@ -260,7 +263,10 @@ func (m *mounterConn) upload(image resolvedFile, ticket []byte) error {
 	if err = m.expectStatus(command, reply, "ReceiveBytesAck"); err != nil {
 		return err
 	}
-	written, err := io.Copy(m.conn, file)
+	written, err := io.Copy(m.conn, &contextReader{ctx: ctx, reader: file})
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if err != nil {
 		return E.Cause(err, "imagemounter: upload the image")
 	}

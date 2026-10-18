@@ -126,10 +126,12 @@ type Tunnel struct {
 }
 
 func Open(ctx context.Context, conn net.Conn, logger *slog.Logger) (*Tunnel, error) {
+	if err := ctx.Err(); err != nil {
+		conn.Close()
+		return nil, err
+	}
 	reader := bufio.NewReaderSize(conn, 2*(ipv6HeaderLength+65535))
-	stopAfter := context.AfterFunc(ctx, func() {
-		conn.SetDeadline(time.Unix(1, 0))
-	})
+	stopAfter := context.AfterFunc(ctx, func() { conn.Close() })
 	parameters, err := handshake(conn, reader)
 	if !stopAfter() || ctx.Err() != nil {
 		err = ctx.Err()
@@ -138,7 +140,6 @@ func Open(ctx context.Context, conn net.Conn, logger *slog.Logger) (*Tunnel, err
 		conn.Close()
 		return nil, err
 	}
-	conn.SetDeadline(time.Time{})
 	logger.Debug("tunnel parameters",
 		slog.String("client", parameters.ClientAddress.String()),
 		slog.String("server", parameters.ServerAddress.String()),

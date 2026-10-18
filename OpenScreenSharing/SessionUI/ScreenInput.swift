@@ -30,6 +30,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private var finger: Finger?
     private var holdTask: Task<Void, Never>?
     private var pendingClick: Task<Void, Never>?
+    private var pendingClickDeadline: TimeInterval?
     private var lastClickTime: TimeInterval = 0
     private var fingersTouchDirectly = false
     private var touchFinger: UITouch?
@@ -362,9 +363,11 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             if let finger { end(finger, liftedAt: nil) }
             return
         }
-        let afterTap = pendingClick != nil
+        let afterTap = pendingClickDeadline.map { touch.timestamp <= $0 } ?? false
+        if pendingClick != nil, !afterTap { click() }
         pendingClick?.cancel()
         pendingClick = nil
+        pendingClickDeadline = nil
         let next = Finger(touch: touch, location: touch.location(in: view), phase: afterTap ? .secondTap : .pending)
         finger = next
         guard afterTap else { return }
@@ -413,7 +416,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         holdTask = nil
         switch finger.phase {
         case .pending:
-            if let time, finger.isTap(endedAt: time) { tapped() }
+            if let time, finger.isTap(endedAt: time) { tapped(at: time) }
         case .pointing:
             break
         case .secondTap:
@@ -423,16 +426,19 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         }
     }
 
-    private func tapped() {
+    private func tapped(at time: TimeInterval) {
         guard controller.isControlling else { return }
         guard CACurrentMediaTime() - lastClickTime > Self.multiClickInterval else {
             click()
             return
         }
+        let deadline = time + Self.tapDragWindow
+        pendingClickDeadline = deadline
         pendingClick = Task { [weak self] in
-            try? await Task.sleep(seconds: Self.tapDragWindow)
+            try? await Task.sleep(seconds: max(0, deadline - ProcessInfo.processInfo.systemUptime))
             guard !Task.isCancelled, let self else { return }
             self.pendingClick = nil
+            self.pendingClickDeadline = nil
             self.click()
         }
     }

@@ -5,8 +5,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sagernet/asc-go/asc"
@@ -28,7 +30,8 @@ func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("usage: app_store_connect next_project_version | publish_testflight <project version> [release notes]")
 	}
-	ctx := context.Background()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 	var err error
 	switch os.Args[1] {
 	case "next_project_version":
@@ -135,13 +138,21 @@ func publishTestflight(ctx context.Context, projectVersion string, releaseNotes 
 		}
 		if len(builds.Data) == 0 {
 			log.Print(name, " waiting for build upload")
-			time.Sleep(buildPollInterval)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(buildPollInterval):
+			}
 			continue
 		}
 		build := builds.Data[0]
 		if *build.Attributes.ProcessingState != "VALID" {
 			log.Print(name, " waiting for process: ", *build.Attributes.ProcessingState)
-			time.Sleep(buildPollInterval)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(buildPollInterval):
+			}
 			continue
 		}
 		localizations, _, err := client.TestFlight.ListBetaBuildLocalizationsForBuild(ctx, build.ID, nil)
@@ -165,7 +176,11 @@ func publishTestflight(ctx context.Context, projectVersion string, releaseNotes 
 		response, err := client.TestFlight.AddBuildsToBetaGroup(ctx, groupID, []string{build.ID})
 		if response != nil && (response.StatusCode == http.StatusUnprocessableEntity || response.StatusCode == http.StatusNotFound) {
 			log.Print(name, " waiting for process")
-			time.Sleep(buildPollInterval)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(buildPollInterval):
+			}
 			continue
 		} else if err != nil {
 			return err

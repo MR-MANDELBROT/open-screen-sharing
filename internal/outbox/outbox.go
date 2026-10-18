@@ -1,16 +1,13 @@
 package outbox
 
 import (
+	"context"
 	"net"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
-const (
-	writeStallLimit = 30 * time.Second
-	writeChunk      = 64 << 10
-)
+const writeChunk = 64 << 10
 
 type Outbox struct {
 	access        sync.Mutex
@@ -30,8 +27,12 @@ func (o *Outbox) PushWait(message []byte) error {
 	written := make(chan error, 1)
 	o.access.Lock()
 	if o.closed {
+		err := o.err
 		o.access.Unlock()
-		return net.ErrClosed
+		if err == nil {
+			err = net.ErrClosed
+		}
+		return err
 	}
 	o.messages = append(o.messages, message)
 	o.waiters = append(o.waiters, written)
@@ -76,6 +77,18 @@ func (o *Outbox) Close(err error) {
 	o.signal()
 }
 
+func (o *Outbox) Abort(err error) {
+	o.access.Lock()
+	o.closed, o.err = true, err
+	waiters := o.waiters
+	o.messages, o.waiters = nil, nil
+	o.access.Unlock()
+	for _, waiter := range waiters {
+		waiter <- err
+	}
+	o.signal()
+}
+
 func (o *Outbox) signal() {
 	select {
 	case o.wake <- struct{}{}:
@@ -98,9 +111,6 @@ type Writer struct {
 	data    []byte
 	wire    []byte
 	written atomic.Uint64
-
-	deadlineAccess sync.Mutex
-	finishing      bool
 }
 
 func NewWriter(conn net.Conn) *Writer {
@@ -115,20 +125,8 @@ func (w *Writer) Written() uint64 {
 	return w.written.Load()
 }
 
-func (w *Writer) FinishWithin(limit time.Duration) {
-	w.deadlineAccess.Lock()
-	w.finishing = true
-	w.conn.SetWriteDeadline(time.Now().Add(limit))
-	w.deadlineAccess.Unlock()
-}
-
 func (w *Writer) send(data []byte) error {
 	for len(data) > 0 {
-		w.deadlineAccess.Lock()
-		if !w.finishing {
-			w.conn.SetWriteDeadline(time.Now().Add(writeStallLimit))
-		}
-		w.deadlineAccess.Unlock()
 		piece := data[:min(len(data), writeChunk)]
 		written, err := w.conn.Write(piece)
 		w.written.Add(uint64(written))
@@ -152,21 +150,29 @@ func (w *Writer) Write(messages [][]byte) error {
 	return w.send(w.wire)
 }
 
-func (w *Writer) Run(box *Outbox) error {
+func (w *Writer) Run(ctx context.Context, box *Outbox) error {
+	stop := context.AfterFunc(ctx, func() {
+		box.Abort(context.Cause(ctx))
+		w.conn.Close()
+	})
+	defer stop()
 	for range box.wake {
 		messages, waiters, closed := box.take()
 		var err error
-		if len(messages) > 0 {
+		if ctx.Err() == nil && len(messages) > 0 {
 			err = w.Write(messages)
+		}
+		cause := context.Cause(ctx)
+		if cause != nil {
+			err = cause
 		}
 		for _, waiter := range waiters {
 			waiter <- err
 		}
 		if err != nil {
-			box.Close(err)
-			_, waiters, _ = box.take()
-			for _, waiter := range waiters {
-				waiter <- err
+			box.Abort(err)
+			if cause != nil {
+				return nil
 			}
 			return err
 		}

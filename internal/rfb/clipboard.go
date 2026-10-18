@@ -226,9 +226,6 @@ func (c *Client) receivePasteboard() error {
 	if err != nil {
 		return err
 	}
-	c.access.Lock()
-	c.fetchInProgress = false
-	c.access.Unlock()
 	archive, err := inflatePasteboard(compressed, uncompressed)
 	if err != nil {
 		return E.Cause(err, "inflate pasteboard")
@@ -253,7 +250,6 @@ func (c *Client) RequestClipboard() error {
 	c.access.Lock()
 	c.clipboardEcho++
 	echo := c.clipboardEcho
-	c.fetchInProgress = true
 	c.access.Unlock()
 	message := []byte{0x0b, 0, 0, 0}
 	return c.send(binary.BigEndian.AppendUint32(message, echo))

@@ -26,23 +26,34 @@ const (
 	// -[VCVideoStreamRateAdaptationFeedbackOnly startFeedbackSource] 0x1c0806298..0x1c08062a8).
 	rateFeedbackInterval = 50 * time.Millisecond
 	reportInterval       = time.Second
-	keyframeInterval     = 250 * time.Millisecond
-	keyframeAnswerLimit  = 2 * time.Second
-	legSilenceLimit      = 48 * time.Second
-	firstVideoLimit      = 8 * time.Second
-	receiveTick          = 10 * time.Millisecond
-	maxDatagram          = 65536
+	// AVConference GetNextFrame repeats packet-loss refresh requests after
+	// 0.25 s; DecoderRequestKeyFrame independently handles decoder failures
+	// (26A434 AVConference, _VideoPacketBuffer_GetNextFrame
+	// 0x1c0f30b0c..0x1c0f30b70, __VideoReceiver_DecoderRequestKeyFrame
+	// 0x1c0f51200; RE/26A434/AVConference/android-receiver-recovery-findings.txt).
+	keyframeInterval = 250 * time.Millisecond
+	receiveTick      = 10 * time.Millisecond
+	maxDatagram      = 65536
 
 	drainQuiet   = 150 * time.Millisecond
 	drainMinimum = 250 * time.Millisecond
 	drainLimit   = time.Second
+
+	// On kCGSDisplayWillReconfigure the Agent releases its media sender, whose sockets only
+	// avconferenced holds, before the daemon announces the ports again in the first
+	// SendFrameBuffer after DisplayChangeFinished. The Agent waits at most 90 ticks for the
+	// reconfiguration and the daemon holds framebuffer updates for at most 90 ticks, 1440 ms
+	// (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+	// DisplayReconfigureNotificationHandler 0x100024208..0x100024290,
+	// createAVCVideoStreamWithRemoteAddress: 0x100009db0..0x100009db8,
+	// WaitForDisplayReconfigureToFinish 0x10003e2b4..0x10003e354; screensharingd 756.36.5.2,
+	// macOS 27.0.1 26A434, UUID 44908B06-F788-3822-ABC4-2285001F6A8D,
+	// SendFrameBuffer 0x100021f1c..0x100021f40, 0x100023a14..0x100023a94;
+	// RE/26A434/ScreensharingAgent/media-restart-socket-close.txt).
+	restartLimit = 3 * time.Second
 )
 
-var (
-	ErrStreamSilent       = E.New("media: the server stopped sending on the video leg")
-	ErrStreamNoVideo      = E.New("media: no video arrived on the video leg")
-	ErrKeyframeUnanswered = E.New("media: the server did not answer keyframe requests")
-)
+var ErrStreamSilent = E.New("media: the server closed its media ports and did not announce them again")
 
 type StreamConfig struct {
 	Offer  *Offer
@@ -91,7 +102,8 @@ type Stream struct {
 	microphoneAccess    sync.Mutex
 	microphonePacket    []byte
 	lastKeyframeRequest time.Time
-	keyframeRequestedAt time.Time
+	refusedAt           time.Time
+	restartExpected     bool
 	stats               StreamStats
 	receiveRTCP         []byte
 	feedbackRTCP        []byte
@@ -107,6 +119,7 @@ type leg struct {
 	sendBuffer  []byte
 	sources     map[uint32]*receptionStats
 	lastHeardAt time.Time
+	heard       bool
 }
 
 func NewStream(config StreamConfig) *Stream {
@@ -132,6 +145,7 @@ func (s *Stream) HandleRectangle(payload []byte) error {
 			s.stats.Answer = *message
 			s.rate.restart()
 			s.stats.OneWayDelay = 0
+			s.awaitPacketsLocked()
 			s.access.Unlock()
 		case *ServerError:
 			err = message
@@ -156,6 +170,8 @@ func (s *Stream) handlePorts(ports *Ports) error {
 	}
 	if s.ports != nil && s.ports.Video.Port == ports.Video.Port && s.ports.Audio.Port == ports.Audio.Port {
 		s.ports = ports
+		s.restartExpected = false
+		s.awaitPacketsLocked()
 		return nil
 	}
 	if s.ports != nil {
@@ -223,11 +239,40 @@ func (l *leg) source(ssrc uint32) *receptionStats {
 	return source
 }
 
-func (l *leg) send(packet []byte) {
-	l.sendAccess.Lock()
-	defer l.sendAccess.Unlock()
-	l.sendBuffer = l.sender.appendProtected(l.sendBuffer[:0], packet)
-	_, _ = l.conn.Write(l.sendBuffer)
+func (s *Stream) send(target *leg, packet []byte) {
+	target.sendAccess.Lock()
+	target.sendBuffer = target.sender.appendProtected(target.sendBuffer[:0], packet)
+	_, err := target.conn.Write(target.sendBuffer)
+	target.sendAccess.Unlock()
+	s.refused(target, err)
+}
+
+func (s *Stream) refused(target *leg, err error) bool {
+	if !errors.Is(err, syscall.ECONNREFUSED) {
+		return false
+	}
+	s.access.Lock()
+	if target.heard && !s.restartExpected && s.refusedAt.IsZero() {
+		s.refusedAt = time.Now()
+	}
+	s.access.Unlock()
+	return true
+}
+
+func (s *Stream) awaitPacketsLocked() {
+	s.refusedAt = time.Time{}
+	for _, target := range []*leg{s.video, s.audio} {
+		if target != nil {
+			target.heard = false
+		}
+	}
+}
+
+func (s *Stream) ExpectRestart() {
+	s.access.Lock()
+	defer s.access.Unlock()
+	s.restartExpected = true
+	s.refusedAt = time.Time{}
 }
 
 func (s *Stream) SendAudio(data []byte) error {
@@ -266,19 +311,10 @@ func (s *Stream) SendAudio(data []byte) error {
 	audio := s.audio
 	s.access.Unlock()
 	_, err := audio.conn.Write(protected)
-	if err != nil && !errors.Is(err, syscall.ECONNREFUSED) {
+	if err != nil && !s.refused(audio, err) {
 		return err
 	}
 	return nil
-}
-
-func (s *Stream) StopIfNotStarted() {
-	s.access.Lock()
-	waiting := s.ports == nil
-	s.access.Unlock()
-	if waiting {
-		s.stop(ErrStreamNoVideo)
-	}
 }
 
 func (s *Stream) RequestKeyframe() {
@@ -343,13 +379,15 @@ func (s *Stream) stop(cause error) {
 		if audio != nil {
 			_ = audio.conn.Close()
 		}
-		s.config.Sink.StreamStopped(cause)
+		go func() {
+			s.wg.Wait()
+			s.config.Sink.StreamStopped(cause)
+		}()
 	})
 }
 
 func (s *Stream) receiveVideo(video *leg) {
 	defer s.wg.Done()
-	opened := time.Now()
 	var assembler *videoAssembler
 	var appliedAnswer *Answer
 	var unitsAtAnswer uint64
@@ -368,7 +406,7 @@ func (s *Stream) receiveVideo(video *leg) {
 			if s.isDone() {
 				return
 			}
-			if !E.IsMulti(err, os.ErrDeadlineExceeded, syscall.ECONNREFUSED) {
+			if !errors.Is(err, os.ErrDeadlineExceeded) && !s.refused(video, err) {
 				s.stop(E.Cause(err, "media: read video leg"))
 				return
 			}
@@ -379,7 +417,7 @@ func (s *Stream) receiveVideo(video *leg) {
 				if assembler != nil {
 					assembler.requestSync()
 				}
-				s.requestKeyframe(video, assembler)
+				s.requestKeyframe(video, true)
 			default:
 			}
 			s.applyVideoAnswer(assembler, &appliedAnswer, &unitsAtAnswer)
@@ -394,10 +432,10 @@ func (s *Stream) receiveVideo(video *leg) {
 				}
 				if order, pending := assembler.takeAcknowledgment(); pending {
 					s.receiveRTCP = appendReferenceAcknowledgment(s.receiveRTCP[:0], video.localSSRC, order)
-					video.send(s.receiveRTCP)
+					s.send(video, s.receiveRTCP)
 				}
 				if assembler.wantsKeyframe() {
-					s.requestKeyframe(video, assembler)
+					s.requestKeyframe(video, false)
 				}
 				s.access.Lock()
 				if s.answer == appliedAnswer && assembler.units > unitsAtAnswer {
@@ -405,9 +443,7 @@ func (s *Stream) receiveVideo(video *leg) {
 				}
 				if !assembler.awaitingSync {
 					s.lastKeyframeRequest = time.Time{}
-					s.keyframeRequestedAt = time.Time{}
 				}
-				unanswered := !s.keyframeRequestedAt.IsZero() && now.Sub(s.keyframeRequestedAt) > keyframeAnswerLimit
 				s.stats.VideoAccessUnitsReceived = assembler.received
 				s.stats.VideoAccessUnits = assembler.units
 				s.stats.VideoFrames = assembler.frames
@@ -415,19 +451,14 @@ func (s *Stream) receiveVideo(video *leg) {
 				s.stats.VideoLatePackets = assembler.latePackets()
 				s.stats.VideoPlayoutDelay = time.Duration(assembler.playoutDelay)
 				s.access.Unlock()
-				if unanswered {
-					s.stop(ErrKeyframeUnanswered)
-					return
-				}
 			}
-			if now.Sub(opened) > firstVideoLimit && (assembler == nil || assembler.units == 0) {
-				s.stop(ErrStreamNoVideo)
-				return
-			}
-			if now.Sub(video.lastHeardAt) > legSilenceLimit {
-				s.stop(ErrStreamSilent)
-				return
-			}
+		}
+		s.access.Lock()
+		silent := !s.refusedAt.IsZero() && now.Sub(s.refusedAt) > restartLimit
+		s.access.Unlock()
+		if silent {
+			s.stop(ErrStreamSilent)
+			return
 		}
 	}
 }
@@ -450,7 +481,9 @@ func (s *Stream) applyVideoAnswer(assembler *videoAssembler, applied **Answer, u
 
 func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, datagram []byte, now time.Time) {
 	if isRTCP(datagram) {
-		s.handleReports(video, datagram, now)
+		if s.handleReports(video, datagram, now) && *assembler != nil && (*assembler).awaitingSync {
+			s.requestKeyframe(video, false)
+		}
 		return
 	}
 	packet, err := video.srtp.unprotect(datagram)
@@ -464,6 +497,8 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 	}
 	s.access.Lock()
 	video.lastHeardAt = now
+	video.heard = true
+	s.refusedAt = time.Time{}
 	s.stats.VideoPackets++
 	s.stats.VideoBytes += uint64(len(datagram))
 	s.stats.VideoPacketsExpected += uint64(video.source(packet.ssrc).record(packet.sequence, packet.timestamp, videoClockRate, now))
@@ -491,7 +526,7 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 		}
 		s.access.Unlock()
 		*assembler = newVideoAssembler(codec, bands, s.config.Offer.options.ImmediatePlayout, s.config.Sink, func() {
-			s.requestKeyframe(video, *assembler)
+			s.requestKeyframe(video, false)
 		})
 		if answer != nil && answer.SSRC != 0 {
 			(*assembler).expectAnswer(answer)
@@ -500,34 +535,29 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 	(*assembler).push(packet, datagram[:len(datagram)-authTagLength], now.UnixNano())
 }
 
-func (s *Stream) requestKeyframe(video *leg, assembler *videoAssembler) {
+func (s *Stream) requestKeyframe(video *leg, immediate bool) {
 	s.access.Lock()
-	if assembler == nil && s.stats.VideoPackets == 0 {
-		s.access.Unlock()
-		return
-	}
-	if !s.lastKeyframeRequest.IsZero() && time.Since(s.lastKeyframeRequest) < keyframeInterval {
+	if !immediate && !s.lastKeyframeRequest.IsZero() && time.Since(s.lastKeyframeRequest) < keyframeInterval {
 		s.access.Unlock()
 		return
 	}
 	s.lastKeyframeRequest = time.Now()
-	if s.keyframeRequestedAt.IsZero() {
-		s.keyframeRequestedAt = s.lastKeyframeRequest
-	}
 	s.stats.KeyframeRequests++
 	s.receiveRTCP = appendKeyframeRequest(s.receiveRTCP[:0], video.localSSRC, video.sources, s.lastKeyframeRequest)
 	s.access.Unlock()
-	video.send(s.receiveRTCP)
+	s.send(video, s.receiveRTCP)
 }
 
-func (s *Stream) handleReports(target *leg, datagram []byte, now time.Time) {
+func (s *Stream) handleReports(target *leg, datagram []byte, now time.Time) bool {
 	compound, err := target.reports.unprotect(datagram)
 	if err != nil {
-		return
+		return false
 	}
 	s.access.Lock()
 	defer s.access.Unlock()
 	target.lastHeardAt = now
+	target.heard = true
+	s.refusedAt = time.Time{}
 	s.stats.SenderReports++
 	senderReports(compound, func(ssrc uint32, ntpMiddle uint32) {
 		source := target.sources[ssrc]
@@ -537,6 +567,7 @@ func (s *Stream) handleReports(target *leg, datagram []byte, now time.Time) {
 		source.lastSenderReport = ntpMiddle
 		source.senderReportAt = now
 	})
+	return true
 }
 
 func (s *Stream) receiveAudio(audio *leg) {
@@ -551,7 +582,7 @@ func (s *Stream) receiveAudio(audio *leg) {
 			if s.isDone() {
 				return
 			}
-			if !E.IsMulti(err, os.ErrDeadlineExceeded, syscall.ECONNREFUSED) {
+			if !errors.Is(err, os.ErrDeadlineExceeded) && !s.refused(audio, err) {
 				s.stop(E.Cause(err, "media: read audio leg"))
 				return
 			}
@@ -563,7 +594,8 @@ func (s *Stream) receiveAudio(audio *leg) {
 				packet, unprotectErr := audio.srtp.unprotect(datagram)
 				if unprotectErr == nil {
 					s.access.Lock()
-					audio.lastHeardAt = now
+					audio.heard = true
+					s.refusedAt = time.Time{}
 					s.stats.AudioBytes += uint64(len(datagram))
 					audio.source(packet.ssrc).record(packet.sequence, packet.timestamp, audioSampleRate, now)
 					s.access.Unlock()
@@ -600,7 +632,7 @@ func (s *Stream) feedback() {
 			s.feedbackRTCP, report = s.rate.appendReport(s.feedbackRTCP[:0], s.video.localSSRC, now)
 			s.access.Unlock()
 			if report {
-				s.video.send(s.feedbackRTCP)
+				s.send(s.video, s.feedbackRTCP)
 			}
 			if now.Sub(lastReport) >= reportInterval {
 				lastReport = now
@@ -619,6 +651,6 @@ func (s *Stream) sendReports() {
 		s.access.Lock()
 		s.feedbackRTCP = appendReceiverReport(s.feedbackRTCP[:0], target.localSSRC, target.sources, now)
 		s.access.Unlock()
-		target.send(s.feedbackRTCP)
+		s.send(target, s.feedbackRTCP)
 	}
 }

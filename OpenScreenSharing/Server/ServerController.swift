@@ -113,15 +113,24 @@ final class ServerController: ObservableObject {
                     throughLocalNetwork = server?.loopbackAddress()?.localNetwork ?? false
                 } else {
                     let port = remotePairing.port ?? 0
-                    let (found, localNetwork) = await Task.detached(priority: .utility) {
-                        let loopback = LibsharingDetectLoopbackAddress(Int32(port))
-                        return (loopback != nil, loopback?.localNetwork ?? false)
-                    }.value
-                    guard !Task.isCancelled else { return }
-                    if tunnelFound != found {
-                        tunnelFound = found
+                    let probe = UncheckedSendable(value: LibsharingNewLoopbackProbe(Int32(port))!)
+                    let result = await withTaskCancellationHandler {
+                        await Task.detached(priority: .utility) {
+                            do {
+                                let loopback = try probe.value.run()
+                                return (found: true, localNetwork: loopback.localNetwork)
+                            } catch {
+                                return (found: false, localNetwork: false)
+                            }
+                        }.value
+                    } onCancel: {
+                        probe.value.cancel()
                     }
-                    throughLocalNetwork = localNetwork
+                    guard !Task.isCancelled else { return }
+                    if tunnelFound != result.found {
+                        tunnelFound = result.found
+                    }
+                    throughLocalNetwork = result.localNetwork
                 }
                 if tunnelThroughLocalNetwork != throughLocalNetwork {
                     tunnelThroughLocalNetwork = throughLocalNetwork
@@ -160,7 +169,6 @@ final class ServerController: ObservableObject {
         let generation = generation
         phase = .starting
         startTask = Task {
-            await remotePairing.waitForPort(timeout: 2)
             guard generation == self.generation else { return }
             await launch(record: record, generation: generation)
         }
@@ -217,7 +225,10 @@ final class ServerController: ObservableObject {
         switch result {
         case .success(let box):
             guard generation == self.generation else {
-                Self.queue.async { box.value.close() }
+                Self.queue.async {
+                    do { try box.value.close() }
+                    catch { Self.logger.error("Close unused server: \(error.localizedDescription, privacy: .public)") }
+                }
                 return
             }
             if let port = remotePairing.port, Int32(port) != options.remotePairingPort {
@@ -226,7 +237,10 @@ final class ServerController: ObservableObject {
             do {
                 try box.value.start()
             } catch {
-                Self.queue.async { box.value.close() }
+                Self.queue.async {
+                    do { try box.value.close() }
+                    catch { Self.logger.error("Close unused server: \(error.localizedDescription, privacy: .public)") }
+                }
                 fail(ServerProblem(kind: .other, message: error.localizedDescription))
                 return
             }
@@ -290,13 +304,24 @@ final class ServerController: ObservableObject {
         }
         let restoration = brightness.stop(server)
         let box = UncheckedSendable(value: server)
+        let generation = generation
         closingTask = Task {
             defer { endCleanupBackgroundTask() }
             await restoration.value
-            await withCheckedContinuation { continuation in
+            let error: String? = await withCheckedContinuation { continuation in
                 Self.queue.async {
-                    box.value.close()
-                    continuation.resume()
+                    do {
+                        try box.value.close()
+                        continuation.resume(returning: nil)
+                    } catch {
+                        continuation.resume(returning: error.localizedDescription)
+                    }
+                }
+            }
+            if let error {
+                Self.logger.error("Close server: \(error, privacy: .public)")
+                if generation == self.generation, self.phase == .stopped {
+                    self.phase = .failed(ServerProblem(kind: .other, message: error))
                 }
             }
         }
@@ -336,8 +361,12 @@ final class ServerController: ObservableObject {
         updateIdleTimer()
     }
 
+    var keepsAppRunning: Bool {
+        phase.isActive && (location.isUpdating || audio.isPlaying)
+    }
+
     private func updateIdleTimer() {
-        SessionActivity.shared.set(self, active: phase.isActive && !location.isUpdating && !audio.isPlaying)
+        SessionActivity.shared.set(self, active: phase.isActive && !keepsAppRunning)
     }
 
     private func setBrowsing(_ browsing: Bool) {

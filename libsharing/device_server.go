@@ -6,7 +6,6 @@ import (
 	"net/netip"
 	"strconv"
 	"sync/atomic"
-	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/lockdown"
@@ -56,8 +55,6 @@ type DeviceServerHandler interface {
 
 const defaultRemotePairingPort = 49152
 
-const vpnProbeTimeout = 2 * time.Second
-
 type LoopbackAddress struct {
 	LocalNetwork bool
 }
@@ -66,16 +63,35 @@ func newLoopbackAddress(peer vpnpeer.Peer) *LoopbackAddress {
 	return &LoopbackAddress{LocalNetwork: peer.LocalNetwork}
 }
 
-func DetectLoopbackAddress(remotePairingPort int32) *LoopbackAddress {
+type LoopbackProbe struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	port   uint16
+}
+
+func NewLoopbackProbe(remotePairingPort int32) *LoopbackProbe {
 	port := uint16(remotePairingPort)
 	if port == 0 {
 		port = defaultRemotePairingPort
 	}
-	peer, err := vpnpeer.Find(context.Background(), port, time.Second)
-	if err != nil {
-		return nil
+	ctx, cancel := context.WithCancel(context.Background())
+	return &LoopbackProbe{ctx: ctx, cancel: cancel, port: port}
+}
+
+func (p *LoopbackProbe) Run() (*LoopbackAddress, error) {
+	defer p.cancel()
+	peer, err := vpnpeer.Find(p.ctx, p.port)
+	if p.ctx.Err() != nil {
+		return nil, p.ctx.Err()
 	}
-	return newLoopbackAddress(peer)
+	if err != nil {
+		return nil, err
+	}
+	return newLoopbackAddress(peer), nil
+}
+
+func (p *LoopbackProbe) Cancel() {
+	p.cancel()
 }
 
 type DeviceServer struct {
@@ -107,7 +123,7 @@ func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) 
 			if file.lockdown != nil {
 				port = lockdown.Port
 			}
-			peer, err := vpnpeer.Find(ctx, port, vpnProbeTimeout)
+			peer, err := vpnpeer.Find(ctx, port)
 			if err != nil {
 				return nil, err
 			}
@@ -192,11 +208,11 @@ func (s *DeviceServer) WakeScreen() error {
 	return s.server.WakeScreen()
 }
 
-func (s *DeviceServer) Close() {
+func (s *DeviceServer) Close() error {
 	servingDevices.access.Lock()
 	delete(servingDevices.ports, s)
 	servingDevices.access.Unlock()
-	s.server.Close()
+	return s.server.Close()
 }
 
 type deviceObserver struct {

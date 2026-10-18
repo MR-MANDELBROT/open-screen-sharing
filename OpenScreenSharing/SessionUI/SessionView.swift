@@ -136,7 +136,10 @@ struct SessionView: View {
                 controller.start()
             }
             .onDisappear {
-                controller.disconnect()
+                controller.abort()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in
+                controller.abort()
             }
             .onChangeCompat(of: controller.isFullScreen) {
                 controller.isToolbarVisible = false
@@ -206,7 +209,9 @@ struct SessionView: View {
                     return
                 }
                 withAnimation { showsPointerLockHint = true }
-                try? await Task.sleep(seconds: 3)
+                do {
+                    try await Task.sleep(seconds: 3)
+                } catch { return }
                 withAnimation { showsPointerLockHint = false }
             }
             .focusedSceneValue(\.sessionController, controller)
@@ -218,10 +223,7 @@ struct SessionView: View {
                         if prompt == nil, controller.credentialPrompt != nil {
                             controller.cancelCredentials()
                         }
-                    }),
-                onDismiss: {
-                    if controller.isClosing { onClose() }
-                }
+                    })
             ) { prompt in
                 CredentialsView(prompt: prompt, computerName: controller.title) { credentials, remember in
                     controller.submitCredentials(credentials, remember: remember)
@@ -234,7 +236,10 @@ struct SessionView: View {
                 controller.start()
             }
             .onDisappear {
-                controller.disconnect()
+                controller.abort()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                controller.abort()
             }
     }
     #endif
@@ -279,11 +284,11 @@ private struct DeviceWindowShaper: UIViewRepresentable {
     final class ShaperView: UIView {
         var screen: CGSize?
         var isFullScreen = false
+        private weak var scene: UIWindowScene?
         private var observation: NSKeyValueObservation?
         private var hasShaped = false
         private var requested: CGSize?
         private var minimumSize: CGSize?
-        private var raises = 0
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -294,35 +299,61 @@ private struct DeviceWindowShaper: UIViewRepresentable {
             fatalError()
         }
 
+        deinit {
+            MainActor.assumeIsolated { restoreMinimumSize() }
+        }
+
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            observation = window?.windowScene?.observe(\.effectiveGeometry) { [weak self] _, _ in
-                DispatchQueue.main.async { self?.shape() }
+            let newScene = window?.windowScene
+            if newScene !== scene {
+                observation = nil
+                restoreMinimumSize()
+                scene = newScene
+                requested = nil
+                hasShaped = false
+                observation = newScene?.observe(\.effectiveGeometry) { [weak self] _, _ in
+                    DispatchQueue.main.async { self?.shape() }
+                }
             }
             shape()
         }
 
         func shape() {
-            guard let scene = window?.windowScene, let restrictions = scene.sizeRestrictions, let screen,
-                screen.width > 0, screen.height > 0, !isFullScreen
-            else { return }
-            if scene.effectiveGeometry.isInteractivelyResizing {
+            guard let scene, let restrictions = scene.sizeRestrictions else { return }
+            guard let screen, screen.width > 0, screen.height > 0, !isFullScreen else {
+                restoreMinimumSize()
                 requested = nil
                 return
+            }
+            if scene.effectiveGeometry.isInteractivelyResizing {
+                restoreMinimumSize()
+                requested = nil
+                return
+            }
+            if let requested {
+                let current = scene.effectiveGeometry.coordinateSpace.bounds.size
+                if current.width >= requested.width - 2, current.height >= requested.height - 2 {
+                    restoreMinimumSize()
+                }
             }
             let target = target(for: scene, screen: screen, atLeastScreen: !hasShaped)
             hasShaped = true
             guard let target, !Self.isClose(target, requested) else { return }
+            if minimumSize == nil || restrictions.minimumSize != requested {
+                minimumSize = restrictions.minimumSize
+            }
             requested = target
-            let minimum = minimumSize ?? restrictions.minimumSize
-            minimumSize = minimum
             restrictions.minimumSize = target
-            raises += 1
-            let raise = raises
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                guard self?.raises == raise else { return }
+        }
+
+        private func restoreMinimumSize() {
+            if let minimum = minimumSize, let restrictions = scene?.sizeRestrictions,
+                restrictions.minimumSize == requested
+            {
                 restrictions.minimumSize = minimum
             }
+            minimumSize = nil
         }
 
         private func target(for scene: UIWindowScene, screen: CGSize, atLeastScreen: Bool) -> CGSize? {

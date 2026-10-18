@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"strings"
 	"sync"
-	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -24,8 +23,12 @@ const (
 	clipboardVersion2           = 2
 	clipboardLongFormatNames    = 0x00000002
 	maxClipboardData            = 16 << 20
-	pasteTimeout                = 5 * time.Second
 )
+
+type clipboardResponse struct {
+	generation uint64
+	accepted   chan error
+}
 
 type clipboardChannel struct {
 	events  Events
@@ -42,7 +45,8 @@ type clipboardChannel struct {
 	pending       bool
 	pendingManual bool
 	stale         bool
-	responses     []chan error
+	generation    uint64
+	responses     []clipboardResponse
 }
 
 func clipboardPDU(kind, flags uint16, data []byte) []byte {
@@ -64,11 +68,7 @@ func (c *clipboardChannel) OnClose() {
 	ready := c.ready
 	c.send, c.ready = nil, false
 	c.localText, c.localOwned = "", false
-	for _, response := range c.responses {
-		if response != nil {
-			response <- E.New("rdp: the clipboard channel closed before the server answered the format list")
-		}
-	}
+	c.supersede(E.New("rdp: the clipboard channel closed before pasting"))
 	c.responses = nil
 	c.access.Unlock()
 	if ready {
@@ -82,25 +82,36 @@ func (c *clipboardChannel) enabled() bool {
 	return c.ready
 }
 
-func (c *clipboardChannel) setText(text string, accepted chan error) error {
+func (c *clipboardChannel) setText(text string, accepted chan error) (uint64, error) {
 	text, _, _ = strings.Cut(text, "\x00")
 	if len(text) > maxClipboardData/4 {
-		return E.New("rdp: clipboard text of ", len(text), " bytes is over the ", maxClipboardData/4, "-byte limit")
+		return 0, E.New("rdp: clipboard text of ", len(text), " bytes is over the ", maxClipboardData/4, "-byte limit")
 	}
 	c.access.Lock()
 	defer c.access.Unlock()
 	if c.send == nil {
-		return E.New("rdp: the clipboard channel is not open")
+		return 0, E.New("rdp: the clipboard channel is not open")
 	}
 	if accepted != nil && !c.ready {
-		return E.New("rdp: the remote clipboard is not ready to paste")
+		return 0, E.New("rdp: the remote clipboard is not ready to paste")
 	}
+	c.supersede(E.New("rdp: the clipboard changed before pasting"))
 	c.localText, c.localOwned = text, text != ""
 	c.remoteText = false
 	if !c.ready {
-		return nil
+		return c.generation, nil
 	}
-	return c.sendFormatList(accepted)
+	return c.generation, c.sendFormatList(accepted)
+}
+
+func (c *clipboardChannel) supersede(err error) {
+	c.generation++
+	for i := range c.responses {
+		if accepted := c.responses[i].accepted; accepted != nil {
+			accepted <- err
+			c.responses[i].accepted = nil
+		}
+	}
 }
 
 func (c *clipboardChannel) request() error {
@@ -152,7 +163,7 @@ func (c *clipboardChannel) sendFormatList(accepted chan error) error {
 	if err != nil {
 		return err
 	}
-	c.responses = append(c.responses, accepted)
+	c.responses = append(c.responses, clipboardResponse{generation: c.generation, accepted: accepted})
 	return nil
 }
 
@@ -225,6 +236,7 @@ func (c *clipboardChannel) receive(kind, flags uint16, body []byte) (string, boo
 		}
 		c.ready = true
 		c.remoteText = remoteText
+		c.supersede(E.New("rdp: the remote clipboard changed before pasting"))
 		c.localText, c.localOwned = "", false
 		err = c.send(clipboardPDU(clipboardFormatListResponse, clipboardResponseOK, nil))
 		if err != nil || !remoteText {
@@ -239,17 +251,21 @@ func (c *clipboardChannel) receive(kind, flags uint16, body []byte) (string, boo
 		}
 		return "", false, nil
 	case clipboardFormatListResponse:
-		var result error
-		if flags&clipboardResponseFail != 0 {
-			c.localText, c.localOwned = "", false
-			result = E.New("rdp: the server rejected the clipboard")
+		if len(c.responses) == 0 {
+			return "", false, nil
 		}
-		if len(c.responses) > 0 {
-			accepted := c.responses[0]
-			c.responses = c.responses[1:]
-			if accepted != nil {
-				accepted <- result
+		response := c.responses[0]
+		c.responses = c.responses[1:]
+		var result error
+		if flags&clipboardResponseFail != 0 || flags&clipboardResponseOK == 0 {
+			result = E.New("rdp: the server rejected the clipboard")
+			if response.generation == c.generation {
+				c.localText, c.localOwned = "", false
+				c.supersede(result)
 			}
+		}
+		if response.accepted != nil {
+			response.accepted <- result
 		}
 		return "", false, nil
 	case clipboardFormatDataRequest:
@@ -302,7 +318,10 @@ func clipboardHasUnicodeText(data []byte, longNames bool) (bool, error) {
 	return found, nil
 }
 
-func (c *Client) SetClipboard(text string) error { return c.clipboard.setText(text, nil) }
+func (c *Client) SetClipboard(text string) error {
+	_, err := c.clipboard.setText(text, nil)
+	return err
+}
 
 func (c *Client) RequestClipboard() error { return c.clipboard.request() }
 

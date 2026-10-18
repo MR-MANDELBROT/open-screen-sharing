@@ -61,16 +61,17 @@ type Session struct {
 	options SessionOptions
 	handler SessionHandler
 
-	access     sync.Mutex
-	remote     remote
-	cancel     context.CancelFunc
-	resizing   bool
-	attached   *bgra.Image
-	prompts    map[int64]chan int32
-	nextPrompt int64
-	ending     bool
-	finished   bool
-	setup      sessionSetup
+	access        sync.Mutex
+	remote        remote
+	cancel        context.CancelFunc
+	resizing      bool
+	attached      *bgra.Image
+	prompts       map[int64]chan int32
+	nextPrompt    int64
+	ending        bool
+	disconnecting bool
+	finished      bool
+	setup         sessionSetup
 
 	resizeWidth  int
 	resizeHeight int
@@ -100,6 +101,7 @@ func NewSession(options *SessionOptions, handler SessionHandler) (*Session, erro
 type remote interface {
 	Run() error
 	Close() error
+	Abort() error
 	serverInfo() *ServerInfo
 	statistics(statistics *Statistics)
 	apply(setup sessionSetup)
@@ -289,7 +291,8 @@ func (s *Session) run(ctx context.Context, dial func(ctx context.Context) (remot
 	s.setup = sessionSetup{}
 	s.access.Unlock()
 	if cancelled {
-		_ = connected.Close()
+		_ = connected.Abort()
+		_ = connected.Run()
 		s.finish(context.Canceled)
 		return
 	}
@@ -325,6 +328,9 @@ type virtualDisplay struct {
 func (s *Session) pending(keep func(*sessionSetup)) (remote, bool) {
 	s.access.Lock()
 	defer s.access.Unlock()
+	if s.disconnecting {
+		return nil, false
+	}
 	if s.remote == nil && !s.finished {
 		keep(&s.setup)
 		return nil, true
@@ -399,6 +405,24 @@ func (s *Session) cancelPromptsLocked() {
 
 func (s *Session) Disconnect() {
 	s.access.Lock()
+	if s.finished || s.disconnecting {
+		s.access.Unlock()
+		return
+	}
+	s.disconnecting = true
+	cancel, connected := s.cancel, s.remote
+	s.cancelPromptsLocked()
+	s.access.Unlock()
+	if connected != nil {
+		go connected.Close()
+	} else if cancel != nil {
+		cancel()
+	}
+}
+
+func (s *Session) Abort() {
+	s.access.Lock()
+	s.disconnecting = true
 	cancel, connected := s.cancel, s.remote
 	s.cancelPromptsLocked()
 	s.access.Unlock()
@@ -406,7 +430,7 @@ func (s *Session) Disconnect() {
 		cancel()
 	}
 	if connected != nil {
-		go connected.Close()
+		_ = connected.Abort()
 	}
 }
 
@@ -447,16 +471,17 @@ func (s *Session) AttachFramebuffer(address int64, width int32, height int32, by
 func (s *Session) connectedRemote() (remote, error) {
 	s.access.Lock()
 	defer s.access.Unlock()
-	if s.remote == nil {
+	if s.remote == nil || s.disconnecting {
 		return nil, E.New("not connected")
 	}
 	return s.remote, nil
 }
 
 func (s *Session) connected() (*rfb.Client, error) {
-	s.access.Lock()
-	connected := s.remote
-	s.access.Unlock()
+	connected, err := s.connectedRemote()
+	if err != nil {
+		return nil, err
+	}
 	return rfbClient(connected)
 }
 

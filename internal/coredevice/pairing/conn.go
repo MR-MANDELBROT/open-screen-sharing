@@ -11,7 +11,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -121,19 +120,6 @@ func (c *conn) readPlain() (object, error) {
 		return nil, E.New("pairing: unexpected encrypted RPPairing message")
 	}
 	return message.Plain, nil
-}
-
-func withContext(ctx context.Context, netConn net.Conn) (stop func() bool) {
-	stopAfter := context.AfterFunc(ctx, func() {
-		netConn.SetDeadline(time.Unix(1, 0))
-	})
-	return func() bool {
-		if !stopAfter() {
-			return false
-		}
-		netConn.SetDeadline(time.Time{})
-		return true
-	}
 }
 
 func contextError(ctx context.Context, err error) error {

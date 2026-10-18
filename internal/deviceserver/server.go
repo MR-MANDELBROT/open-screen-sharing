@@ -24,7 +24,10 @@ import (
 // (DDI 27A9266e, Library/LaunchDaemons/com.apple.coredevice.dtremotedisplayd.plist).
 const displayService = "com.apple.coredevice.displayservice"
 
-var errRerouted = E.New("a new connection to the device would take a different route; reconnecting")
+var (
+	errRerouted       = E.New("a new connection to the device would take a different route; reconnecting")
+	errRetryRequested = E.New("a new connection to the device was requested")
+)
 
 var retryDelays = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 10 * time.Second}
 
@@ -32,9 +35,6 @@ const (
 	stableConnection    = 30 * time.Second
 	displayPollInterval = 5 * time.Second
 	routeCheckInterval  = 5 * time.Second
-	connectTimeout      = 30 * time.Second
-	requestTimeout      = 10 * time.Second
-	shutdownLimit       = 3 * time.Second
 )
 
 type State int
@@ -104,16 +104,18 @@ type Server struct {
 	retry       chan struct{}
 	displayWake chan struct{}
 
-	access       sync.Mutex
-	started      bool
-	closed       bool
-	state        State
-	stateErr     error
-	attached     *attachment
-	attachWake   chan struct{}
-	screen       rfb.ServerScreen
-	display      displayGeometry
-	videoProblem error
+	access        sync.Mutex
+	started       bool
+	closed        bool
+	state         State
+	stateErr      error
+	closeErr      error
+	attached      *attachment
+	attemptCancel context.CancelCauseFunc
+	attachWake    chan struct{}
+	screen        rfb.ServerScreen
+	display       displayGeometry
+	videoProblem  error
 
 	listener net.Listener
 	relisted bool
@@ -124,6 +126,7 @@ type attachment struct {
 	display    *display.Client
 	pasteboard *pasteboard.Client
 	ctx        context.Context
+	owner      context.Context
 	cancel     context.CancelFunc
 }
 
@@ -188,9 +191,15 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Retry() {
+	s.access.Lock()
+	cancel := s.attemptCancel
 	select {
 	case s.retry <- struct{}{}:
 	default:
+	}
+	s.access.Unlock()
+	if cancel != nil {
+		cancel(errRetryRequested)
 	}
 }
 
@@ -198,17 +207,16 @@ func (s *Server) Sessions() []*rfb.ServerSession {
 	return s.rfb.Sessions()
 }
 
-func (s *Server) Close() {
+func (s *Server) Close() error {
 	s.access.Lock()
 	if s.closed {
 		s.access.Unlock()
 		<-s.done
-		return
+		return s.closeErr
 	}
 	s.closed = true
 	started := s.started
 	s.access.Unlock()
-	s.buttons.close()
 	s.cancel()
 	_ = s.rfb.Close()
 	if started {
@@ -216,18 +224,19 @@ func (s *Server) Close() {
 	} else {
 		close(s.done)
 	}
-	s.stopped()
+	s.stopped(s.closeErr)
+	return s.closeErr
 }
 
-func (s *Server) stopped() {
+func (s *Server) stopped(err error) {
 	s.access.Lock()
-	changed := s.state != StateStopped || s.stateErr != nil
-	s.state, s.stateErr = StateStopped, nil
+	changed := s.state != StateStopped || !errors.Is(s.stateErr, err) || !errors.Is(err, s.stateErr)
+	s.state, s.stateErr = StateStopped, err
 	s.access.Unlock()
 	var last func()
 	if changed {
-		s.logger.Info("state", "state", StateStopped)
-		last = func() { s.options.Observer.StateChanged(StateStopped, nil) }
+		s.logger.Info("state", "state", StateStopped, "error", err)
+		last = func() { s.options.Observer.StateChanged(StateStopped, err) }
 	}
 	s.notifier.close(last)
 }
@@ -273,35 +282,35 @@ func (s *Server) run() {
 		default:
 		}
 		s.setState(StateConnecting, lastErr)
-		connectContext, cancel := context.WithTimeout(s.ctx, connectTimeout)
-		device, err := s.options.Connect(connectContext)
-		cancel()
-		if s.ctx.Err() != nil {
-			if device != nil {
+		var connected time.Time
+		err := func() error {
+			ctx, cancel := context.WithCancelCause(s.ctx)
+			defer cancel(nil)
+			s.access.Lock()
+			s.attemptCancel = cancel
+			s.access.Unlock()
+			device, err := s.options.Connect(ctx)
+			s.access.Lock()
+			s.attemptCancel = nil
+			s.access.Unlock()
+			if err != nil {
+				if ctx.Err() != nil {
+					return context.Cause(ctx)
+				}
+				return err
+			}
+			if err := s.ctx.Err(); err != nil {
 				_ = device.Close()
+				return err
 			}
-			return
-		}
-		if err != nil {
-			if stopping(err) {
-				s.fail(err)
-				return
-			}
-			s.logger.Info("connect to the device", "error", err)
-			lastErr = err
-			if !s.wait(retryDelays[min(failures, len(retryDelays)-1)]) {
-				return
-			}
-			failures++
-			continue
-		}
-		connected := time.Now()
-		err = s.serveDevice(device)
+			connected = time.Now()
+			return s.serveDevice(device)
+		}()
 		if s.ctx.Err() != nil {
 			return
 		}
 		switch {
-		case E.IsMulti(err, errRemounted, errRerouted):
+		case E.IsMulti(err, errRemounted, errRerouted, errRetryRequested):
 			lastErr = nil
 			failures = 0
 			continue
@@ -309,9 +318,13 @@ func (s *Server) run() {
 			s.fail(err)
 			return
 		}
-		s.logger.Info("device connection ended", "error", err)
+		if connected.IsZero() {
+			s.logger.Info("connect to the device", "error", err)
+		} else {
+			s.logger.Info("device connection ended", "error", err)
+		}
 		lastErr = err
-		if time.Since(connected) >= stableConnection {
+		if !connected.IsZero() && time.Since(connected) >= stableConnection {
 			failures = 0
 		}
 		if !s.wait(retryDelays[min(failures, len(retryDelays)-1)]) {
@@ -351,6 +364,15 @@ func (s *Server) wait(delay time.Duration) bool {
 
 func (s *Server) serveDevice(device *coredevice.Device) error {
 	defer device.Close()
+	owner, cancelOwner := context.WithCancelCause(context.Background())
+	defer cancelOwner(context.Canceled)
+	go func() {
+		select {
+		case <-device.Done():
+			cancelOwner(device.Err())
+		case <-owner.Done():
+		}
+	}()
 	info := device.Info()
 	s.logger.Info("device connected", "udid", info.UDID, "product", info.ProductType, "os", info.OSVersion, "build", info.BuildVersion)
 	s.notify(func(observer Observer) { observer.DeviceConnected(info) })
@@ -367,10 +389,8 @@ func (s *Server) serveDevice(device *coredevice.Device) error {
 	if !device.HasService(displayService) {
 		return newError(ProblemUnsupported, "the device does not offer ", displayService, " although its disk image is mounted")
 	}
-	displayClient := display.New(device, logger.With("service", "display"))
-	ctx, cancel := context.WithTimeout(s.ctx, requestTimeout)
-	state, err := displayClient.Displays(ctx)
-	cancel()
+	displayClient := display.New(owner, device, logger.With("service", "display"))
+	state, err := displayClient.Displays(s.ctx)
 	if err != nil {
 		return lostOr(device, E.Cause(err, "read the device's displays"))
 	}
@@ -384,13 +404,20 @@ func (s *Server) serveDevice(device *coredevice.Device) error {
 		return err
 	}
 	a := s.attach(&attachment{
-		device:     device,
-		display:    displayClient,
-		pasteboard: pasteboard.New(device, logger.With("service", "pasteboard")),
+		device:  device,
+		display: displayClient,
+		owner:   owner,
 	})
 	s.setRunning()
 	rerouted := s.watchRoute(device)
-	s.detach(a)
+	if err := s.detach(a); err != nil {
+		s.access.Lock()
+		if s.closed {
+			s.closeErr = err
+		}
+		s.access.Unlock()
+		return err
+	}
 	if s.ctx.Err() != nil {
 		return s.ctx.Err()
 	}
@@ -491,6 +518,7 @@ func (s *Server) listen() error {
 
 func (s *Server) attach(a *attachment) *attachment {
 	a.ctx, a.cancel = context.WithCancel(s.ctx)
+	a.pasteboard = pasteboard.New(a.ctx, a.device, s.logger.With("component", "device", "service", "pasteboard"))
 	s.access.Lock()
 	s.attached = a
 	close(s.attachWake)
@@ -501,7 +529,7 @@ func (s *Server) attach(a *attachment) *attachment {
 	return a
 }
 
-func (s *Server) detach(a *attachment) {
+func (s *Server) detach(a *attachment) error {
 	s.access.Lock()
 	s.attached = nil
 	close(s.attachWake)
@@ -509,18 +537,10 @@ func (s *Server) detach(a *attachment) {
 	s.access.Unlock()
 	a.cancel()
 	s.clip.update()
-	s.input.forget()
-	s.buttons.close()
-	stopped := make(chan struct{})
-	go func() {
-		s.streams.stopDevice(a.device)
-		close(stopped)
-	}()
-	select {
-	case <-stopped:
-	case <-time.After(shutdownLimit):
-		s.logger.Warn("the device's streams did not stop in time; the device ends them after its RTCP timeout")
-	}
+	inputErr := s.input.forgetAndWait()
+	buttonErr := s.buttons.close()
+	streamErr := s.streams.stopDevice(a.device)
+	return E.Errors(inputErr, buttonErr, streamErr)
 }
 
 func (s *Server) currentDevice() *attachment {
@@ -561,9 +581,7 @@ func (s *Server) pollDisplay(a *attachment) {
 				continue
 			}
 		}
-		ctx, cancel := context.WithTimeout(a.ctx, 3*time.Second)
-		state, err := a.display.Displays(ctx)
-		cancel()
+		state, err := a.display.Displays(a.ctx)
 		if err != nil {
 			if a.ctx.Err() == nil {
 				s.logger.Debug("read the device's displays", "error", err)

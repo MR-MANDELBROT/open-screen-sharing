@@ -55,6 +55,8 @@ type ResponderOptions struct {
 }
 
 type Responder struct {
+	ctx      context.Context
+	cancel   context.CancelFunc
 	options  ResponderOptions
 	logger   *slog.Logger
 	listener *net.TCPListener
@@ -78,7 +80,8 @@ func NewResponder(options ResponderOptions) (*Responder, error) {
 	if err != nil {
 		return nil, E.Cause(err, "responder: listen")
 	}
-	return &Responder{options: options, logger: logger, listener: listener, identity: identity}, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Responder{ctx: ctx, cancel: cancel, options: options, logger: logger, listener: listener, identity: identity}, nil
 }
 
 func responderIdentity(previous *Record) (*Record, error) {
@@ -133,14 +136,7 @@ func (r *Responder) TXTRecord() map[string]string {
 	}
 }
 
-const (
-	responderConnections       = 8
-	responderHandshakeTimeout  = 10 * time.Second
-	responderSetupStartTimeout = 2 * time.Minute
-	responderCodeTimeout       = 5 * time.Minute
-	responderStepTimeout       = 30 * time.Second
-	responderDrainTimeout      = 5 * time.Second
-)
+const responderConnections = 8
 
 type acceptState struct {
 	ctx     context.Context
@@ -157,6 +153,8 @@ type acceptResult struct {
 func (r *Responder) Accept(ctx context.Context) (*Record, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	stopClose := context.AfterFunc(r.ctx, cancel)
+	defer stopClose()
 	state := &acceptState{ctx: ctx, results: make(chan acceptResult, 1)}
 	listenerStopped := make(chan struct{})
 	stopListener := context.AfterFunc(ctx, func() {
@@ -229,12 +227,10 @@ func (r *Responder) serve(state *acceptState, netConn net.Conn) {
 }
 
 func (r *Responder) pair(state *acceptState, c *conn) (record *Record, attempt uint64, err error) {
-	c.conn.SetDeadline(time.Now().Add(responderHandshakeTimeout))
 	err = r.handshake(c)
 	if err != nil {
 		return nil, 0, err
 	}
-	c.conn.SetDeadline(time.Now().Add(responderSetupStartTimeout))
 	data, err := c.readPairingData()
 	if err != nil {
 		return nil, 0, E.Cause(err, "read pair-setup M1")
@@ -281,7 +277,6 @@ func (r *Responder) drain(c *conn, logger *slog.Logger) {
 		if tcpConn, isTCP := c.conn.(*net.TCPConn); isTCP {
 			tcpConn.CloseWrite()
 		}
-		c.conn.SetDeadline(time.Now().Add(responderDrainTimeout))
 		for {
 			message, err := c.read()
 			if err != nil {
@@ -376,7 +371,6 @@ func (r *Responder) pairSetup(state *acceptState, c *conn) (*Record, uint64, err
 }
 
 func (r *Responder) pairSetupSteps(c *conn, server *srpServer) (*Record, error) {
-	c.conn.SetDeadline(time.Now().Add(responderCodeTimeout))
 	err := r.writeSetup(c,
 		tlv8.Item{Type: tlv8.TypeState, Value: []byte{2}},
 		tlv8.Item{Type: tlv8.TypeSalt, Value: server.salt},
@@ -389,7 +383,6 @@ func (r *Responder) pairSetupSteps(c *conn, server *srpServer) (*Record, error) 
 	if err != nil {
 		return nil, E.Cause(err, "read M3")
 	}
-	c.conn.SetDeadline(time.Now().Add(responderStepTimeout))
 	key, serverProof, err := server.Verify(m3[tlv8.TypePublicKey], m3[tlv8.TypeProof])
 	if err != nil {
 		r.writeSetup(c,
@@ -499,6 +492,7 @@ func (r *Responder) accessoryIdentity(record *Record, key []byte) ([]byte, error
 }
 
 func (r *Responder) Close() error {
+	r.cancel()
 	r.drainAccess.Lock()
 	r.closed = true
 	for netConn := range r.draining {

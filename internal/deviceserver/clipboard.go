@@ -20,12 +20,13 @@ type clipboardBridge struct {
 	server *Server
 	logger *slog.Logger
 
-	access    sync.Mutex
-	sharers   map[*rfb.ServerSession]bool
-	watched   *attachment
-	stopWatch context.CancelFunc
-	latest    *rfb.Clipboard
-	writing   *rfb.Clipboard
+	access       sync.Mutex
+	sharers      map[*rfb.ServerSession]bool
+	watched      *attachment
+	watchContext context.Context
+	stopWatch    context.CancelFunc
+	latest       *rfb.Clipboard
+	writing      *rfb.Clipboard
 }
 
 func newClipboardBridge(server *Server, logger *slog.Logger) *clipboardBridge {
@@ -64,6 +65,7 @@ func (c *clipboardBridge) update() {
 	if c.stopWatch != nil {
 		c.stopWatch()
 		c.stopWatch = nil
+		c.watchContext = nil
 		c.watched = nil
 		c.latest = nil
 	}
@@ -72,13 +74,15 @@ func (c *clipboardBridge) update() {
 	}
 	ctx, cancel := context.WithCancel(a.ctx)
 	c.stopWatch = cancel
+	c.watchContext = ctx
 	c.watched = a
 	c.logger.Debug("watching the device's clipboard")
 	go func() {
+		defer cancel()
 		err := a.pasteboard.Watch(ctx, func(snapshot pasteboard.Snapshot) {
 			clipboard := clipboardOf(snapshot)
 			c.access.Lock()
-			current := c.watched == a && ctx.Err() == nil
+			current := c.watchContext == ctx && ctx.Err() == nil
 			if current {
 				c.latest = clipboard
 			}
@@ -87,8 +91,16 @@ func (c *clipboardBridge) update() {
 				c.server.rfb.ClipboardChanged()
 			}
 		})
+		c.access.Lock()
+		if c.watchContext == ctx {
+			c.watched = nil
+			c.watchContext = nil
+			c.stopWatch = nil
+			c.latest = nil
+		}
+		c.access.Unlock()
 		if err != nil && !errors.Is(err, context.Canceled) {
-			c.logger.Debug("watch the device's clipboard", "error", err)
+			c.logger.Warn("watch the device's clipboard", "error", err)
 		}
 	}()
 }
@@ -131,34 +143,32 @@ func (c *clipboardBridge) viewerClipboard(clipboard *rfb.Clipboard) {
 }
 
 func (c *clipboardBridge) written(a *attachment, clipboard *rfb.Clipboard, err error) {
-	if err != nil {
-		c.logger.Warn("write the clipboard to the device", "error", err)
-		return
-	}
 	c.access.Lock()
 	current := c.writing == clipboard
 	if current {
 		c.writing = nil
 	}
-	announce := current && c.watched == a
+	announce := err == nil && current && c.watched == a
 	if announce {
 		c.latest = clipboard
 	}
 	c.access.Unlock()
+	if err != nil {
+		c.logger.Warn("write the clipboard to the device", "error", err)
+		return
+	}
 	if announce {
 		c.server.rfb.ClipboardChanged()
 	}
 }
 
-func (w *inputWorker) writeClipboard(ctx context.Context, a *attachment, clipboard *rfb.Clipboard) {
-	ctx, cancel := context.WithTimeout(ctx, inputTimeout)
-	defer cancel()
+func (w *inputWorker) writeClipboard(a *attachment, clipboard *rfb.Clipboard) {
 	board := a.pasteboard
 	written := func(err error) {
 		w.server.clip.written(a, clipboard, err)
 	}
 	if text, found := clipboard.Text(); found {
-		if err := board.WriteText(ctx, text, written); err != nil {
+		if err := board.WriteText(a.ctx, text, written); err != nil {
 			written(err)
 		}
 		return
@@ -167,7 +177,7 @@ func (w *inputWorker) writeClipboard(ctx context.Context, a *attachment, clipboa
 		for _, item := range clipboard.Items {
 			for _, flavor := range item.Flavors {
 				if flavor.Type == imageType && !flavor.Promise && len(flavor.Data) > 0 {
-					if err := board.WriteImage(ctx, imageType, flavor.Data, written); err != nil {
+					if err := board.WriteImage(a.ctx, imageType, flavor.Data, written); err != nil {
 						written(err)
 					}
 					return

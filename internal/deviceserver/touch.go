@@ -167,7 +167,7 @@ func (m *touchMapper) pointer(ctx context.Context, event rfb.ViewerPointer) erro
 		}
 		if finger.button == rfb.ButtonRight {
 			if err := sleep(ctx, longPressHold-time.Since(finger.downAt)); err != nil {
-				return m.liftAfter(err)
+				return err
 			}
 			return m.lift(ctx)
 		}
@@ -186,7 +186,7 @@ func (m *touchMapper) flick(ctx context.Context, trail []trailPoint, low, high p
 	}
 	for index := 1; ; index++ {
 		if err := sleep(ctx, flickStep); err != nil {
-			return m.liftAfter(err)
+			return err
 		}
 		fraction := float64(index) * flickStep.Seconds() / seconds
 		at := point{clamp(last.at.X+dx*fraction, low.X, high.X), clamp(last.at.Y+dy*fraction, low.Y, high.Y)}
@@ -197,13 +197,6 @@ func (m *touchMapper) flick(ctx context.Context, trail []trailPoint, low, high p
 			return err
 		}
 	}
-}
-
-func (m *touchMapper) liftAfter(err error) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_ = m.lift(ctx)
-	return err
 }
 
 func (m *touchMapper) inset() (left, top, right, bottom float64) {
@@ -267,7 +260,7 @@ func (m *touchMapper) drag(ctx context.Context, edge hid.Edge, from, to point, s
 	}
 	for index := 1; index <= steps; index++ {
 		if err := sleep(ctx, step); err != nil {
-			return m.liftAfter(err)
+			return err
 		}
 		fraction := float64(index) / float64(steps)
 		at := point{from.X + (to.X-from.X)*fraction, from.Y + (to.Y-from.Y)*fraction}
@@ -276,7 +269,7 @@ func (m *touchMapper) drag(ctx context.Context, edge hid.Edge, from, to point, s
 		}
 	}
 	if err := sleep(ctx, hold); err != nil {
-		return m.liftAfter(err)
+		return err
 	}
 	return m.lift(ctx)
 }
@@ -380,7 +373,7 @@ func (m *touchMapper) tap(ctx context.Context, at point, hold time.Duration) err
 		return err
 	}
 	if err := sleep(ctx, hold); err != nil {
-		return m.liftAfter(err)
+		return err
 	}
 	return m.lift(ctx)
 }

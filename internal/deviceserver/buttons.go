@@ -1,9 +1,7 @@
 package deviceserver
 
 import (
-	"context"
 	"sync"
-	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/hid"
@@ -12,14 +10,10 @@ import (
 
 // dtuhidd drops the events it has not dispatched yet once their connection
 // ends, however it ends (observed on iPhone18,2, iOS 27.2 24B5110a).
-const buttonLinger = time.Second
-
 type buttonPresser struct {
-	access     sync.Mutex
-	device     *coredevice.Device
-	client     *hid.Client
-	generation uint64
-	lastPress  time.Time
+	access sync.Mutex
+	device *coredevice.Device
+	client *hid.Client
 }
 
 func (s *Server) AdjustBrightness(steps int) error {
@@ -47,49 +41,44 @@ func (s *Server) pressButton(button hid.Button, count int) error {
 	if a == nil {
 		return E.New("the device is not connected")
 	}
-	ctx, cancel := context.WithTimeout(a.ctx, inputTimeout)
-	defer cancel()
 	b := &s.buttons
 	b.access.Lock()
 	defer b.access.Unlock()
+	s.access.Lock()
+	current := !s.closed && s.attached == a && a.ctx.Err() == nil
+	s.access.Unlock()
+	if !current {
+		return E.New("the device is not connected")
+	}
 	if b.client != nil && b.device != a.device {
-		b.closeLocked()
+		if err := b.closeLocked(); err != nil {
+			return E.Cause(err, "release the previous device's buttons")
+		}
 	}
 	if b.client == nil {
-		b.client = hid.New(a.device, s.logger.With("component", "buttons"))
+		b.client = hid.New(a.owner, a.device, s.logger.With("component", "buttons"))
 		b.device = a.device
 	}
 	var err error
 	for range count {
-		if err = b.client.PressButton(ctx, button); err != nil {
+		if err = b.client.PressButton(a.ctx, button); err != nil {
 			break
 		}
 	}
-	b.lastPress = time.Now()
-	b.generation++
-	generation := b.generation
-	time.AfterFunc(buttonLinger, func() {
-		b.access.Lock()
-		defer b.access.Unlock()
-		if b.client != nil && b.generation == generation {
-			b.closeLocked()
-		}
-	})
 	return err
 }
 
-func (b *buttonPresser) close() {
+func (b *buttonPresser) close() error {
 	b.access.Lock()
 	defer b.access.Unlock()
 	if b.client == nil {
-		return
+		return nil
 	}
-	time.Sleep(time.Until(b.lastPress.Add(buttonLinger)))
-	b.closeLocked()
+	return b.closeLocked()
 }
 
-func (b *buttonPresser) closeLocked() {
-	b.client.Close()
+func (b *buttonPresser) closeLocked() error {
+	err := b.client.Close()
 	b.client, b.device = nil, nil
-	b.generation++
+	return err
 }

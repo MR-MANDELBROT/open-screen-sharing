@@ -13,6 +13,7 @@ type ServerVideoRequest struct {
 	TilesPerFrame  int
 	PixelFormats   PixelFormats
 	MaximumBitrate int64
+	Audio          bool
 }
 
 type ServerVideoInfo struct {

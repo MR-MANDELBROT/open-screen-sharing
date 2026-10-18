@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -56,12 +57,19 @@ func (v Variant) repositoryDirectory() string {
 // (DeveloperDiskImage 6eae353, update_ddi.py:42,60-75,260).
 const repository = "https://raw.githubusercontent.com/doronz88/DeveloperDiskImage/main/PersonalizedImages"
 
+var httpClient = func() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = (&net.Dialer{}).DialContext
+	transport.TLSHandshakeTimeout = 0
+	return &http.Client{Transport: transport}
+}()
+
 func RepositoryURL(variant Variant) string {
 	return repository + "/" + variant.repositoryDirectory()
 }
 
-func Verify(dir string, variant Variant) error {
-	manifest, err := loadManifest(dir)
+func Verify(ctx context.Context, dir string, variant Variant) error {
+	manifest, err := loadManifest(ctx, dir)
 	if err != nil {
 		return err
 	}
@@ -74,7 +82,7 @@ func Verify(dir string, variant Variant) error {
 		if err != nil {
 			return err
 		}
-		if err = file.verify(); err != nil {
+		if err = file.verify(ctx); err != nil {
 			return err
 		}
 	}
@@ -127,7 +135,7 @@ func (s *httpSource) request(ctx context.Context, method, name string) (*http.Re
 	if err != nil {
 		return nil, E.Cause(err, "imagemounter")
 	}
-	response, err := http.DefaultClient.Do(request)
+	response, err := httpClient.Do(request)
 	if err != nil {
 		return nil, E.Cause(err, "imagemounter: download")
 	}
@@ -151,7 +159,10 @@ func (e *httpStatusError) Error() string {
 	return fmt.Sprintf("imagemounter: download %s: HTTP %s", e.location, e.status)
 }
 
-func writeFile(path string, write func(file *os.File) error) error {
+func writeFile(ctx context.Context, path string, write func(file *os.File) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	file, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
 		return E.Cause(err, "imagemounter")
@@ -161,6 +172,9 @@ func writeFile(path string, write func(file *os.File) error) error {
 	err = E.Append(err, file.Close(), func(err error) error {
 		return E.Cause(err, "imagemounter")
 	})
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if err != nil {
 		return err
 	}

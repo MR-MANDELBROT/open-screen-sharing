@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/outbox"
@@ -21,11 +20,10 @@ import (
 )
 
 const (
-	serverVersion          = "RFB 003.889\n"
-	preludeLimit           = 32
-	preludeByteLimit       = 64 << 10
-	pasteboardFetchTimeout = 5 * time.Second
-	layoutAnswerInterval   = time.Second
+	serverVersion        = "RFB 003.889\n"
+	preludeLimit         = 32
+	preludeByteLimit     = 64 << 10
+	layoutAnswerInterval = time.Second
 )
 
 type ServerSession struct {
@@ -46,8 +44,6 @@ type ServerSession struct {
 	writerDone    chan struct{}
 	mode          Mode
 	mediaWanted   bool
-	standardTimer *time.Timer
-	askedMedia    atomic.Bool
 
 	access           sync.Mutex
 	encodings        []Encoding
@@ -92,6 +88,10 @@ func (s *ServerSession) ID() uint64 {
 	return s.id
 }
 
+func (s *ServerSession) Context() context.Context {
+	return s.ctx
+}
+
 func (s *ServerSession) RemoteAddr() net.Addr {
 	return s.conn.RemoteAddr()
 }
@@ -107,6 +107,7 @@ func (s *ServerSession) MediaStats() (media.ServerStreamStats, bool) {
 }
 
 func (s *ServerSession) Close() error {
+	s.cancel()
 	return s.conn.Close()
 }
 
@@ -116,7 +117,6 @@ func (s *ServerSession) run() {
 	s.server.endHandshake()
 	var held [][]byte
 	if err == nil {
-		s.conn.SetDeadline(time.Time{})
 		held, err = s.prelude()
 	}
 	if err != nil {
@@ -127,8 +127,6 @@ func (s *ServerSession) run() {
 			s.logger.Info("viewer failed to sign in", "user", s.userName, "error", err)
 		case hungUp(err):
 			s.logger.Debug("viewer left during the handshake", "error", err)
-		case E.IsTimeout(err):
-			s.logger.Debug("viewer did not sign in in time", "error", err)
 		default:
 			s.logger.Warn("handshake", "error", err)
 		}
@@ -157,9 +155,7 @@ func (s *ServerSession) run() {
 }
 
 func (s *ServerSession) finish(err error) {
-	if s.standardTimer != nil {
-		s.standardTimer.Stop()
-	}
+	s.cancel()
 	s.access.Lock()
 	s.ending = true
 	stream := s.media
@@ -170,7 +166,6 @@ func (s *ServerSession) finish(err error) {
 	}
 	s.conn.Close()
 	s.stopWriter()
-	s.cancel()
 	s.server.removeSession(s)
 	if hungUp(err) {
 		err = nil
@@ -192,7 +187,6 @@ func (s *ServerSession) stopWriter() {
 
 func (s *ServerSession) handshake() error {
 	options := &s.server.options
-	s.conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	_, err := io.WriteString(s.conn, serverVersion)
 	if err != nil {
 		return err
@@ -356,7 +350,7 @@ func (s *ServerSession) startWriter() error {
 	s.writer.SetEncoder(encoder.encode)
 	s.writerStarted = true
 	go func() {
-		err := s.writer.Run(s.outbox)
+		err := s.writer.Run(s.ctx, s.outbox)
 		if err != nil {
 			s.conn.Close()
 		}
@@ -542,11 +536,6 @@ func (s *ServerSession) setEncodings(encodings []Encoding) {
 	start := wanted && !s.mediaWanted
 	stop := !wanted && s.mediaWanted
 	s.mediaWanted = wanted
-	if wanted {
-		s.askedMedia.Store(true)
-	} else if s.standardTimer == nil {
-		s.standardTimer = time.AfterFunc(standardViewerLimit, s.letStandardViewerGo)
-	}
 	s.access.Unlock()
 	s.logger.Debug("set encodings", "encodings", fmt.Sprint(encodings))
 	if len(rectangles) > 0 {
@@ -558,14 +547,6 @@ func (s *ServerSession) setEncodings(encodings []Encoding) {
 	case stop:
 		s.stopMedia()
 	}
-}
-
-func (s *ServerSession) letStandardViewerGo() {
-	if s.askedMedia.Load() {
-		return
-	}
-	s.logger.Info("viewer did not ask for High Performance, the only picture a device has")
-	_ = s.conn.Close()
 }
 
 func (s *ServerSession) startMedia() {
@@ -662,7 +643,7 @@ func (s *ServerSession) screenChanged(screen ServerScreen) {
 		s.send(framebufferUpdate(rectangles...))
 	}
 	if resized && stream != nil {
-		err := stream.Renegotiate()
+		err := stream.Renegotiate(screen.Width, screen.Height)
 		if err != nil {
 			s.logger.Debug("restart the media stream", "error", err)
 		}
@@ -714,9 +695,7 @@ func (s *ServerSession) fetchPasteboard(echo uint32) {
 }
 
 func (s *ServerSession) answerPasteboard(echo uint32) {
-	ctx, cancel := context.WithTimeout(s.ctx, pasteboardFetchTimeout)
-	defer cancel()
-	clipboard, err := s.server.handler.Clipboard(ctx)
+	clipboard, err := s.server.handler.Clipboard(s.ctx)
 	var message []byte
 	if err == nil {
 		message, err = pasteboardMessage(clipboard, echo)
@@ -725,19 +704,8 @@ func (s *ServerSession) answerPasteboard(echo uint32) {
 		if s.ctx.Err() != nil {
 			return
 		}
-		s.access.Lock()
-		clipboard = s.viewerClipboard
-		s.access.Unlock()
-		if clipboard == nil {
-			s.logger.Warn("the device clipboard is unavailable; the viewer's pasteboard request goes unanswered", "error", err)
-			return
-		}
-		s.logger.Warn("the device clipboard is unavailable; answering the viewer with its last known pasteboard", "error", err)
-		message, err = pasteboardMessage(clipboard, echo)
-		if err != nil {
-			s.logger.Warn("pasteboard", "error", err)
-			return
-		}
+		s.logger.Warn("read the device clipboard", "error", err)
+		return
 	}
 	s.access.Lock()
 	s.viewerClipboard = clipboard

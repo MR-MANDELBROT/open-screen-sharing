@@ -67,35 +67,24 @@ func coreDeviceRequest(deviceIdentifier, feature, action string, input map[strin
 	return request
 }
 
-func request(ctx context.Context, conn *xpc.Conn, message map[string]any) (map[string]any, error) {
-	reply, err := conn.Request(ctx, message)
-	if ctx.Err() != nil {
-		err = ctx.Err()
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return nil, E.New("the display service did not reply; dtremotedisplayd may be wedged, rebooting the device clears it")
-	}
-	if err != nil {
-		return nil, err
-	}
-	return reply, nil
-}
-
 func invoke(ctx context.Context, conn *xpc.Conn, deviceIdentifier, feature, action string, input map[string]any) (map[string]any, error) {
-	reply, err := request(ctx, conn, coreDeviceRequest(deviceIdentifier, feature, action, input))
+	reply, err := conn.Request(ctx, coreDeviceRequest(deviceIdentifier, feature, action, input))
+	if ctx.Err() != nil {
+		err = context.Cause(ctx)
+	}
 	if err != nil {
 		return nil, E.Cause(err, feature)
 	}
+	return replyOutput(feature, reply)
+}
+
+func replyOutput(feature string, reply map[string]any) (map[string]any, error) {
 	if output, isDictionary := reply["CoreDevice.output"].(map[string]any); isDictionary {
 		return output, nil
 	}
-	return nil, parseCoreDeviceError(feature, reply)
-}
-
-func parseCoreDeviceError(feature string, reply map[string]any) error {
 	errorValue := dictionary(reply["CoreDevice.error"])
 	if errorValue == nil {
-		return E.New(feature, ": unexpected reply: ", fmt.Sprint(reply))
+		return nil, E.New(feature, ": unexpected reply: ", fmt.Sprint(reply))
 	}
 	result := &Error{
 		Feature:     feature,
@@ -108,5 +97,5 @@ func parseCoreDeviceError(feature string, reply map[string]any) error {
 	case uint64:
 		result.Code = int64(code)
 	}
-	return result
+	return nil, result
 }

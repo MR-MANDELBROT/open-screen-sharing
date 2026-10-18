@@ -6,15 +6,9 @@ import (
 	"net"
 	"slices"
 	"sync/atomic"
-	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/media"
 	E "github.com/sagernet/sing/common/exceptions"
-)
-
-const (
-	mediaPortsLimit     = 15 * time.Second
-	maxKeyframeRestarts = 2
 )
 
 type mediaSession struct {
@@ -25,7 +19,6 @@ type mediaSession struct {
 	unanswered      bool
 	reoffer         bool
 	portsSeen       bool
-	restarts        int
 	portsPayload    []byte
 	ports           media.Ports
 	videoArrived    atomic.Bool
@@ -69,11 +62,8 @@ func canRetryMediaStart(session *mediaSession, err error) bool {
 	if session.videoArrived.Load() {
 		return false
 	}
-	var refusal *media.ServerError
-	if errors.As(err, &refusal) {
-		return refusal.Type != media.ServerErrorBusy || refusal.SubCode != media.ServerErrorBusySubCode
-	}
-	return errors.Is(err, media.ErrStreamNoVideo)
+	refusal, ok := errors.AsType[*media.ServerError](err)
+	return ok && (refusal.Type != media.ServerErrorBusy || refusal.SubCode != media.ServerErrorBusySubCode)
 }
 
 func (c *Client) endMediaSession(session *mediaSession, cause error) {
@@ -104,25 +94,6 @@ func (c *Client) endMediaSession(session *mediaSession, cause error) {
 			cause = E.Errors(cause, err)
 		}
 	}
-	if !c.closed.Load() && hasPorts && errors.Is(cause, media.ErrKeyframeUnanswered) {
-		restarts := session.restarts + 1
-		if session.videoArrived.Load() {
-			restarts = 1
-		}
-		if restarts <= maxKeyframeRestarts {
-			restarted, err := c.restartMediaSessionLocked(session)
-			if err == nil {
-				restarted.restarts = restarts
-				c.logger.Debug("restart media stream", "error", cause)
-				c.mediaLifecycle.Unlock()
-				return
-			}
-			if restarted != nil {
-				defer restarted.stream.Close()
-			}
-			cause = E.Errors(cause, err)
-		}
-	}
 	c.access.Lock()
 	c.media = nil
 	c.mediaStopping = true
@@ -138,14 +109,6 @@ func (c *Client) endMediaSession(session *mediaSession, cause error) {
 		c.access.Unlock()
 	}()
 	session.notifyStopped(cause)
-}
-
-func (c *Client) restartMediaSessionLocked(session *mediaSession) (*mediaSession, error) {
-	offer, err := session.offer.Renewed()
-	if err != nil {
-		return nil, err
-	}
-	return c.startMediaSessionLocked(offer, session.sink, session)
 }
 
 func (c *Client) StartMediaStream(options media.OfferOptions, sink media.Sink) error {
@@ -193,9 +156,6 @@ func (c *Client) startMediaSessionLocked(offer *media.Offer, sink media.Sink, pr
 		offer: offer, sink: sink, starting: true,
 		portsPayload: portsPayload, ports: ports, portsSeen: previous != nil, unanswered: previous != nil,
 	}
-	if previous != nil {
-		session.restarts = previous.restarts
-	}
 	session.stream = media.NewStream(media.StreamConfig{
 		Offer: offer, Remote: remote, Local: local,
 		Sink: &mediaSink{Sink: sink, client: c, session: session},
@@ -232,7 +192,6 @@ func (c *Client) startMediaSessionLocked(offer *media.Offer, sink media.Sink, pr
 		_ = c.SetMediaStream(false)
 		return session, err
 	}
-	time.AfterFunc(mediaPortsLimit, session.stream.StopIfNotStarted)
 	return session, nil
 }
 

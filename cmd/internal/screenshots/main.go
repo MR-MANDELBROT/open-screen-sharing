@@ -13,11 +13,13 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sagernet/sing/common"
@@ -383,33 +385,43 @@ func boot(udid string) {
 
 const pressPose = `on run {deviceName, pose}
 	tell application "System Events"
-		repeat 100 times
-			try
+		if UI elements enabled is false then error "The terminal needs Accessibility access"
+		repeat
+			if exists (first process whose bundle identifier is "com.apple.dt.Devices") then
 				tell (first process whose bundle identifier is "com.apple.dt.Devices")
-					click (first button of (first window whose name starts with deviceName) whose description is pose)
+					if exists (first window whose name starts with deviceName) then
+						tell (first window whose name starts with deviceName)
+							if exists (first button whose description is pose) then
+								click (first button whose description is pose)
+								return
+							end if
+						end tell
+					end if
 				end tell
-				return
-			end try
+			end if
 			delay 0.3
 		end repeat
 	end tell
-	error "Device Hub shows no " & pose & " button for " & deviceName & "; the terminal needs Accessibility access"
 end run`
 
 // Only Device Hub folds a simulated iPhone Duo, and it opens on the device it showed last.
 func setPose(booted simulator, pose string) {
-	if exec.Command("pgrep", "-x", "DeviceHub").Run() == nil {
-		run(exec.Command("osascript", "-e", `quit app id "com.apple.dt.Devices"`))
-		for start := time.Now(); exec.Command("pgrep", "-x", "DeviceHub").Run() == nil; time.Sleep(100 * time.Millisecond) {
-			if time.Since(start) > 10*time.Second {
-				log.Fatal("Device Hub didn't quit")
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if exec.CommandContext(ctx, "pgrep", "-x", "DeviceHub").Run() == nil {
+		run(exec.CommandContext(ctx, "osascript", "-e", `quit app id "com.apple.dt.Devices"`))
+		for exec.CommandContext(ctx, "pgrep", "-x", "DeviceHub").Run() == nil {
+			select {
+			case <-ctx.Done():
+				log.Fatal(ctx.Err())
+			case <-time.After(100 * time.Millisecond):
 			}
 		}
 	}
-	run(exec.Command("defaults", "write", "com.apple.dt.Devices", "lastSelectedDeviceIdentifier", "-data", hex.EncodeToString([]byte(strconv.Quote(booted.UDID)))))
-	developer := strings.TrimSpace(string(output(exec.Command("xcode-select", "-p"))))
-	run(exec.Command("open", "-g", "-a", filepath.Join(developer, "../Applications/DeviceHub.app")))
-	run(exec.Command("osascript", "-e", pressPose, booted.Name, pose))
+	run(exec.CommandContext(ctx, "defaults", "write", "com.apple.dt.Devices", "lastSelectedDeviceIdentifier", "-data", hex.EncodeToString([]byte(strconv.Quote(booted.UDID)))))
+	developer := strings.TrimSpace(string(output(exec.CommandContext(ctx, "xcode-select", "-p"))))
+	run(exec.CommandContext(ctx, "open", "-g", "-a", filepath.Join(developer, "../Applications/DeviceHub.app")))
+	run(exec.CommandContext(ctx, "osascript", "-e", pressPose, booted.Name, pose))
 }
 
 func takeScreenshots(device device, simulator string, variant variant, languages []string) {
@@ -467,6 +479,8 @@ func takeScreenshots(device device, simulator string, variant variant, languages
 }
 
 func takeMacScreenshots(device device, variant variant, languages []string, appearance string) {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 	log.Print("taking ", variant.name, " ", device.name, " screenshots")
 	executables, err := filepath.Glob(filepath.Join(derivedData+variant.name, "Build/Products/Release/*.app/Contents/MacOS/*"))
 	if err != nil {
@@ -484,7 +498,6 @@ func takeMacScreenshots(device device, variant variant, languages []string, appe
 		if err != nil {
 			log.Fatal(err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		app := exec.CommandContext(ctx, executables[0],
 			"-AppleLanguages", "("+language+")",
 			"-AppleLocale", language+"_"+regions[language],
@@ -505,7 +518,6 @@ func takeMacScreenshots(device device, variant variant, languages []string, appe
 		app.Stderr = &stderr
 		start := time.Now()
 		err = app.Run()
-		cancel()
 		if err != nil {
 			log.Fatal(app.Args, ": ", err, "\n", stdout.String(), stderr.String())
 		}

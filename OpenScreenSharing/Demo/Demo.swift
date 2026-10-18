@@ -72,9 +72,11 @@ extension Demo {
     private static let screenshotCanvasSize = CGSize(width: 1440, height: 900)
 
     private static func takeScreenshot(named name: String) async throws {
-        var shown: NSWindow?
+        var updates = NotificationCenter.default.notifications(named: NSApplication.didUpdateNotification, object: NSApp).makeAsyncIterator()
+        var shown = NSApp.windows.first { $0.isVisible && $0.canBecomeMain }
         while shown == nil {
-            try await Task.sleep(seconds: 0.1)
+            guard await updates.next() != nil else { throw CancellationError() }
+            try Task.checkCancellation()
             shown = NSApp.windows.first { $0.isVisible && $0.canBecomeMain }
         }
         let window = shown!
@@ -83,7 +85,12 @@ extension Demo {
         NSApp.activate(ignoringOtherApps: true)
         window.setContentSize(screenshotWindowSize)
         window.center()
-        try await Task.sleep(seconds: 2)
+        updates = NotificationCenter.default.notifications(named: NSApplication.didUpdateNotification, object: NSApp).makeAsyncIterator()
+        NSApp.setWindowsNeedUpdate(true)
+        guard await updates.next() != nil else { throw CancellationError() }
+        try Task.checkCancellation()
+        window.layoutIfNeeded()
+        window.displayIfNeeded()
         let content = try await SCShareableContent.currentProcess
         let captured = content.windows.first { $0.windowID == CGWindowID(window.windowNumber) }!
         let filter = SCContentFilter(desktopIndependentWindow: captured)

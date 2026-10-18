@@ -83,6 +83,15 @@ func (c *Client) sendDisplayChangeLocked(message []byte, selection bool) error {
 		c.heldDisplay = append(c.heldDisplay, heldDisplayChange{selection: selection, message: message})
 		return nil
 	}
+	// ScreensharingAgent waits up to 90 ticks for the display to reconfigure after a
+	// virtual display configuration and sends kCGSDisplayWillReconfigure itself when it
+	// does not, so even a configuration that changes nothing releases the media sender
+	// (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
+	// -[SSAgentVirtualDisplay updateDisplayInfo:dynamicResolution:updateDisplayModes:]
+	// 0x100003908..0x100003994; RE/26A434/ScreensharingAgent/virtual-rejection-round12-native.txt).
+	if !selection && c.media != nil {
+		c.media.stream.ExpectRestart()
+	}
 	return c.send(message)
 }
 
@@ -90,6 +99,9 @@ func (c *Client) releaseDisplayChangesLocked() error {
 	held := c.heldDisplay
 	c.heldDisplay = nil
 	for _, change := range held {
+		if !change.selection && c.media != nil {
+			c.media.stream.ExpectRestart()
+		}
 		err := c.send(change.message)
 		if err != nil {
 			return err

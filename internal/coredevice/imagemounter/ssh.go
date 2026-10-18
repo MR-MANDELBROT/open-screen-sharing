@@ -28,6 +28,7 @@ type SSHOptions struct {
 type SSHSource struct {
 	client  *ssh.Client
 	address string
+	stop    func() bool
 }
 
 func DialSSH(ctx context.Context, options SSHOptions) (*SSHSource, error) {
@@ -61,7 +62,8 @@ func DialSSH(ctx context.Context, options SSHOptions) (*SSHSource, error) {
 	}
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	clientConn, channels, requests, err := ssh.NewClientConn(conn, options.Address, config)
-	if !stop() {
+	if ctx.Err() != nil {
+		stop()
 		if err == nil {
 			clientConn.Close()
 		}
@@ -69,13 +71,14 @@ func DialSSH(ctx context.Context, options SSHOptions) (*SSHSource, error) {
 		return nil, ctx.Err()
 	}
 	if err != nil {
+		stop()
 		conn.Close()
 		if strings.Contains(err.Error(), "unable to authenticate") {
 			return nil, E.Cause(err, "imagemounter: ", options.Address, " refused the user name, password or key")
 		}
 		return nil, E.Cause(err, "imagemounter: connect to ", options.Address)
 	}
-	return &SSHSource{client: ssh.NewClient(clientConn, channels, requests), address: options.Address}, nil
+	return &SSHSource{client: ssh.NewClient(clientConn, channels, requests), address: options.Address, stop: stop}, nil
 }
 
 func ParsePrivateKey(key []byte, passphrase string) (ssh.Signer, error) {
@@ -100,6 +103,7 @@ func (s *SSHSource) String() string {
 }
 
 func (s *SSHSource) Close() error {
+	s.stop()
 	return s.client.Close()
 }
 
@@ -125,12 +129,18 @@ func statError(file, errorOutput string, err error) error {
 }
 
 func (s *SSHSource) Size(ctx context.Context, name string) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	file, err := s.path(name)
 	if err != nil {
 		return 0, err
 	}
 	session, err := s.client.NewSession()
 	if err != nil {
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
 		return 0, E.Cause(err, "imagemounter: open ssh session")
 	}
 	defer session.Close()
@@ -151,12 +161,18 @@ func (s *SSHSource) Size(ctx context.Context, name string) (int64, error) {
 }
 
 func (s *SSHSource) Open(ctx context.Context, name string) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	file, err := s.path(name)
 	if err != nil {
 		return nil, err
 	}
 	session, err := s.client.NewSession()
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, E.Cause(err, "imagemounter: open ssh session")
 	}
 	stop := context.AfterFunc(ctx, func() { session.Close() })

@@ -6,7 +6,6 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -68,15 +67,45 @@ func parseStartReply(output map[string]any) (StreamInfo, error) {
 	info.LTRP, _ = boolValue(config["IsltrpEnabled"])
 	info.SyncToken, _ = uintValue(config["SyncStreamToken"])
 	info.PixelFormat, _ = uint32Field(config, "PixelFormat")
-	if seconds, ok := floatValue(config["RTCPTimeoutInterval"]); ok {
-		info.RTCPTimeout = time.Duration(seconds * float64(time.Second))
+	if value, present := config["RTCPTimeoutInterval"]; present {
+		seconds, ok := floatValue(value)
+		nanoseconds := seconds * float64(time.Second)
+		if !ok || math.IsNaN(nanoseconds) || nanoseconds <= 0 || nanoseconds >= float64(math.MaxInt64) {
+			return StreamInfo{}, E.New("display: streamConfig has an invalid RTCP timeout interval")
+		}
+		info.RTCPTimeout = time.Duration(nanoseconds)
+		if info.RTCPTimeout == 0 {
+			return StreamInfo{}, E.New("display: RTCP timeout interval is below clock precision")
+		}
 	}
 	return info, nil
 }
 
-func parseStopReply(output map[string]any) []uint32 {
-	return common.FilterIsInstance(array(output["stoppedStreams"]), func(value any) (uint32, bool) {
-		number, ok := uintValue(value)
-		return uint32(number), ok && number <= math.MaxUint32
-	})
+// The stop reply is StopResponse(stoppedStreams: [UInt32]?, serverInfo:
+// DeviceServerInfo(running: Bool, ...)), and dtremotedisplayd leaves
+// stoppedStreams nil when no live stream matches the requested identifiers
+// (DDI 27B5028f, CoreDeviceUtilities
+// DeviceMediaStream.StopResponse.init(stoppedStreams:serverInfo:),
+// dtremotedisplayd 0x100037854, 0x100038168..0x10003816c).
+func parseStopReply(output map[string]any) ([]uint32, error) {
+	if _, ok := boolValue(dictionary(output["serverInfo"])["running"]); !ok {
+		return nil, E.New("display: stop reply without serverInfo.running")
+	}
+	value := output["stoppedStreams"]
+	if value == nil {
+		return nil, nil
+	}
+	identifiers, ok := value.([]any)
+	if !ok {
+		return nil, E.New("display: stop reply with invalid stoppedStreams")
+	}
+	stopped := make([]uint32, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		number, valid := uintValue(identifier)
+		if !valid || number > math.MaxUint32 {
+			return nil, E.New("display: stop reply with an invalid stream identifier")
+		}
+		stopped = append(stopped, uint32(number))
+	}
+	return stopped, nil
 }

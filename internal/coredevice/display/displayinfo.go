@@ -26,6 +26,11 @@ type DisplayInfo struct {
 }
 
 func (c *Client) Displays(ctx context.Context) ([]DisplayInfo, error) {
+	ctx, cancel := c.operationContext(ctx)
+	defer cancel()
+	if err := context.Cause(ctx); err != nil {
+		return nil, err
+	}
 	conn, err := c.device.DialXPC(ctx, deviceInfoServiceName)
 	if err != nil {
 		return nil, err

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -35,8 +34,6 @@ const (
 	// pymobiledevice3/services/mobile_image_mounter.py:374,401-403,432).
 	personalizedImageType = "Personalized"
 	personalizedDDIType   = "DeveloperDiskImage"
-
-	uploadTimeout = 5 * time.Minute
 )
 
 var (

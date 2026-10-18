@@ -92,11 +92,12 @@ type inputEvent struct {
 }
 
 type inputGroup struct {
-	events   []inputEvent
-	paced    bool
-	motion   bool
-	gate     <-chan error
-	deadline time.Time
+	events              []inputEvent
+	paced               bool
+	motion              bool
+	gate                <-chan error
+	clipboard           *clipboardChannel
+	clipboardGeneration uint64
 }
 
 type inputQueue struct {
@@ -184,6 +185,14 @@ func (q *inputQueue) delay(group inputGroup) time.Duration {
 }
 
 func (q *inputQueue) deliver(group inputGroup) error {
+	if clipboard := group.clipboard; clipboard != nil {
+		clipboard.access.Lock()
+		defer clipboard.access.Unlock()
+		if group.clipboardGeneration != clipboard.generation {
+			q.logger.Warn("drop paste after the clipboard changed")
+			return nil
+		}
+	}
 	err := q.send(group.events, group.motion)
 	if err != nil {
 		return err
@@ -233,7 +242,6 @@ func (q *inputQueue) run() {
 			q.pending = nil
 		} else if head := q.pending[0]; head.gate != nil {
 			gate = head.gate
-			timer = time.After(time.Until(head.deadline))
 		} else if wait := q.delay(head); wait > 0 {
 			timer = time.After(wait)
 		} else {
@@ -249,9 +257,6 @@ func (q *inputQueue) run() {
 		select {
 		case <-q.wake:
 		case <-timer:
-			if gate != nil {
-				q.open(gate, E.New("rdp: the server did not take the clipboard in ", pasteTimeout))
-			}
 		case err := <-gate:
 			q.open(gate, err)
 		case <-q.done:
@@ -466,7 +471,7 @@ func (c *Client) Paste(text string) error {
 		return nil
 	}
 	accepted := make(chan error, 1)
-	err := c.clipboard.setText(text, accepted)
+	generation, err := c.clipboard.setText(text, accepted)
 	if err != nil {
 		return err
 	}
@@ -476,5 +481,5 @@ func (c *Client) Paste(text string) error {
 	if !c.input.pressed[scancodeControl] && !c.input.pressed[keyExtended|scancodeControl] {
 		events = []inputEvent{scancodeEvent(scancodeControl, true), events[0], events[1], scancodeEvent(scancodeControl, false)}
 	}
-	return c.input.enqueue(inputGroup{events: events, gate: accepted, deadline: time.Now().Add(pasteTimeout)})
+	return c.input.enqueue(inputGroup{events: events, gate: accepted, clipboard: c.clipboard, clipboardGeneration: generation})
 }

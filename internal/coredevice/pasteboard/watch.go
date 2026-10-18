@@ -3,8 +3,8 @@ package pasteboard
 import (
 	"context"
 	"errors"
-	"time"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/rsd"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -14,65 +14,62 @@ const (
 	// pymobiledevice3/services/notification_proxy.py:25,76).
 	notificationProxyService = "com.apple.mobile.notification_proxy.shim.remote"
 	changedNotification      = "com.apple.pasteboard.notify.changed"
-
-	writeReplyWait = time.Second
-
-	reconnectDelay = 2 * time.Second
 )
 
 func (c *Client) Watch(ctx context.Context, changed func(Snapshot)) error {
+	ctx, cancel := c.operationContext(ctx)
+	defer cancel()
 	var last change
-	started := false
-	for {
-		err := c.watch(ctx, &last, &started, changed)
+	for redialed := false; ; redialed = true {
+		conn, err := c.device.DialShim(ctx, notificationProxyService)
+		if err != nil {
+			if ctx.Err() != nil {
+				return context.Cause(ctx)
+			}
+			return E.Cause(err, "pasteboard")
+		}
+		delivered, err := c.watch(ctx, conn, &last, redialed, changed)
+		conn.Close()
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return context.Cause(ctx)
 		}
-		c.logger.Debug("pasteboard watch connection lost; reconnecting", "error", err)
-		timer := time.NewTimer(reconnectDelay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
+		if redialed && !delivered {
+			return err
 		}
+		c.logger.Debug("pasteboard notification proxy connection ended; reconnecting", "error", err)
 	}
 }
 
-func (c *Client) watch(ctx context.Context, last *change, started *bool, changed func(Snapshot)) error {
-	conn, err := c.device.DialShim(ctx, notificationProxyService)
-	if err != nil {
-		return E.Cause(err, "pasteboard")
-	}
-	defer conn.Close()
+func (c *Client) watch(ctx context.Context, conn *rsd.PlistConn, last *change, redialed bool, changed func(Snapshot)) (bool, error) {
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
-	err = conn.Send(map[string]any{"Command": "ObserveNotification", "Name": changedNotification})
+	err := conn.Send(map[string]any{"Command": "ObserveNotification", "Name": changedNotification})
 	if err != nil {
-		return E.Cause(err, "pasteboard: observe ", changedNotification)
+		return false, E.Cause(err, "pasteboard: observe ", changedNotification)
 	}
-	if !*started {
+	if redialed {
+		c.check(ctx, last, changed)
+	} else {
 		snapshot, err := c.pull(ctx, policyAllPromised)
-		if err != nil && !errors.Is(err, errRefused) {
-			return err
+		if err != nil && !errors.Is(err, errRefused) && ctx.Err() == nil {
+			c.logger.Warn("read the pasteboard", "error", err)
 		}
 		*last = snapshot.change
-		*started = true
-	} else {
-		c.check(ctx, last, changed)
 	}
+	delivered := false
 	for {
 		message, err := conn.Receive()
 		if err != nil {
-			return E.Cause(err, "pasteboard: receive notification")
+			return delivered, E.Cause(err, "pasteboard: receive notification")
 		}
 		switch message["Command"] {
 		case "RelayNotification":
 			if message["Name"] == changedNotification {
+				delivered = true
 				c.check(ctx, last, changed)
 			}
 		case "ProxyDeath":
-			return E.New("pasteboard: the notification proxy stopped")
+			return delivered, E.New("pasteboard: the notification proxy stopped")
 		}
 	}
 }
@@ -84,10 +81,11 @@ func (c *Client) check(ctx context.Context, last *change, changed func(Snapshot)
 		return
 	}
 	if err != nil {
-		c.logger.Warn("read the pasteboard after a change", "error", err)
+		if ctx.Err() == nil {
+			c.logger.Warn("read the pasteboard after a change", "error", err)
+		}
 		return
 	}
-	c.waitWrites(ctx, writeReplyWait)
 	if snapshot.change.equal(*last) {
 		return
 	}

@@ -143,13 +143,13 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 		case "clipboard-set":
 			err = client.SetClipboard(rfb.NewTextClipboard(argument))
 		case "clipboard-get":
-			_, err = fetchClipboard(client, h)
+			_, err = fetchClipboard(ctx, client, h, done, runErr)
 		case "shared-clipboard":
 			err = client.SetSharedClipboard(argument == "on")
 		case "clipboard-set-flavors":
 			err = setClipboardFlavors(client, argument)
 		case "clipboard-save":
-			saved, err = fetchClipboard(client, h)
+			saved, err = fetchClipboard(ctx, client, h, done, runErr)
 		case "clipboard-restore":
 			if saved == nil {
 				err = E.New("nothing saved")
@@ -380,7 +380,7 @@ func copyFile(ctx context.Context, client *rfb.Client, h *handler, upload bool, 
 	return nil
 }
 
-func fetchClipboard(client *rfb.Client, h *handler) (*rfb.Clipboard, error) {
+func fetchClipboard(ctx context.Context, client *rfb.Client, h *handler, done <-chan struct{}, runErr *error) (*rfb.Clipboard, error) {
 	for len(h.clipboards) > 0 {
 		<-h.clipboards
 	}
@@ -391,8 +391,13 @@ func fetchClipboard(client *rfb.Client, h *handler) (*rfb.Clipboard, error) {
 	select {
 	case clipboard := <-h.clipboards:
 		return clipboard, nil
-	case <-time.After(10 * time.Second):
-		return nil, E.New("no pasteboard within 10s")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-done:
+		if *runErr != nil {
+			return nil, *runErr
+		}
+		return nil, errSessionEnded
 	}
 }
 

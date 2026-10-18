@@ -35,46 +35,87 @@ const (
 	// build 24B5089g).
 	DefaultDisplayID = 1
 	rtcpTimeout      = 30 * time.Second
-	// A probe received its first IDR at 90.5 ms; display ID 2 produced RTCP
-	// but no video RTP during its probe (observed on iPad17,1, build
-	// 24B5089g).
-	firstPacketTimeout = 2 * time.Second
-
-	stopTimeout = 5 * time.Second
 )
 
-var ErrNoMedia = E.New("display: the device accepted the stream but sent no media; check that Xcode's Device Hub is not showing the device")
-
 type Client struct {
+	owner            context.Context
 	device           *coredevice.Device
 	logger           *slog.Logger
 	deviceIdentifier string
 }
 
-func New(device *coredevice.Device, logger *slog.Logger) *Client {
+func New(owner context.Context, device *coredevice.Device, logger *slog.Logger) *Client {
 	return &Client{
+		owner:            owner,
 		device:           device,
 		logger:           logger,
 		deviceIdentifier: uuid.NewString(),
 	}
 }
 
+func (c *Client) operationContext(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancelCause(parent)
+	if err := c.device.Err(); err != nil {
+		cancel(err)
+	} else if err := context.Cause(c.owner); err != nil {
+		cancel(err)
+	} else {
+		go func() {
+			select {
+			case <-c.device.Done():
+				cancel(c.device.Err())
+			case <-c.owner.Done():
+				cancel(context.Cause(c.owner))
+			case <-ctx.Done():
+			}
+		}()
+	}
+	return ctx, func() { cancel(context.Canceled) }
+}
+
 // The device returns stoppedStreams in the client-offered SSRC namespace
 // (observed on iPad17,1, iPadOS 27.2 24B5099f).
-func (c *Client) stop(ctx context.Context, ssrc uint32) ([]uint32, error) {
+func (c *Client) stop(ssrc uint32) (func() ([]uint32, error), error) {
+	ctx, cancel := c.operationContext(c.owner)
+	if err := context.Cause(ctx); err != nil {
+		cancel()
+		return nil, err
+	}
 	conn, err := c.device.DialXPC(ctx, serviceName)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
-	defer conn.Close()
-	output, err := invoke(ctx, conn, c.deviceIdentifier, featureStop, actionStop, map[string]any{
+	err = conn.SendContext(ctx, coreDeviceRequest(c.deviceIdentifier, featureStop, actionStop, map[string]any{
 		"stopAll":     false,
 		"identifiers": []any{uint64(ssrc)},
-	})
-	if err != nil {
-		return nil, err
+	}), true)
+	if ctx.Err() != nil {
+		err = context.Cause(ctx)
 	}
-	return parseStopReply(output), nil
+	if err != nil {
+		conn.Close()
+		cancel()
+		return nil, E.Cause(err, featureStop)
+	}
+	return func() ([]uint32, error) {
+		defer cancel()
+		defer conn.Close()
+		stopReceive := context.AfterFunc(ctx, func() { conn.Close() })
+		reply, err := conn.Receive()
+		stopReceive()
+		if ctx.Err() != nil {
+			err = context.Cause(ctx)
+		}
+		if err != nil {
+			return nil, E.Cause(err, featureStop)
+		}
+		output, err := replyOutput(featureStop, reply)
+		if err != nil {
+			return nil, err
+		}
+		return parseStopReply(output)
+	}, nil
 }
 
 type StreamOptions struct {
@@ -126,6 +167,11 @@ func startInput(streamType StreamType, sessionID uuid.UUID, offer []byte, receiv
 }
 
 func (c *Client) start(ctx context.Context, streamType StreamType, options StreamOptions, extraOptions map[string]any) (*Stream, error) {
+	ctx, cancel := c.operationContext(ctx)
+	defer cancel()
+	if err := context.Cause(ctx); err != nil {
+		return nil, err
+	}
 	for options.SSRC == 0 {
 		options.SSRC = rand.Uint32()
 	}
@@ -151,7 +197,7 @@ func (c *Client) start(ctx context.Context, streamType StreamType, options Strea
 		conn.Close()
 		var deviceError *Error
 		if !errors.As(err, &deviceError) {
-			c.stopOffered(ctx, options.SSRC)
+			err = E.Errors(err, c.stopOffered(options.SSRC))
 		}
 		return nil, E.Cause(err, "start ", string(streamType))
 	}
@@ -159,7 +205,7 @@ func (c *Client) start(ctx context.Context, streamType StreamType, options Strea
 	if err != nil {
 		control.Close()
 		conn.Close()
-		c.stopOffered(ctx, options.SSRC)
+		err = E.Errors(err, c.stopOffered(options.SSRC))
 		return nil, E.Cause(err, "start ", string(streamType))
 	}
 	stream := newStream(c, info, conn, control)
@@ -168,22 +214,22 @@ func (c *Client) start(ctx context.Context, streamType StreamType, options Strea
 		"device", info.DeviceAddress, "width", info.Width, "height", info.Height,
 		"tiles", info.TilesPerFrame, "ltrp", info.LTRP, "sync_token", info.SyncToken, "rtcp_timeout", info.RTCPTimeout,
 		"connect_time", connected.Sub(began), "reply_time", answered.Sub(connected))
-	if streamType == Video {
-		err = stream.waitFirstPacket(ctx)
-		if err != nil {
-			stream.Close()
-			return nil, E.Cause(err, "start ", string(streamType))
-		}
+	err = stream.startKeepalive()
+	if err != nil {
+		return nil, E.Cause(E.Errors(err, stream.Close()), "start ", string(streamType))
 	}
-	stream.startKeepalive()
 	return stream, nil
 }
 
-func (c *Client) stopOffered(ctx context.Context, ssrc uint32) {
-	stopContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), stopTimeout)
-	defer cancel()
-	_, err := c.stop(stopContext, ssrc)
+func (c *Client) stopOffered(ssrc uint32) error {
+	reply, err := c.stop(ssrc)
 	if err != nil {
-		c.logger.Debug("stop after a failed start", "ssrc", ssrc, "error", err)
+		return E.Cause(err, "stop after a failed start")
 	}
+	go func() {
+		if _, err := reply(); err != nil {
+			c.logger.Debug("stop after a failed start", "ssrc", ssrc, "error", err)
+		}
+	}()
+	return nil
 }

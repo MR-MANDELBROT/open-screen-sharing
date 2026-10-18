@@ -54,9 +54,7 @@ func (e *CryptexError) Error() string {
 }
 
 func (c *Client) MountCryptex(ctx context.Context, dir string) error {
-	ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
-	defer cancel()
-	manifest, err := loadManifest(dir)
+	manifest, err := loadManifest(ctx, dir)
 	if err != nil {
 		return err
 	}
@@ -76,7 +74,7 @@ func (c *Client) MountCryptex(ctx context.Context, dir string) error {
 		if files[index], err = identity.resolve(dir, file.key); err != nil {
 			return err
 		}
-		if err = files[index].verify(); err != nil {
+		if err = files[index].verify(ctx); err != nil {
 			return err
 		}
 	}
@@ -170,6 +168,9 @@ func (c *Client) install(ctx context.Context, files []resolvedFile, ticket []byt
 	}
 	_, err := c.invokeCryptexd(ctx, "install", argv, func(conn *xpc.Conn) error {
 		for index, file := range cryptexFiles {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if file.key == "" {
 				if err := conn.SendFile(ctx, uint64(index+1), bytes.NewReader(ticket), sizes[index]); err != nil {
 					return E.Cause(err, "imagemounter: send ", file.argument)
@@ -180,8 +181,13 @@ func (c *Client) install(ctx context.Context, files []resolvedFile, ticket []byt
 			if err != nil {
 				return E.Cause(err, "imagemounter")
 			}
-			err = conn.SendFile(ctx, uint64(index+1), content, sizes[index])
+			stop := context.AfterFunc(ctx, func() { content.Close() })
+			err = conn.SendFile(ctx, uint64(index+1), &contextReader{ctx: ctx, reader: content}, sizes[index])
+			stop()
 			content.Close()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			if err != nil {
 				return E.Cause(err, "imagemounter: send ", file.argument)
 			}

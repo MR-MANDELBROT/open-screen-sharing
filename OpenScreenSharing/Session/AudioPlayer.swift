@@ -30,6 +30,7 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
     private var quietTimer: DispatchSourceTimer?
     private var observers: [any NSObjectProtocol] = []
     private let failed: @Sendable (any Error) -> Void
+    private let stopped: @Sendable () -> Void
 
     private static let minimumTarget = 0.015
     private static let maximumTarget = 0.25
@@ -44,8 +45,9 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
     private static let quietLimit = 60.0
     private static let audibleLevel: Float = 1 / 32768
 
-    init(format: AudioFormat, failed: @escaping @Sendable (any Error) -> Void) throws {
+    init(format: AudioFormat, failed: @escaping @Sendable (any Error) -> Void, stopped: @escaping @Sendable () -> Void) throws {
         self.failed = failed
+        self.stopped = stopped
         let pcm = format.formatID == kAudioFormatLinearPCM
         var description = AudioStreamBasicDescription(
             mSampleRate: format.sampleRate, mFormatID: kAudioFormatMPEG4AAC_ELD, mFormatFlags: 0, mBytesPerPacket: 0,
@@ -90,9 +92,11 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
         observers.append(
             center.addObserver(forName: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), queue: nil) {
                 [weak self] notification in
-                guard (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init) == .ended
-                else { return }
-                self?.restart()
+                switch (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init) {
+                case .began: self?.stopped()
+                case .ended: self?.restart()
+                default: break
+                }
             })
         #endif
     }
@@ -109,6 +113,10 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
 
     func stop() {
         queue.async { [self] in halt() }
+    }
+
+    var isPlaying: Bool {
+        queue.sync { started && engine.isRunning }
     }
 
     func setInBackground(_ background: Bool) {
@@ -136,6 +144,7 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
         } catch {
             started = false
             failed(error)
+            stopped()
         }
     }
 
@@ -161,6 +170,7 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
         target = Self.minimumTarget
         ring.target.store(Int(target * sampleRate), ordering: .relaxed)
         converter.reset()
+        stopped()
     }
 
     private func stopWhenQuiet() {

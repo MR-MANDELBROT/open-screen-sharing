@@ -14,10 +14,7 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
-const (
-	maxDatagram      = 65536
-	keyFrameInterval = time.Second
-)
+const keyFrameInterval = time.Second
 
 type Stream struct {
 	client   *Client
@@ -26,7 +23,6 @@ type Stream struct {
 	control  *xpc.Conn
 	deviceIP netip.Addr
 
-	first   []byte
 	arrival time.Time
 
 	keyFrameAccess sync.Mutex
@@ -36,20 +32,41 @@ type Stream struct {
 
 	lastRTCP atomic.Int64
 
-	done chan struct{}
+	done      chan struct{}
+	endOnce   sync.Once
+	endErr    error
+	closeOnce sync.Once
+	sendErr   error
+	closeDone chan struct{}
+	closeErr  error
+	localOnce sync.Once
 }
 
 func newStream(client *Client, info StreamInfo, conn *tunnel.UDPConn, control *xpc.Conn) *Stream {
 	stream := &Stream{
-		client:   client,
-		info:     info,
-		conn:     conn,
-		control:  control,
-		deviceIP: info.DeviceAddress.Addr().Unmap(),
-		done:     make(chan struct{}),
+		client:    client,
+		info:      info,
+		conn:      conn,
+		control:   control,
+		deviceIP:  info.DeviceAddress.Addr().Unmap(),
+		done:      make(chan struct{}),
+		closeDone: make(chan struct{}),
 	}
 	stream.lastRTCP.Store(time.Now().UnixNano())
 	go stream.watchControl()
+	go func() {
+		var err error
+		select {
+		case <-client.device.Done():
+			err = client.device.Err()
+		case <-client.owner.Done():
+			err = context.Cause(client.owner)
+		case <-stream.done:
+			return
+		}
+		stream.end(err)
+		stream.closeLocal()
+	}()
 	return stream
 }
 
@@ -66,22 +83,49 @@ func (s *Stream) watchControl() {
 			default:
 				s.client.logger.Debug("display stream control connection ended", "ssrc", s.info.SSRC, "error", err)
 			}
+			s.end(E.Cause(err, "receive stream control"))
+			s.closeLocal()
 			return
 		}
 		s.client.logger.Debug("display stream control message", "ssrc", s.info.SSRC, "message", message)
 	}
 }
 
+func (s *Stream) closeLocal() {
+	s.localOnce.Do(func() {
+		_ = s.control.Close()
+		_ = s.conn.Close()
+	})
+}
+
+func (s *Stream) end(err error) {
+	s.endOnce.Do(func() {
+		s.endErr = err
+		close(s.done)
+		s.conn.CloseRead()
+	})
+}
+
 func (s *Stream) ReadPacket(ctx context.Context, buffer []byte) (n int, rtcp bool, err error) {
-	if s.first != nil {
-		n = copy(buffer, s.first)
-		s.first = nil
-		s.arrival = time.Now()
-		return n, isRTCP(buffer[:n]), nil
-	}
 	for {
+		if err = context.Cause(ctx); err != nil {
+			return 0, false, err
+		}
+		select {
+		case <-s.done:
+			return 0, false, s.endErr
+		default:
+		}
 		n, from, arrived, err := s.conn.ReadFrom(ctx, buffer)
 		if err != nil {
+			if cause := context.Cause(ctx); cause != nil {
+				return 0, false, cause
+			}
+			select {
+			case <-s.done:
+				return 0, false, s.endErr
+			default:
+			}
 			return 0, false, err
 		}
 		if from.Addr() == s.deviceIP {
@@ -95,22 +139,12 @@ func (s *Stream) Arrival() time.Time {
 	return s.arrival
 }
 
-func (s *Stream) waitFirstPacket(ctx context.Context) error {
-	waitContext, cancel := context.WithTimeout(ctx, firstPacketTimeout)
-	defer cancel()
-	buffer := make([]byte, maxDatagram)
-	n, _, err := s.ReadPacket(waitContext, buffer)
-	if err != nil {
-		if ctx.Err() == nil && waitContext.Err() != nil {
-			return ErrNoMedia
-		}
-		return err
-	}
-	s.first = buffer[:n]
-	return nil
-}
-
 func (s *Stream) WriteRTCP(packet []byte) error {
+	select {
+	case <-s.done:
+		return s.endErr
+	default:
+	}
 	_, err := s.conn.WriteTo(packet, s.info.DeviceAddress)
 	if err != nil {
 		return E.Cause(err, "write rtcp")
@@ -170,13 +204,19 @@ func keepaliveReport(ssrc uint32) []byte {
 	return append(report, 1, 0, 0, 0)
 }
 
-func (s *Stream) startKeepalive() {
+func (s *Stream) startKeepalive() error {
 	timeout := rtcpTimeout
 	if s.info.RTCPTimeout > 0 {
 		timeout = min(timeout, s.info.RTCPTimeout)
 	}
-	interval := max(timeout/6, 500*time.Millisecond)
+	interval := timeout / 6
+	if interval <= 0 {
+		return E.New("display: invalid RTCP report interval")
+	}
 	report := keepaliveReport(s.info.SSRC)
+	if err := s.WriteRTCP(report); err != nil {
+		return err
+	}
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -195,19 +235,41 @@ func (s *Stream) startKeepalive() {
 			}
 		}
 	}()
+	return nil
 }
 
 func (s *Stream) Close() error {
-	close(s.done)
-	s.conn.CloseRead()
-	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
-	defer cancel()
-	stopped, err := s.client.stop(ctx, s.info.SSRC)
-	_ = s.control.Close()
-	_ = s.conn.Close()
-	if err != nil {
-		return E.Cause(err, "stop ", string(s.info.Type), " stream")
-	}
-	s.client.logger.Debug("display stream stopped", "ssrc", s.info.SSRC, "stopped", stopped)
-	return nil
+	s.closeOnce.Do(func() {
+		s.end(net.ErrClosed)
+		s.keyFrameAccess.Lock()
+		if s.keyFrameTimer != nil {
+			s.keyFrameTimer.Stop()
+			s.keyFrameTimer = nil
+		}
+		s.keyFrameAccess.Unlock()
+		reply, err := s.client.stop(s.info.SSRC)
+		if err != nil {
+			s.sendErr = E.Cause(err, "stop ", string(s.info.Type), " stream")
+			s.closeErr = s.sendErr
+			s.closeLocal()
+			close(s.closeDone)
+			return
+		}
+		go func() {
+			defer close(s.closeDone)
+			defer s.closeLocal()
+			stopped, err := reply()
+			if err != nil {
+				s.closeErr = E.Cause(err, "stop ", string(s.info.Type), " stream")
+				return
+			}
+			s.client.logger.Debug("display stream stopped", "ssrc", s.info.SSRC, "stopped", stopped)
+		}()
+	})
+	return s.sendErr
+}
+
+func (s *Stream) WaitStopped() error {
+	<-s.closeDone
+	return s.closeErr
 }

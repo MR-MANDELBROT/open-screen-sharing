@@ -41,8 +41,12 @@ type Session struct {
 }
 
 func Verify(ctx context.Context, netConn net.Conn, record *Record, logger *slog.Logger) (*Session, error) {
+	if err := ctx.Err(); err != nil {
+		netConn.Close()
+		return nil, err
+	}
 	session := &Session{conn: newConn(netConn, originHost), logger: logger}
-	stop := withContext(ctx, netConn)
+	stop := context.AfterFunc(ctx, func() { netConn.Close() })
 	err := session.verify(record)
 	if !stop() && err == nil {
 		err = ctx.Err()
@@ -178,11 +182,14 @@ func (s *Session) Key() []byte {
 }
 
 func (s *Session) request(ctx context.Context, request map[string]any) (map[string]any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	plaintext, err := json.Marshal(object{"request": object{"_0": request}})
 	if err != nil {
 		return nil, err
 	}
-	stop := withContext(ctx, s.conn.conn)
+	stop := context.AfterFunc(ctx, func() { s.conn.conn.Close() })
 	result, err := s.exchange(plaintext)
 	if !stop() && err == nil {
 		err = ctx.Err()

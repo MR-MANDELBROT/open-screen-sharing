@@ -4,24 +4,28 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/hid"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
-const (
-	inputQueueLimit = 4096
-	inputTimeout    = 10 * time.Second
-)
+const inputQueueLimit = 4096
 
 type inputItem struct {
-	session *rfb.ServerSession
-	event   rfb.ViewerEvent
-	write   *rfb.Clipboard
-	release bool
-	moves   bool
+	session   *rfb.ServerSession
+	owner     context.Context
+	event     rfb.ViewerEvent
+	write     *rfb.Clipboard
+	release   bool
+	moves     bool
+	forgotten chan error
+}
+
+type inputSession struct {
+	context context.Context
+	cancel  context.CancelFunc
 }
 
 type inputWorker struct {
@@ -33,6 +37,7 @@ type inputWorker struct {
 	queue    []inputItem
 	dropping bool
 	buttons  map[*rfb.ServerSession]uint8
+	sessions map[*rfb.ServerSession]inputSession
 	wake     chan struct{}
 
 	device     *coredevice.Device
@@ -40,16 +45,18 @@ type inputWorker struct {
 	generation uint64
 	touch      touchMapper
 	keys       *keyboard
+	closeErr   error
 }
 
 func newInputWorker(server *Server, logger *slog.Logger) *inputWorker {
 	return &inputWorker{
-		server:  server,
-		logger:  logger,
-		wake:    make(chan struct{}, 1),
-		done:    make(chan struct{}),
-		keys:    newKeyboard(),
-		buttons: make(map[*rfb.ServerSession]uint8),
+		server:   server,
+		logger:   logger,
+		wake:     make(chan struct{}, 1),
+		done:     make(chan struct{}),
+		keys:     newKeyboard(),
+		buttons:  make(map[*rfb.ServerSession]uint8),
+		sessions: make(map[*rfb.ServerSession]inputSession),
 	}
 }
 
@@ -77,25 +84,31 @@ func (w *inputWorker) signal() {
 }
 
 func (w *inputWorker) post(session *rfb.ServerSession, event rfb.ViewerEvent) {
-	pointer, isPointer := event.(rfb.ViewerPointer)
-	if !isPointer {
-		w.push(inputItem{session: session, event: event})
+	w.access.Lock()
+	owner, present := w.sessions[session]
+	if !present || owner.context.Err() != nil {
+		w.access.Unlock()
 		return
 	}
-	w.access.Lock()
+	pointer, isPointer := event.(rfb.ViewerPointer)
+	if !isPointer {
+		w.access.Unlock()
+		w.push(inputItem{session: session, owner: owner.context, event: event})
+		return
+	}
 	held, known := w.buttons[session]
 	w.buttons[session] = pointer.Buttons
 	moves := known && held == pointer.Buttons
 	if count := len(w.queue); moves && count > 0 {
 		last := &w.queue[count-1]
-		if last.moves && last.session == session {
+		if last.moves && last.session == session && last.owner == owner.context {
 			last.event = pointer
 			w.access.Unlock()
 			return
 		}
 	}
 	w.access.Unlock()
-	w.push(inputItem{session: session, event: event, moves: moves})
+	w.push(inputItem{session: session, owner: owner.context, event: event, moves: moves})
 }
 
 func (w *inputWorker) postClipboard(clipboard *rfb.Clipboard) {
@@ -104,13 +117,40 @@ func (w *inputWorker) postClipboard(clipboard *rfb.Clipboard) {
 
 func (w *inputWorker) sessionEnded(session *rfb.ServerSession) {
 	w.access.Lock()
+	if owner, present := w.sessions[session]; present {
+		owner.cancel()
+		delete(w.sessions, session)
+	}
 	delete(w.buttons, session)
 	w.access.Unlock()
 	w.push(inputItem{session: session, release: true})
 }
 
-func (w *inputWorker) forget() {
-	w.push(inputItem{})
+func (w *inputWorker) forgetAndWait() error {
+	forgotten := make(chan error, 1)
+	w.push(inputItem{forgotten: forgotten})
+	select {
+	case err := <-forgotten:
+		return err
+	case <-w.done:
+		return w.closeErr
+	}
+}
+
+func (w *inputWorker) viewerConnected(session *rfb.ServerSession) {
+	w.access.Lock()
+	owner, cancel := context.WithCancel(session.Context())
+	w.sessions[session] = inputSession{context: owner, cancel: cancel}
+	w.access.Unlock()
+}
+
+func (w *inputWorker) sessionResumed(session *rfb.ServerSession) {
+	w.access.Lock()
+	defer w.access.Unlock()
+	if _, present := w.sessions[session]; !present {
+		owner, cancel := context.WithCancel(session.Context())
+		w.sessions[session] = inputSession{context: owner, cancel: cancel}
+	}
 }
 
 func (w *inputWorker) run(ctx context.Context) {
@@ -121,7 +161,7 @@ func (w *inputWorker) run(ctx context.Context) {
 		if !ok {
 			return
 		}
-		w.handle(ctx, item)
+		w.handle(item)
 	}
 }
 
@@ -145,13 +185,20 @@ func (w *inputWorker) next(ctx context.Context) (inputItem, bool) {
 }
 
 func (w *inputWorker) closeClient() {
+	var err error
 	if w.client != nil {
-		w.client.Close()
+		err = w.client.Close()
 	}
 	w.client = nil
 	w.device = nil
 	w.resetState()
 	w.keys.capsLock = false
+	if err != nil {
+		w.logger.Warn("close device input", "error", err)
+		w.closeErr = E.Append(w.closeErr, err, func(err error) error {
+			return E.Cause(err, "close device input")
+		})
+	}
 }
 
 func (w *inputWorker) resetState() {
@@ -159,7 +206,13 @@ func (w *inputWorker) resetState() {
 	w.keys.reset()
 }
 
-func (w *inputWorker) handle(ctx context.Context, item inputItem) {
+func (w *inputWorker) handle(item inputItem) {
+	if item.forgotten != nil {
+		w.closeClient()
+		item.forgotten <- w.closeErr
+		w.closeErr = nil
+		return
+	}
 	a := w.server.currentDevice()
 	if w.client != nil && (a == nil || a.device != w.device) {
 		w.closeClient()
@@ -169,55 +222,79 @@ func (w *inputWorker) handle(ctx context.Context, item inputItem) {
 	}
 	switch {
 	case item.write != nil:
-		w.writeClipboard(ctx, a, item.write)
+		w.writeClipboard(a, item.write)
 		return
 	case item.release:
 		if w.client != nil {
-			releaseContext, cancel := context.WithTimeout(ctx, inputTimeout)
-			err := w.client.ReleaseAll(releaseContext)
-			cancel()
-			if err != nil {
-				w.logger.Debug("release input", "error", err)
-			}
-			w.resetState()
 			if len(w.server.rfb.Sessions()) == 0 {
 				w.closeClient()
+				return
+			}
+			if err := w.client.ReleaseAll(a.ctx); err != nil {
+				w.logger.Warn("release input", "error", err)
+				w.closeClient()
+			} else {
+				w.resetState()
 			}
 		}
 		return
 	case item.event == nil:
 		return
 	}
-	running, wait, generation := w.server.streams.inputState()
-	if !running {
-		return
-	}
-	if sleep(ctx, wait) != nil {
+	running, _, generation := w.server.streams.inputState()
+	if !running || a.ctx.Err() != nil {
 		return
 	}
 	if w.client == nil {
-		w.client = hid.New(a.device, w.logger)
+		w.client = hid.New(a.owner, a.device, w.logger)
 		w.device = a.device
 		w.generation = generation
 	}
-	eventContext, cancel := context.WithTimeout(ctx, inputTimeout)
+	if item.owner.Err() != nil {
+		return
+	}
+	eventContext, cancel := inputContext(a, item.owner)
 	defer cancel()
 	if generation != w.generation {
 		w.generation = generation
-		err := w.client.ReleaseAll(eventContext)
-		if err != nil {
-			w.logger.Debug("release input after the video restarted", "error", err)
+		if err := w.client.ReleaseAll(eventContext); err != nil {
+			w.logger.Warn("release input after the video restarted", "error", err)
+			w.closeClient()
+			return
 		}
 		w.resetState()
+	}
+	running, wait, currentGeneration := w.server.streams.inputState()
+	if !running || currentGeneration != generation {
+		return
+	}
+	if sleep(eventContext, wait) != nil {
+		return
+	}
+	running, _, currentGeneration = w.server.streams.inputState()
+	if !running || currentGeneration != generation || eventContext.Err() != nil {
+		return
 	}
 	w.touch.input = w.client
 	w.touch.geometry = w.server.geometry()
 	if w.touch.geometry.Width < 2 || w.touch.geometry.Height < 2 {
 		return
 	}
-	err := w.dispatch(eventContext, item)
-	if err != nil && ctx.Err() == nil {
+	if err := w.dispatch(eventContext, item); err != nil {
 		w.logger.Debug("send input", "event", item.event, "error", err)
+		w.closeClient()
+	}
+}
+
+func inputContext(a *attachment, viewer context.Context) (context.Context, context.CancelFunc) {
+	operation, cancel := context.WithCancel(a.ctx)
+	stop := context.AfterFunc(viewer, cancel)
+	if viewer.Err() != nil {
+		cancel()
+	}
+	return operation, func() {
+		stop()
+		cancel()
 	}
 }
 

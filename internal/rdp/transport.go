@@ -31,6 +31,7 @@ const (
 )
 
 type transport struct {
+	tcp     net.Conn
 	conn    net.Conn
 	reader  *bufio.Reader
 	buffer  []byte
@@ -39,7 +40,7 @@ type transport struct {
 }
 
 func newTransport(conn net.Conn) *transport {
-	return &transport{conn: conn, reader: bufio.NewReaderSize(conn, 64<<10), buffer: make([]byte, 0, 64<<10)}
+	return &transport{tcp: conn, conn: conn, reader: bufio.NewReaderSize(conn, 64<<10), buffer: make([]byte, 0, 64<<10)}
 }
 
 func (t *transport) upgrade(config *tls.Config) (*x509.Certificate, error) {
@@ -128,6 +129,9 @@ func (t *transport) readX224() ([]byte, error) {
 		return nil, err
 	}
 	t.read.Add(tpktHeaderLength)
+	if string(header[:]) == "RFB " {
+		return nil, ErrRFBServer
+	}
 	if header[0] != tpktVersion || header[1] != 0 {
 		return nil, E.New("rdp: expected a TPKT header, got 0x", hex.EncodeToString(header[:]))
 	}

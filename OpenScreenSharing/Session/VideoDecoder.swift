@@ -21,10 +21,8 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     private var inFlight: [UInt64: Submission] = [:]
     private var pending: [PendingFrame] = []
     private var base: [CVPixelBuffer?] = []
-    private var baselineStartedAt: CFTimeInterval?
     private var lastSubmittedFrameID: Int64?
     private var lastSubmissionEnded = true
-    private var timeout: DispatchWorkItem?
     private var rejections = 0
     private var reportedUnsupported = false
     private let completions = LockedState(initialState: [Completion]())
@@ -34,7 +32,6 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
 
     private static let maxInFlight = 8
     private static let maxPendingFrames = 4
-    private static let assemblyTimeout: CFTimeInterval = 0.5
     private static let rejectionLimit = 10
 
     private struct Submission {
@@ -76,7 +73,6 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
     }
 
     deinit {
-        timeout?.cancel()
         if let session {
             VTDecompressionSessionInvalidate(session)
         }
@@ -163,10 +159,14 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
         }
         guard let session else { return }
         let epoch = generation
-        if inFlight.count >= Self.maxInFlight {
-            VTDecompressionSessionWaitForAsynchronousFrames(session)
+        if inFlight.count >= Self.maxInFlight || lastSubmittedFrameID != unit.frameID && pending.count >= Self.maxPendingFrames {
+            let status = VTDecompressionSessionWaitForAsynchronousFrames(session)
             drainCompletions()
             guard generation == epoch else { return }
+            guard status == noErr else {
+                rejected(status)
+                return
+            }
             guard inFlight.count < Self.maxInFlight else {
                 recover()
                 return
@@ -216,9 +216,7 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
         if waitingForSync {
             waitingForSync = false
             base = Array(repeating: nil, count: bands)
-            baselineStartedAt = received
         }
-        scheduleTimeout()
         let status = VTDecompressionSessionDecodeFrame(session, sampleBuffer: sample, flags: [._EnableAsynchronousDecompression], infoFlagsOut: nil) {
             [weak self, completions, queue] status, _, imageBuffer, _, _ in
             let completion = Completion(generation: epoch, ticket: ticket, status: status, pixelBuffer: imageBuffer)
@@ -276,7 +274,6 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
                     recover()
                     return
                 }
-                baselineStartedAt = nil
                 let frame = DecodedVideoFrame(
                     pixelBuffer: bands == 1 ? strips[0] : nil,
                     strips: bands == 1 ? [] : strips,
@@ -288,19 +285,6 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
                 output(frame)
             }
         }
-        scheduleTimeout()
-    }
-
-    private func scheduleTimeout() {
-        timeout?.cancel()
-        let starts = [pending.first?.startedAt, baselineStartedAt].compactMap { $0 }
-        guard let startedAt = starts.min() else {
-            timeout = nil
-            return
-        }
-        let item = DispatchWorkItem { [weak self] in self?.recover() }
-        timeout = item
-        queue.asyncAfter(deadline: .now() + max(0, startedAt + Self.assemblyTimeout - CACurrentMediaTime()), execute: item)
     }
 
     private func recover() {
@@ -325,11 +309,8 @@ nonisolated final class VideoDecoder: @unchecked Sendable {
 
     private func invalidateSession() {
         generation &+= 1
-        timeout?.cancel()
-        timeout = nil
         pending = []
         base = []
-        baselineStartedAt = nil
         lastSubmittedFrameID = nil
         lastSubmissionEnded = true
         inFlight = [:]

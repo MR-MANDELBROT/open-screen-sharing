@@ -33,7 +33,7 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
     private var zoom: CGFloat = 1
     private var viewportCenter: CGPoint?
 
-    private var settleTask: Task<Void, Never>?
+    private var reportTask: Task<Void, Never>?
     private var reportedArea: CGSize?
     private var reportedScale: CGFloat?
     private var keyMonitor: Any?
@@ -139,8 +139,8 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
         }
-        settleTask?.cancel()
-        settleTask = nil
+        reportTask?.cancel()
+        reportTask = nil
         reportedArea = nil
         reportedScale = nil
         guard let window else {
@@ -209,8 +209,8 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
 
     override func viewDidEndLiveResize() {
         super.viewDidEndLiveResize()
-        settleTask?.cancel()
-        settleTask = nil
+        reportTask?.cancel()
+        reportTask = nil
         reportArea()
     }
 
@@ -233,20 +233,23 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
 
     private func geometryDidChange() {
         guard window != nil, bounds.width > 0, bounds.height > 0 else { return }
-        settleTask?.cancel()
-        settleTask = nil
-        if inLiveResize { return }
-        if bounds.size == reportedArea, backingScale == reportedScale { return }
-        let delay: TimeInterval = reportedArea == nil ? 0.1 : 0.3
-        settleTask = Task { [weak self] in
-            try? await Task.sleep(seconds: delay)
-            guard let self, !Task.isCancelled, !self.inLiveResize else { return }
+        guard !inLiveResize else {
+            reportTask?.cancel()
+            reportTask = nil
+            return
+        }
+        guard reportTask == nil else { return }
+        reportTask = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            self.reportTask = nil
+            guard !self.inLiveResize else { return }
             self.reportArea()
         }
     }
 
     private func reportArea() {
         guard let window, bounds.width > 0, bounds.height > 0 else { return }
+        guard bounds.size != reportedArea || window.backingScaleFactor != reportedScale else { return }
         reportedArea = bounds.size
         reportedScale = window.backingScaleFactor
         controller.displayAreaDidChange(bounds.size, scale: window.backingScaleFactor, screen: window.screen?.frame.size ?? bounds.size)

@@ -2,13 +2,9 @@ package coredevice
 
 import (
 	"context"
-	"errors"
-	"io"
 	"log/slog"
 	"net"
 	"net/netip"
-	"syscall"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/lockdown"
@@ -28,11 +24,6 @@ var ErrLoopbackAddress = E.New("remote pairing through a loopback address is ref
 	"it leaves the device's remotepairingd unable to set up tunnels until Developer Mode is turned off and on again; " +
 	"use the VPN's loopback address (such as 10.7.0.1) instead")
 
-const (
-	connectAttempts = 3
-	retryDelay      = 500 * time.Millisecond
-)
-
 func ConnectRemotePairing(ctx context.Context, options RemotePairingOptions) (*Device, error) {
 	if address := options.Address.Addr().Unmap(); address.IsLoopback() || address.IsUnspecified() {
 		return nil, ErrLoopbackAddress
@@ -41,19 +32,12 @@ func ConnectRemotePairing(ctx context.Context, options RemotePairingOptions) (*D
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	identity := handshakeIdentity(options.Record.Identifier)
-	return retry(ctx, logger, func() (*Device, error) {
-		return connectRemotePairing(ctx, options.Address, options.Record, identity, logger)
-	})
-}
-
-func connectRemotePairing(ctx context.Context, address netip.AddrPort, record *pairing.Record, identity uuid.UUID, logger *slog.Logger) (*Device, error) {
 	var dialer net.Dialer
-	conn, err := dialer.DialContext(ctx, "tcp", address.String())
+	conn, err := dialer.DialContext(ctx, "tcp", options.Address.String())
 	if err != nil {
 		return nil, E.Cause(err, "connect to remote pairing")
 	}
-	session, err := pairing.Verify(ctx, conn, record, logger)
+	session, err := pairing.Verify(ctx, conn, options.Record, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +47,7 @@ func connectRemotePairing(ctx context.Context, address netip.AddrPort, record *p
 		return nil, err
 	}
 	logger.Debug("remote pairing listener", slog.Int("port", int(port)))
-	tunnelConn, err := dialer.DialContext(ctx, "tcp", netip.AddrPortFrom(address.Addr(), port).String())
+	tunnelConn, err := dialer.DialContext(ctx, "tcp", netip.AddrPortFrom(options.Address.Addr(), port).String())
 	if err != nil {
 		session.Close()
 		return nil, E.Cause(err, "connect to tunnel port")
@@ -78,7 +62,7 @@ func connectRemotePairing(ctx context.Context, address netip.AddrPort, record *p
 		session.Close()
 		return nil, err
 	}
-	return newDevice(ctx, tun, session, identity, logger)
+	return newDevice(ctx, tun, session, handshakeIdentity(options.Record.Identifier), logger)
 }
 
 type LockdownOptions struct {
@@ -97,9 +81,7 @@ func ConnectLockdown(ctx context.Context, options LockdownOptions) (*Device, err
 		return dialer.DialContext(ctx, "tcp", netip.AddrPortFrom(options.Address, port).String())
 	}
 	identity := handshakeIdentity(options.Record.HostID)
-	return retry(ctx, logger, func() (*Device, error) {
-		return connectLockdown(ctx, options.Record, dial, identity, logger)
-	})
+	return connectLockdown(ctx, options.Record, dial, identity, logger)
 }
 
 func connectLockdown(ctx context.Context, record *lockdown.PairRecord, dial lockdown.Dialer, identity uuid.UUID, logger *slog.Logger) (*Device, error) {
@@ -122,32 +104,4 @@ func handshakeIdentity(name string) uuid.UUID {
 		identity = uuid.NewSHA1(uuid.NameSpaceOID, []byte("open-screen-sharing:"+name))
 	}
 	return identity
-}
-
-func retry(ctx context.Context, logger *slog.Logger, connect func() (*Device, error)) (*Device, error) {
-	for attempt := 1; ; attempt++ {
-		device, err := connect()
-		if err == nil || attempt == connectAttempts || !isTransient(err) || ctx.Err() != nil {
-			return device, err
-		}
-		logger.Debug("connect failed, retrying", slog.Int("attempt", attempt), slog.Any("error", err))
-		select {
-		case <-ctx.Done():
-			return nil, err
-		case <-time.After(retryDelay * time.Duration(attempt)):
-		}
-	}
-}
-
-func isTransient(err error) bool {
-	var rejected *pairing.PairingRejectedError
-	var alert *tlspsk.AlertError
-	switch {
-	case E.IsCanceled(err), errors.Is(err, pairing.ErrPairVerifyFailed), errors.As(err, &rejected), errors.As(err, &alert):
-		return false
-	case E.IsMulti(err, io.EOF, io.ErrUnexpectedEOF, syscall.ECONNRESET, syscall.ECONNREFUSED,
-		syscall.EPIPE, syscall.ECONNABORTED, syscall.ETIMEDOUT, net.ErrClosed):
-		return true
-	}
-	return E.IsTimeout(err)
 }

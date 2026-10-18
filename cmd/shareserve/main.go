@@ -71,8 +71,10 @@ func main() {
 	if *password == "" && !*noAuthentication {
 		fatal(E.New("-password, SHARESERVE_PASSWORD or -no-authentication is required"))
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	if *udid == "" {
-		found, err := firstDevice()
+		found, err := firstDevice(ctx)
 		if err != nil {
 			fatal(E.Cause(err, "find the default device for -udid"))
 		}
@@ -152,8 +154,6 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	err = server.Start()
 	if err != nil {
 		fatal(err)
@@ -168,16 +168,14 @@ func main() {
 	}
 	stop()
 	logger.Info("stopping")
-	server.Close()
+	failure = E.Errors(failure, server.Close())
 	logger.Info("stopped")
 	if failure != nil {
 		fatal(failure)
 	}
 }
 
-func firstDevice() (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func firstDevice(ctx context.Context) (string, error) {
 	devices, err := lockdown.ListDevices(ctx)
 	if err != nil {
 		return "", err

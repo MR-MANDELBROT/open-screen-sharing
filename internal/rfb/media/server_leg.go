@@ -78,7 +78,6 @@ type serverLeg struct {
 	outputs       map[uint32]*serverOutput
 	active        *serverActive
 	held          uint64
-	lastHeard     time.Time
 	sentReports   [sentReportSlots]sentReport
 	sentNext      int
 	deviceReports map[uint32]*deviceReport
@@ -125,7 +124,6 @@ func (l *serverLeg) setKeys(stream *serverOfferStream, now time.Time) {
 	l.sentReports = [sentReportSlots]sentReport{}
 	l.clientRTT = 0
 	l.target, l.latched = l.initialTarget, false
-	l.lastHeard = time.Time{}
 	l.checkPendingLocked(now)
 }
 
@@ -138,7 +136,7 @@ func (l *serverLeg) checkPendingLocked(now time.Time) {
 		}
 		_, err := l.receiver.unprotect(datagram.data)
 		if err == nil {
-			l.latchLocked(datagram.from, datagram.at)
+			l.latchLocked(datagram.from)
 		}
 	}
 }
@@ -150,9 +148,8 @@ func (l *serverLeg) keepPendingLocked(datagram []byte, from netip.AddrPort, now 
 	l.pending = append(l.pending, pendingDatagram{data: append([]byte(nil), datagram...), from: from, at: now})
 }
 
-func (l *serverLeg) latchLocked(from netip.AddrPort, now time.Time) bool {
+func (l *serverLeg) latchLocked(from netip.AddrPort) bool {
 	from = netip.AddrPortFrom(from.Addr().Unmap(), from.Port())
-	l.lastHeard = now
 	if l.latched && l.target == from {
 		return false
 	}
@@ -186,12 +183,6 @@ func (l *serverLeg) snapshot() serverLegSnapshot {
 		sendErrors:    l.sendErrors,
 		target:        l.target,
 	}
-}
-
-func (l *serverLeg) lastHeardAt() time.Time {
-	l.access.Lock()
-	defer l.access.Unlock()
-	return l.lastHeard
 }
 
 func (l *serverLeg) currentTarget() netip.AddrPort {

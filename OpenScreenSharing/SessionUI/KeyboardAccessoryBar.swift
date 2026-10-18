@@ -118,7 +118,7 @@ struct ModifierKeyButton: View {
     @State private var isHolding = false
     @State private var moved = false
     @State private var holdTask: Task<Void, Never>?
-    @State private var lastTap = Date.distantPast
+    @State private var lastTap: TimeInterval?
 
     private var isLocked: Bool { controller.lockedModifiers.contains(modifier) }
     private var isActive: Bool {
@@ -215,10 +215,10 @@ struct ModifierKeyButton: View {
     }
 
     private func tapped() {
-        let now = Date()
+        let now = ProcessInfo.processInfo.systemUptime
         if isLocked {
             controller.setModifier(modifier, locked: false)
-        } else if now.timeIntervalSince(lastTap) < Self.doubleTapInterval, controller.stickyModifiers.contains(modifier) {
+        } else if let lastTap, now - lastTap < Self.doubleTapInterval, controller.stickyModifiers.contains(modifier) {
             controller.setModifier(modifier, locked: true)
         } else {
             controller.toggleSticky(modifier)

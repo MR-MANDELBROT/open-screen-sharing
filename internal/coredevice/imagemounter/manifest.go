@@ -2,6 +2,7 @@ package imagemounter
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
@@ -45,8 +46,8 @@ type manifest struct {
 
 type buildIdentity map[string]any
 
-func loadManifest(dir string) (*manifest, error) {
-	data, err := os.ReadFile(filepath.Join(dir, manifestName))
+func loadManifest(ctx context.Context, dir string) (*manifest, error) {
+	data, err := readLocalFile(ctx, filepath.Join(dir, manifestName))
 	if err != nil {
 		return nil, E.Cause(err, "imagemounter")
 	}
@@ -165,12 +166,12 @@ func (i buildIdentity) resolve(dir, key string) (resolvedFile, error) {
 	return resolvedFile{}, E.Extend(errMissingFile, key, " in ", dir)
 }
 
-func (i buildIdentity) readFile(dir, key string) ([]byte, error) {
+func (i buildIdentity) readFile(ctx context.Context, dir, key string) ([]byte, error) {
 	file, err := i.resolve(dir, key)
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(file.path)
+	data, err := readLocalFile(ctx, file.path)
 	if err != nil {
 		return nil, E.Cause(err, "imagemounter")
 	}
@@ -181,20 +182,63 @@ func (i buildIdentity) readFile(dir, key string) ([]byte, error) {
 	return data, nil
 }
 
-func (f resolvedFile) verify() error {
+func (f resolvedFile) verify(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	file, err := os.Open(f.path)
 	if err != nil {
 		return E.Cause(err, "imagemounter")
 	}
 	defer file.Close()
+	stop := context.AfterFunc(ctx, func() { file.Close() })
+	defer stop()
 	hash := sha512.New384()
-	if _, err = io.Copy(hash, file); err != nil {
+	_, err = io.Copy(hash, &contextReader{ctx: ctx, reader: file})
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil {
 		return E.Cause(err, "imagemounter: read ", f.path)
 	}
 	if sum := hash.Sum(nil); !bytes.Equal(sum, f.digest) {
 		return f.mismatch(sum)
 	}
 	return nil
+}
+
+func readLocalFile(ctx context.Context, path string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	stop := context.AfterFunc(ctx, func() { file.Close() })
+	defer stop()
+	data, err := io.ReadAll(&contextReader{ctx: ctx, reader: file})
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return data, err
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *contextReader) Read(data []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	count, err := r.reader.Read(data)
+	if r.ctx.Err() != nil {
+		return 0, r.ctx.Err()
+	}
+	return count, err
 }
 
 func (f resolvedFile) mismatch(sum []byte) error {

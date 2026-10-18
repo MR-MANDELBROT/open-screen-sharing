@@ -22,9 +22,7 @@ func (s *Server) prepareDiskImage(ctx context.Context, device *coredevice.Device
 		s.relisted = false
 		return nil
 	}
-	statusContext, cancel := context.WithTimeout(ctx, requestTimeout)
-	status, err := images.Status(statusContext)
-	cancel()
+	status, err := images.Status(ctx)
 	if err != nil {
 		return E.Cause(err, "read the Developer Disk Image's state")
 	}
@@ -91,13 +89,19 @@ func (s *Server) prepareDiskImage(ctx context.Context, device *coredevice.Device
 }
 
 func (s *Server) diskImageFiles(ctx context.Context, directory string, variant imagemounter.Variant) (string, error) {
-	if imagemounter.Verify(directory, variant) == nil {
+	if imagemounter.Verify(ctx, directory, variant) == nil {
 		return directory, nil
 	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	own := filepath.Join(directory, variant.String())
-	err := imagemounter.Verify(own, variant)
+	err := imagemounter.Verify(ctx, own, variant)
 	if err == nil {
 		return own, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
 	if !s.options.DownloadDiskImage {
 		return "", E.Cause(err, "verify ", variant)
@@ -113,7 +117,7 @@ func (s *Server) diskImageFiles(ctx context.Context, directory string, variant i
 	if err != nil {
 		return "", E.Cause(err, "download ", variant)
 	}
-	if err = imagemounter.Verify(own, variant); err != nil {
+	if err = imagemounter.Verify(ctx, own, variant); err != nil {
 		return "", E.Cause(err, "download ", variant)
 	}
 	return own, nil

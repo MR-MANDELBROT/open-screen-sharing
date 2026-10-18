@@ -87,11 +87,11 @@ func (c *Client) createKeyboard(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) removeKeyboard() error {
+func (c *Client) removeKeyboard(ctx context.Context) error {
 	if c.keyboard == 0 {
 		return nil
 	}
-	if err := removeService(c.universal, c.keyboard); err != nil {
+	if err := removeService(ctx, c.universal, c.keyboard); err != nil {
 		c.closeUniversal()
 		return E.Cause(err, "hid: remove keyboard")
 	}
@@ -102,9 +102,9 @@ func (c *Client) removeKeyboard() error {
 
 // idevice sends resetGestureState before removeService, without reply
 // flags (idevice d32c818, idevice/src/services/core_device/hid.rs:886-891, 987-997).
-func removeService(conn *xpc.Conn, serviceID uint64) error {
+func removeService(ctx context.Context, conn *xpc.Conn, serviceID uint64) error {
 	for _, call := range []string{"resetGestureState", "removeService"} {
-		err := conn.Send(universalRequest(map[string]any{
+		err := conn.SendContext(ctx, universalRequest(map[string]any{
 			call: map[string]any{"_0": serviceID},
 		}), false)
 		if err != nil {
@@ -139,11 +139,27 @@ func (c *Client) releaseKeys(ctx context.Context) error {
 	return c.sendKeys(ctx, [keyboardBitmapSize]byte{})
 }
 
+// SpringBoard records each key down from an external keyboard by usage and
+// sender ID, and drops it on the up from the same sender. A key down while
+// the screen is off, other than the consumer play/pause, mute, volume and
+// power keys, makes SpringBoard swallow every external keyboard key it
+// receives, such as system shortcuts and brightness keys, until a key up
+// leaves that record empty. A down whose sender never sends the up, as when
+// the service goes away with the key held, keeps the record non-empty, so the
+// next such wake swallows these keys until SpringBoard restarts (iPadOS 27.2
+// 24B5110a, -[SpringBoard _shouldSwallowHIDEvent:] 0x226a2c448..0x226a2c854,
+// called from -[SpringBoard handleKeyHIDEvent:] and
+// -[SpringBoard __handleHIDEvent:withUIEvent:]). Reports go out on the client
+// context, like buttons, so canceling the caller cannot close the connection
+// while keys are held.
 func (c *Client) sendKeys(ctx context.Context, pressed [keyboardBitmapSize]byte) error {
 	if err := c.createKeyboard(ctx); err != nil {
 		return err
 	}
-	if err := c.sendReport(ctx, c.keyboard, keyboardReport(&pressed, now())); err != nil {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := c.sendReport(c.ctx, c.keyboard, keyboardReport(&pressed, now())); err != nil {
 		return err
 	}
 	c.pressed = pressed

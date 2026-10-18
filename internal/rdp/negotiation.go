@@ -10,7 +10,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -29,21 +28,21 @@ const (
 
 var (
 	ErrNotRDP               = E.New("rdp: the server did not answer as an RDP server")
+	ErrRFBServer            = E.New("rdp: the server sent an RFB greeting")
 	ErrNLAUnavailable       = E.New("rdp: the server does not offer Network Level Authentication")
 	ErrAuthenticationFailed = E.New("rdp: authentication failed")
 	ErrRemoteLogonDenied    = E.New("rdp: the account is not allowed to sign in remotely")
 	ErrCertificateChanged   = E.New("rdp: the server certificate changed")
 )
 
-func Probe(ctx context.Context, conn net.Conn) (string, error) {
+func Probe(ctx context.Context, conn net.Conn) (_ string, err error) {
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	defer stop()
-	if deadline, ok := ctx.Deadline(); ok {
-		err := conn.SetDeadline(deadline)
-		if err != nil {
-			return "", err
+	defer func() {
+		stop()
+		if ctx.Err() != nil {
+			err = E.Errors(ctx.Err(), err)
 		}
-	}
+	}()
 	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 	if err != nil {
 		return "", err
@@ -65,25 +64,20 @@ func negotiateTransport(ctx context.Context, opts Options, authenticating func()
 	if err != nil {
 		return nil, E.Cause(err, "rdp: parse server address")
 	}
-	conn, err := (&net.Dialer{Timeout: opts.DialTimeout}).DialContext(ctx, "tcp", opts.Address)
+	conn, err := new(net.Dialer).DialContext(ctx, "tcp", opts.Address)
 	if err != nil {
 		return nil, err
 	}
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer func() {
 		stop()
+		if ctx.Err() != nil {
+			err = E.Errors(ctx.Err(), err)
+		}
 		if err != nil {
 			_ = conn.Close()
 		}
 	}()
-	deadline := time.Now().Add(opts.DialTimeout)
-	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
-		deadline = ctxDeadline
-	}
-	err = conn.SetDeadline(deadline)
-	if err != nil {
-		return nil, err
-	}
 	t := newTransport(conn)
 	certificate, err := t.negotiate(host)
 	if err != nil {

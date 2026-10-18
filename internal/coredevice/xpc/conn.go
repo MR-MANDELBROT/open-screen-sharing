@@ -10,7 +10,6 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -93,6 +92,10 @@ type stream struct {
 }
 
 func NewConn(ctx context.Context, conn net.Conn, logger *slog.Logger) (*Conn, error) {
+	if err := ctx.Err(); err != nil {
+		conn.Close()
+		return nil, err
+	}
 	c := &Conn{
 		conn:              conn,
 		reader:            bufio.NewReaderSize(conn, 64<<10),
@@ -109,25 +112,25 @@ func NewConn(ctx context.Context, conn net.Conn, logger *slog.Logger) (*Conn, er
 	}
 	c.changed = sync.NewCond(&c.access)
 
-	deadline, _ := ctx.Deadline()
-	conn.SetWriteDeadline(deadline)
+	stop := context.AfterFunc(ctx, func() { c.fail(ctx.Err()) })
+	defer stop()
 	err := c.writeHandshake()
-	conn.SetWriteDeadline(time.Time{})
 	if err != nil {
-		conn.Close()
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		c.fail(err)
 		return nil, E.Cause(err, "start RemoteXPC")
 	}
 	go c.readLoop()
 
-	stop := c.wakeOnDone(ctx)
-	defer stop()
 	c.access.Lock()
 	for !c.settingsReceived && c.err == nil && ctx.Err() == nil {
 		c.changed.Wait()
 	}
 	err = c.err
 	c.access.Unlock()
-	if err == nil && ctx.Err() != nil {
+	if !stop() || ctx.Err() != nil {
 		err = ctx.Err()
 	}
 	if err != nil {
@@ -430,6 +433,20 @@ func (c *Conn) reserve(ctx context.Context, id uint32, want int) (int, error) {
 }
 
 func (c *Conn) Send(body map[string]any, wantReply bool) error {
+	return c.SendContext(context.Background(), body, wantReply)
+}
+
+func (c *Conn) SendContext(ctx context.Context, body map[string]any, wantReply bool) (err error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	stop := context.AfterFunc(ctx, func() { c.Close() })
+	defer func() {
+		if !stop() {
+			c.Close()
+			err = ctx.Err()
+		}
+	}()
 	flags := uint32(FlagAlwaysSet)
 	if len(body) > 0 {
 		flags |= FlagData
@@ -442,7 +459,12 @@ func (c *Conn) Send(body map[string]any, wantReply bool) error {
 		return err
 	}
 	c.nextMessageID++
-	return c.writeData(context.Background(), rootStream, data, false)
+	err = c.writeData(ctx, rootStream, data, false)
+	if ctx.Err() != nil {
+		c.Close()
+		return ctx.Err()
+	}
+	return err
 }
 
 func (c *Conn) ReceiveMessage(ctx context.Context) (Message, error) {
@@ -484,12 +506,20 @@ func (c *Conn) Receive() (map[string]any, error) {
 	}
 }
 
-func (c *Conn) Request(ctx context.Context, body map[string]any) (map[string]any, error) {
+func (c *Conn) Request(ctx context.Context, body map[string]any) (reply map[string]any, err error) {
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
 	stop := context.AfterFunc(ctx, func() { c.Close() })
-	defer stop()
-	err := c.Send(body, true)
+	defer func() {
+		if !stop() {
+			c.Close()
+			reply = nil
+			err = ctx.Err()
+		}
+	}()
+	err = c.SendContext(ctx, body, true)
 	if err == nil {
-		var reply map[string]any
 		reply, err = c.Receive()
 		if err == nil {
 			return reply, nil
@@ -504,7 +534,17 @@ func (c *Conn) Request(ctx context.Context, body map[string]any) (map[string]any
 // pymobiledevice3 sends the file-transfer preamble, payload and END_STREAM
 // without waiting for a transfer acknowledgement
 // (pymobiledevice3 9c33842, pymobiledevice3/remote/remotexpc.py:500-531).
-func (c *Conn) SendFile(ctx context.Context, id uint64, content io.Reader, size int64) error {
+func (c *Conn) SendFile(ctx context.Context, id uint64, content io.Reader, size int64) (err error) {
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	stop := context.AfterFunc(ctx, func() { c.Close() })
+	defer func() {
+		if !stop() {
+			c.Close()
+			err = ctx.Err()
+		}
+	}()
 	c.access.Lock()
 	if c.err != nil {
 		c.access.Unlock()
@@ -519,7 +559,7 @@ func (c *Conn) SendFile(ctx context.Context, id uint64, content io.Reader, size 
 		delete(c.streams, streamID)
 		c.access.Unlock()
 	}()
-	err := c.writeFrame(frameHeaders, flagEndHeaders, streamID, nil)
+	err = c.writeFrame(frameHeaders, flagEndHeaders, streamID, nil)
 	if err != nil {
 		return err
 	}
@@ -535,7 +575,9 @@ func (c *Conn) SendFile(ctx context.Context, id uint64, content io.Reader, size 
 		err = c.writeData(ctx, streamID, nil, true)
 	}
 	if err != nil {
-		c.writeFrame(frameRSTStream, 0, streamID, binary.BigEndian.AppendUint32(nil, errorCodeCancel))
+		if ctx.Err() == nil {
+			c.writeFrame(frameRSTStream, 0, streamID, binary.BigEndian.AppendUint32(nil, errorCodeCancel))
+		}
 		return E.Cause(err, "send file ", id)
 	}
 	return nil

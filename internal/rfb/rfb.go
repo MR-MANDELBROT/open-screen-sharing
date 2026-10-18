@@ -109,8 +109,7 @@ type Options struct {
 	UpdateInterval   time.Duration
 	Encodings        []Encoding
 
-	DialTimeout time.Duration
-	Logger      *slog.Logger
+	Logger *slog.Logger
 
 	RectangleObserver func(RawRectangle)
 

@@ -29,7 +29,7 @@ type Peer struct {
 }
 
 func Handshake(ctx context.Context, conn *xpc.Conn, identity uuid.UUID) (*Peer, error) {
-	err := conn.Send(map[string]any{
+	err := conn.SendContext(ctx, map[string]any{
 		"MessageType":              "Handshake",
 		"MessagingProtocolVersion": uint64(messagingProtocolVersion),
 		"UUID":                     identity,

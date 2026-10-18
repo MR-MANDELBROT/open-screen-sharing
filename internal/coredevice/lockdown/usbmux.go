@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -44,9 +43,18 @@ func dialUSBMux(ctx context.Context) (net.Conn, error) {
 	return conn, nil
 }
 
-func usbmuxRequest(ctx context.Context, conn net.Conn, message map[string]any) (map[string]any, error) {
-	stop := applyContext(ctx, conn)
-	defer stop()
+func usbmuxRequest(ctx context.Context, conn net.Conn, message map[string]any) (result map[string]any, resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer func() {
+		if !stop() {
+			conn.Close()
+			result = nil
+			resultErr = ctx.Err()
+		}
+	}()
 	message["ClientVersionString"] = progName
 	message["ProgName"] = progName
 	message["kLibUSBMuxVersion"] = 3
@@ -172,17 +180,6 @@ func connectPort(ctx context.Context, device Device, port uint16) (net.Conn, err
 		return nil, E.New("usbmuxd could not connect to port ", port, " (error ", number, ")")
 	}
 	return conn, nil
-}
-
-func applyContext(ctx context.Context, conn net.Conn) func() {
-	stopAfter := context.AfterFunc(ctx, func() {
-		conn.SetDeadline(time.Unix(1, 0))
-	})
-	return func() {
-		if stopAfter() || ctx.Err() == nil {
-			conn.SetDeadline(time.Time{})
-		}
-	}
 }
 
 func contextError(ctx context.Context, err error) error {

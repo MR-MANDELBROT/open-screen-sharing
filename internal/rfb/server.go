@@ -19,11 +19,9 @@ import (
 var ErrServerClosed = E.New("rfb: server closed")
 
 const (
-	handshakeTimeout     = 30 * time.Second
 	signInFailureDelay   = time.Second
 	acceptRetryLimit     = time.Second
 	maxPendingHandshakes = 16
-	standardViewerLimit  = 10 * time.Second
 )
 
 type ServerScreen struct {
@@ -157,7 +155,13 @@ func (s *Server) Serve(listener net.Listener) error {
 			}
 			delay = min(max(2*delay, 5*time.Millisecond), acceptRetryLimit)
 			s.logger.Warn("accept", "error", err, "retry", delay)
-			time.Sleep(delay)
+			timer := time.NewTimer(delay)
+			select {
+			case <-timer.C:
+			case <-s.done:
+				timer.Stop()
+				return ErrServerClosed
+			}
 			continue
 		}
 		delay = 0

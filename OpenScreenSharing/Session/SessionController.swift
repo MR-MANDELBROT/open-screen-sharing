@@ -100,18 +100,6 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var locksPointer = false
 }
 
-private struct KeyboardSourceRequest {
-    enum Step {
-        case toggling
-        case selecting
-        case leaving
-        case returning
-    }
-
-    let id: String
-    var step: Step
-}
-
 final class SessionController: ObservableObject, Identifiable {
     let route: SessionRoute
     @Published private(set) var title: String
@@ -195,6 +183,7 @@ final class SessionController: ObservableObject, Identifiable {
     private(set) var remoteDragOffer: RemoteDragOffer?
     private var promisedFiles: [Int64: PromisedFile] = [:]
     private var holdsPointer = false
+    private var remoteDragActive = false
     private var credentials: SessionCredentials?
     private var pressedKeys: [Int: MacKey] = [:]
     private var sentModifiers: [ModifierKey: MacKey] = [:]
@@ -203,13 +192,9 @@ final class SessionController: ObservableObject, Identifiable {
     private var capsLockEngaged = false
     private var capsLockPressedAt: TimeInterval?
     private var capsLockActsOnPress = false
-    private var keyboardSourceRequest: KeyboardSourceRequest?
     #if os(macOS)
     private var inferredModifierKeys = Set<Int>()
     #endif
-    private var previousKeyboardSource: String?
-    private var queuedKeyboardSource: MacInputSource?
-    private var keyboardSourceTimeout: Task<Void, Never>?
     private var keyboardType = MacKeyboardType.ansi
     private(set) var pointerPosition = CGPoint.zero
     private var pictureSize = CGSize.zero
@@ -231,8 +216,7 @@ final class SessionController: ObservableObject, Identifiable {
     private var transferTask: ContinuedTask?
     private var transferTaskIDs: Set<Int64> = []
     #endif
-    private var returnedFromBackground: TimeInterval?
-    private var resumeCheck: Task<Void, Never>?
+    private var reconnectsOnReturn = false
     private var restartsHighPerformanceOnReturn = false
     private var hasConnected = false
     private var microphone: MicrophoneSender?
@@ -558,16 +542,19 @@ final class SessionController: ObservableObject, Identifiable {
         session?.startHighPerformanceWithConnection()
     }
 
-    func disconnect() {
-        isClosing = true
+    func abort() {
         releaseAllKeys()
+        isClosing = true
         teardown()
         phase = .disconnected
         endBackgroundTask()
     }
 
     func close() {
-        disconnect()
+        releaseAllKeys()
+        session?.stop()
+        session = nil
+        abort()
         onClose()
     }
 
@@ -601,21 +588,20 @@ final class SessionController: ObservableObject, Identifiable {
         reconnectTask = nil
         probeTask?.cancel()
         probeTask = nil
-        resumeCheck?.cancel()
-        resumeCheck = nil
         restartsHighPerformanceOnReturn = false
         microphone?.stop()
         microphone = nil
         sink?.detach()
         awaitsResolutionChange = false
         pipeline.holdPicture()
-        session?.stop()
+        session?.abort()
         session = nil
         sink = nil
         virtualDisplayRequests.reset(sender: nil)
         awaitsVirtualDisplay = false
         highPerformanceAwaitsDisplay = false
         holdsPointer = false
+        remoteDragActive = false
         pointerButtons = []
         pointerModifiers = []
         dragID = nil
@@ -631,7 +617,6 @@ final class SessionController: ObservableObject, Identifiable {
         sceneInBackground = true
         activeWhenBackgrounded = phase.isActive
         captureThumbnail()
-        endResumeCheck()
         releaseAllKeys()
         stopScrollMomentum()
         updateMicrophone()
@@ -642,6 +627,7 @@ final class SessionController: ObservableObject, Identifiable {
         if phase == .connected {
             beginBackgroundTask()
         }
+        closeIfSuspending()
     }
 
     func sceneDidBecomeActive() {
@@ -650,7 +636,6 @@ final class SessionController: ObservableObject, Identifiable {
             return
         }
         sceneInBackground = false
-        returnedFromBackground = ProcessInfo.processInfo.systemUptime
         endBackgroundTask()
         sink?.setSceneInBackground(false)
         #if os(iOS)
@@ -662,14 +647,16 @@ final class SessionController: ObservableObject, Identifiable {
         let restartsHighPerformance = restartsHighPerformanceOnReturn
         restartsHighPerformanceOnReturn = false
         if phase == .connected {
-            checkConnectionAfterBackground()
-            if resumeCheck == nil {
-                sendChangedClipboard()
+            if isVideo {
+                session?.requestKeyframe()
+            } else {
+                session?.requestRefresh()
             }
+            sendChangedClipboard()
             if restartsHighPerformance {
                 restartHighPerformance()
             }
-        } else if wasActive, brokeInBackground {
+        } else if reconnectsOnReturn || wasActive && brokeInBackground {
             reconnectNow()
         }
     }
@@ -679,6 +666,7 @@ final class SessionController: ObservableObject, Identifiable {
         guard backgroundTask == .invalid else { return }
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Screen Sharing session") { [self] in
             endBackgroundTask()
+            closeIfSuspending()
         }
         #endif
     }
@@ -691,11 +679,18 @@ final class SessionController: ObservableObject, Identifiable {
         #endif
     }
 
-    private static let resumeWindow: TimeInterval = 5
-
-    private var returnedMomentsAgo: Bool {
-        guard !sceneInBackground, let returnedFromBackground else { return false }
-        return ProcessInfo.processInfo.systemUptime - returnedFromBackground < Self.resumeWindow
+    fileprivate func closeIfSuspending() {
+        #if os(iOS)
+        guard sceneInBackground, phase.isActive, !reconnectsOnReturn, backgroundTask == .invalid,
+            transferTask?.isRunning != true, sink?.keepsAppRunning != true
+        else { return }
+        #if DEBUG || SIDELOAD
+        if ServerController.shared.keepsAppRunning { return }
+        #endif
+        reconnectsOnReturn = true
+        teardown()
+        phase = .reconnecting(attempt: 1)
+        #endif
     }
 
     private var brokeInBackground: Bool {
@@ -712,40 +707,12 @@ final class SessionController: ObservableObject, Identifiable {
 
     private func reconnectNow() {
         guard let credentials else { return }
+        reconnectsOnReturn = false
         releaseAllKeys()
         teardown()
         reconnectAttempts = 0
         connect(with: credentials)
         phase = .reconnecting(attempt: 1)
-    }
-
-    private func checkConnectionAfterBackground() {
-        guard let session, let sink else { return }
-        if isVideo {
-            session.requestKeyframe()
-        } else {
-            session.requestRefresh()
-        }
-        guard hasPicture else { return }
-        sink.watchForLife()
-        resumeCheck?.cancel()
-        resumeCheck = Task { [weak self] in
-            try? await Task.sleep(seconds: Self.resumeWindow)
-            guard let self, !Task.isCancelled, self.phase == .connected else { return }
-            self.resumeCheck = nil
-            self.reconnectNow()
-        }
-    }
-
-    fileprivate func endResumeCheck() {
-        resumeCheck?.cancel()
-        resumeCheck = nil
-    }
-
-    fileprivate func connectionResumed() {
-        guard resumeCheck != nil else { return }
-        endResumeCheck()
-        sendChangedClipboard()
     }
 
     private func restartHighPerformance() {
@@ -762,7 +729,6 @@ final class SessionController: ObservableObject, Identifiable {
     private static let reconnectLimit = 6
 
     fileprivate func handle(phase newPhase: SessionPhase) {
-        endResumeCheck()
         var newPhase = newPhase
         var reconnecting = false
         if case .reconnecting = phase { reconnecting = true }
@@ -777,7 +743,7 @@ final class SessionController: ObservableObject, Identifiable {
                 teardown()
                 phase = .reconnecting(attempt: attempt)
                 reconnectTask?.cancel()
-                let delay: TimeInterval = attempt == 1 && returnedMomentsAgo ? 0 : TimeInterval(min(1 << (attempt - 1), 8))
+                let delay = TimeInterval(min(1 << (attempt - 1), 8))
                 reconnectTask = Task { [weak self] in
                     try? await Task.sleep(seconds: delay)
                     guard let self, !Task.isCancelled, case .reconnecting = self.phase else { return }
@@ -826,6 +792,7 @@ final class SessionController: ObservableObject, Identifiable {
             }
             requestVirtualDisplay()
             startHighPerformanceIfDisplayReady()
+            closeIfSuspending()
         case .failed(let failure):
             releaseAllKeys()
             if failure.kind == .authenticationFailed {
@@ -854,8 +821,8 @@ final class SessionController: ObservableObject, Identifiable {
         startHighPerformanceIfDisplayReady()
     }
 
-    fileprivate func handle(screenWidth: Int, height: Int, video: Bool) {
-        virtualDisplayRequests.framebufferDidChange(width: screenWidth, height: height)
+    fileprivate func handle(screenWidth: Int, height: Int, video: Bool, resized: Bool) {
+        virtualDisplayRequests.framebufferDidChange(width: screenWidth, height: height, resized: resized)
         if isVideo != video {
             isVideo = video
             updateMicrophone()
@@ -944,13 +911,9 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     fileprivate func handleVideoFailure(_ failure: MediaFailure) {
-        if usesHighPerformance, failure.kind == .silent || failure.kind == .network, sceneInBackground || returnedMomentsAgo {
+        if usesHighPerformance, failure.kind == .silent || failure.kind == .network, sceneInBackground {
             hasStartedHighPerformance = true
-            if sceneInBackground {
-                restartsHighPerformanceOnReturn = true
-            } else {
-                restartHighPerformance()
-            }
+            restartsHighPerformanceOnReturn = true
             return
         }
         guard usesHighPerformance else { return }
@@ -985,28 +948,9 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     fileprivate func handle(keyboardSource source: String?, secureInput: Bool) {
-        let current = info.keyboardSource
-        if let current, let source, source != current {
-            previousKeyboardSource = current
-        }
         info.keyboardSource = source
         info.secureInput = secureInput
         rememberKeyboardSource(source)
-        guard let source, let request = keyboardSourceRequest else { return }
-        switch request.step {
-        case .toggling where source == request.id:
-            advanceKeyboardSource(request.id, to: nil)
-        case .toggling where source != current:
-            advanceKeyboardSource(request.id, to: .selecting)
-        case .selecting where source == request.id:
-            advanceKeyboardSource(request.id, to: .leaving)
-        case .leaving where source != request.id:
-            advanceKeyboardSource(request.id, to: .returning)
-        case .returning where source == request.id:
-            advanceKeyboardSource(request.id, to: nil)
-        default:
-            break
-        }
     }
 
     fileprivate func handle(event: SessionEvent) {
@@ -1217,7 +1161,16 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     fileprivate func handleRemoteDrag(_ items: [RemoteDragItem], image: Data?) {
-        guard !items.isEmpty, capabilities.contains(.dragFromRemote), isControlling, pointerButtons.contains(.primary) else {
+        remoteDragActive = !items.isEmpty
+        // ScreensharingAgent ends a canceled remote drag with an empty 0x20 event, and sends nothing else for
+        // the cancel request (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434,
+        // UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3, sub_100012544 0x100012644..0x10001266c,
+        // sub_100022378 0x100022434..0x100022448).
+        if !remoteDragActive, holdsPointer {
+            holdsPointer = false
+            if isControlling { sendPointer(buttons: pointerButtons) }
+        }
+        guard remoteDragActive, capabilities.contains(.dragFromRemote), isControlling, pointerButtons.contains(.primary) else {
             remoteDragOffer = nil
             return
         }
@@ -1235,13 +1188,16 @@ final class SessionController: ObservableObject, Identifiable {
     // (ScreensharingAgent 756.36.5.2, macOS 27.0.1 26A434, UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3,
     // sub_100022890 0x100022924..0x100022b94); a button released before that drops the items where the pointer is.
     func cancelRemoteDrag() {
-        session?.cancelRemoteDrag()
+        guard remoteDragActive, let session else {
+            release(.primary)
+            return
+        }
         holdsPointer = true
-        Task { [weak self] in
-            try? await Task.sleep(seconds: 0.5)
-            guard let self, self.holdsPointer else { return }
-            self.holdsPointer = false
-            if self.isControlling { self.sendPointer(buttons: self.pointerButtons) }
+        do {
+            try session.cancelRemoteDrag()
+        } catch {
+            holdsPointer = false
+            alert = AlertState(String(localized: "Couldn’t Cancel Drag"), error: error)
         }
         release(.primary)
     }
@@ -1281,6 +1237,7 @@ final class SessionController: ObservableObject, Identifiable {
             transferTask.finish(success: transfers.allSatisfy { !transferTaskIDs.contains($0.id) || $0.state == .finished })
             self.transferTask = nil
             transferTaskIDs = []
+            closeIfSuspending()
             return
         }
         let activity =
@@ -2322,46 +2279,8 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     func selectKeyboardSource(_ source: MacInputSource) {
-        guard isControlling, !info.secureInput else { return }
-        guard keyboardSourceRequest == nil else {
-            queuedKeyboardSource = source
-            return
-        }
-        guard source.id != info.keyboardSource else { return }
-        advanceKeyboardSource(source.id, to: previousKeyboardSource == nil || previousKeyboardSource == source.id ? .toggling : .selecting)
-    }
-
-    private func advanceKeyboardSource(_ id: String, to step: KeyboardSourceRequest.Step?) {
-        keyboardSourceTimeout?.cancel()
-        guard let step else {
-            keyboardSourceRequest = nil
-            if let queued = queuedKeyboardSource {
-                queuedKeyboardSource = nil
-                selectKeyboardSource(queued)
-            }
-            return
-        }
-        if step == .selecting {
-            session?.selectKeyboardSource(id)
-        } else {
-            sendChord(.previousInputSource)
-        }
-        keyboardSourceRequest = KeyboardSourceRequest(id: id, step: step)
-        keyboardSourceTimeout = Task { [weak self] in
-            try? await Task.sleep(seconds: 0.5)
-            guard !Task.isCancelled, let self else { return }
-            switch step {
-            case .toggling:
-                self.advanceKeyboardSource(id, to: .selecting)
-            case .selecting:
-                self.advanceKeyboardSource(id, to: .leaving)
-            case .leaving:
-                self.advanceKeyboardSource(id, to: nil)
-            case .returning:
-                self.sendChord(.previousInputSource)
-                self.advanceKeyboardSource(id, to: nil)
-            }
-        }
+        guard isControlling, !info.secureInput, source.id != info.keyboardSource else { return }
+        session?.selectKeyboardSource(source.id)
     }
 
     #if os(macOS)
@@ -2595,7 +2514,6 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
     private var audioPlayer: AudioPlayer?
     private var isVideo = false
     private var sceneInBackground = false
-    private var awaitingLife = false
     weak var session: LibsharingRemoteSession?
 
     @MainActor
@@ -2610,7 +2528,6 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
                 pipeline.setVideoFrame(frame) { [weak self] picture, held in
                     self?.pictureReady(picture, arrival: timing.arrival, hold: timing.libraryHold + held, decode: timing.decode)
                 }
-                self.showedLife()
             },
             failure: { [weak self] in self?.session?.requestKeyframe() },
             unsupported: { [weak self] hdr, error in self?.onMain { $0.videoDecodingFailed(error, hdr: hdr) } }
@@ -2642,20 +2559,11 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         lock.unlock()
     }
 
-    func watchForLife() {
+    var keepsAppRunning: Bool {
         lock.lock()
-        awaitingLife = true
+        let player = audioPlayer
         lock.unlock()
-    }
-
-    private func showedLife() {
-        lock.lock()
-        let awaited = awaitingLife
-        awaitingLife = false
-        lock.unlock()
-        if awaited {
-            onMain { $0.connectionResumed() }
-        }
+        return player?.isPlaying ?? false
     }
 
     private func onMain(_ body: @escaping @MainActor (SessionController) -> Void) {
@@ -2684,7 +2592,7 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         if video {
             pipeline.beginVideo()
         }
-        onMain { $0.handle(screenWidth: width, height: height, video: video) }
+        onMain { $0.handle(screenWidth: width, height: height, video: video, resized: true) }
         return framebuffer
     }
 
@@ -2693,7 +2601,6 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         if let picture = pipeline.markDirty() {
             pictureReady(picture, arrival: CACurrentMediaTime(), hold: 0, decode: 0)
         }
-        showedLife()
     }
 
     func sessionVideoFormatChanged(_ format: VideoFormat) {
@@ -2705,7 +2612,7 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         guard started else { return }
         pipeline.beginVideo()
         let size = pipeline.screenSize
-        onMain { $0.handle(screenWidth: size.width, height: size.height, video: true) }
+        onMain { $0.handle(screenWidth: size.width, height: size.height, video: true, resized: false) }
     }
 
     func sessionVideoStopped(failure: MediaFailure?) {
@@ -2719,7 +2626,7 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         pipeline.endVideo()
         let size = pipeline.screenSize
         onMain { controller in
-            controller.handle(screenWidth: size.width, height: size.height, video: false)
+            controller.handle(screenWidth: size.width, height: size.height, video: false, resized: false)
             if let failure {
                 controller.handleVideoFailure(failure)
             }
@@ -2733,7 +2640,11 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
     func sessionAudioFormatChanged(_ format: AudioFormat) {
         let player: AudioPlayer?
         do {
-            player = try AudioPlayer(format: format) { [weak self] error in self?.onMain { $0.audioFailed(error) } }
+            player = try AudioPlayer(
+                format: format,
+                failed: { [weak self] error in self?.onMain { $0.audioFailed(error) } },
+                stopped: { [weak self] in self?.onMain { $0.closeIfSuspending() } }
+            )
         } catch {
             player = nil
             onMain { $0.audioFailed(error) }

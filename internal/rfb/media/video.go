@@ -50,7 +50,6 @@ type videoAssembler struct {
 	base          uint32
 	awaitingSync  bool
 	recovering    bool
-	awaitingSince int64
 	nextOrder     uint16
 	held          []*accessUnit
 	stalledSince  int64
@@ -111,7 +110,6 @@ func (a *videoAssembler) expectAnswer(answer *Answer) {
 	if a.haveExpected && (answer.SSRC != a.expectedBase || answer.Width != a.width || answer.Height != a.height) {
 		a.requestSync()
 		a.recovering = false
-		a.awaitingSince = a.now
 		clear(a.depacketizers)
 		clear(a.lastSeen)
 		a.timestamps = timestampExtender{}
@@ -130,9 +128,6 @@ func (a *videoAssembler) push(packet rtpPacket, raw []byte, now int64) {
 	a.now = now
 	if a.haveExpected && packet.ssrc-a.expectedBase >= uint32(a.bands) {
 		return
-	}
-	if a.awaitingSince == 0 {
-		a.awaitingSince = now
 	}
 	depacketizer := a.depacketizers[packet.ssrc]
 	if depacketizer == nil {
@@ -238,7 +233,7 @@ func (a *videoAssembler) latePackets() uint64 {
 }
 
 func (a *videoAssembler) wantsKeyframe() bool {
-	return a.awaitingSync && (a.recovering || a.now-a.awaitingSince > int64(time.Second))
+	return a.awaitingSync && a.recovering
 }
 
 func (a *videoAssembler) requestSync() {
@@ -292,7 +287,7 @@ func (a *videoAssembler) accept(unit *accessUnit, damaged bool) {
 		a.startChain(unit)
 		return
 	}
-	if _, picture := unit.frameEnd(a.codec); picture && a.awaitingSync && !a.decodeOrders {
+	if _, picture := unit.frameEnd(a.codec); picture && a.awaitingSync {
 		a.recovering = true
 	}
 	if a.awaitingSync || !a.inGroup(unit.ssrc) {

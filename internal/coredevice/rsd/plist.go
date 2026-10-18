@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
 	"howett.net/plist"
@@ -55,9 +54,18 @@ func (c *PlistConn) Receive() (map[string]any, error) {
 	return message, nil
 }
 
-func (c *PlistConn) Request(ctx context.Context, message map[string]any) (map[string]any, error) {
-	stop := c.applyContext(ctx)
-	defer stop()
+func (c *PlistConn) Request(ctx context.Context, message map[string]any) (result map[string]any, resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	stop := context.AfterFunc(ctx, func() { c.conn.Close() })
+	defer func() {
+		if !stop() {
+			c.conn.Close()
+			result = nil
+			resultErr = ctx.Err()
+		}
+	}()
 	err := c.Send(message)
 	if err == nil {
 		var reply map[string]any
@@ -75,10 +83,18 @@ func (c *PlistConn) Request(ctx context.Context, message map[string]any) (map[st
 // pymobiledevice3 reads two replies after RSDCheckin: RSDCheckin first,
 // then StartService, whose Error field reports a failure (pymobiledevice3
 // 9c33842, pymobiledevice3/remote/remote_service_discovery.py:437-447).
-func (c *PlistConn) Checkin(ctx context.Context, label string) error {
-	stop := c.applyContext(ctx)
-	defer stop()
-	err := c.checkin(label)
+func (c *PlistConn) Checkin(ctx context.Context, label string) (err error) {
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	stop := context.AfterFunc(ctx, func() { c.conn.Close() })
+	defer func() {
+		if !stop() {
+			c.conn.Close()
+			err = ctx.Err()
+		}
+	}()
+	err = c.checkin(label)
 	if err != nil && ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -108,17 +124,6 @@ func (c *PlistConn) checkin(label string) error {
 		return E.New("RSDCheckin: service did not start: ", fmt.Sprint(message))
 	}
 	return nil
-}
-
-func (c *PlistConn) applyContext(ctx context.Context) func() {
-	stopAfter := context.AfterFunc(ctx, func() {
-		c.conn.SetDeadline(time.Unix(1, 0))
-	})
-	return func() {
-		if stopAfter() || ctx.Err() == nil {
-			c.conn.SetDeadline(time.Time{})
-		}
-	}
 }
 
 func (c *PlistConn) Write(data []byte) (int, error) {

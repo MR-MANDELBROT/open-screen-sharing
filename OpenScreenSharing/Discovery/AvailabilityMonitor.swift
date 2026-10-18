@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import Network
+import dnssd
 
 nonisolated enum ComputerAvailability: Hashable, Sendable {
     case available
@@ -20,6 +21,7 @@ final class AvailabilityMonitor: ObservableObject {
     private var pingedServers: Set<String>
     private var nearbyChanges: AnyCancellable?
     private static let pingedServersKey = "availabilityPingedServers"
+    private static let refreshInterval: TimeInterval = 1
 
     init(nearby: NearbyBrowser) {
         self.nearby = nearby
@@ -28,7 +30,10 @@ final class AvailabilityMonitor: ObservableObject {
     }
 
     func availability(of address: ComputerAddress) -> ComputerAvailability? {
-        servers[address].flatMap { nearby.computer(matching: address, remoteProtocol: $0) } != nil ? .available : availability[address]
+        if servers[address] == .vnc, nearby.hasCurrentService(matching: address, remoteProtocol: .vnc) {
+            return .available
+        }
+        return availability[address]
     }
 
     func start() {
@@ -44,6 +49,7 @@ final class AvailabilityMonitor: ObservableObject {
         guard activeClients == 0 else { return }
         probes.values.forEach { $0.cancel() }
         probes.removeAll()
+        availability.removeAll()
     }
 
     func update(servers: [ComputerAddress: RemoteProtocol]) {
@@ -64,30 +70,26 @@ final class AvailabilityMonitor: ObservableObject {
     private func probe(_ address: ComputerAddress) {
         probes[address]?.cancel()
         probes[address] = Task {
-            try? await Task.sleep(seconds: 1)
             while !Task.isCancelled {
                 let result = await check(address)
                 guard !Task.isCancelled else { return }
                 if availability[address] != result {
                     availability[address] = result
                 }
-                try? await Task.sleep(seconds: 1)
+                try? await Task.sleep(seconds: Self.refreshInterval)
             }
         }
     }
 
-    private func check(_ address: ComputerAddress) async -> ComputerAvailability {
+    private func check(_ address: ComputerAddress) async -> ComputerAvailability? {
         if servers[address] == .rdp {
             return await AvailabilityProbe.check(address, remoteProtocol: .rdp) == .nothing ? .unavailable : .available
         }
-        if nearby.computer(matching: address, remoteProtocol: .vnc) != nil {
+        if nearby.hasCurrentService(matching: address, remoteProtocol: .vnc) {
             return .available
         }
-        if address.isLocal, nearby.state == .browsing, nearby.host(matching: address) == nil {
-            return .unavailable
-        }
         if pingedServers.contains(address.serverKey) {
-            return await PingProbe.check(address.host) ? .available : .unavailable
+            return await PingProbe.check(address.host)
         }
         switch await AvailabilityProbe.check(address, remoteProtocol: .vnc) {
         case .mac:
@@ -107,12 +109,6 @@ final class AvailabilityMonitor: ObservableObject {
 }
 
 extension ComputerAddress {
-    fileprivate var isLocal: Bool {
-        if bonjourServiceName != nil { return true }
-        let lowered = host.lowercased()
-        return lowered.hasSuffix(".local") || lowered.hasSuffix(".local.")
-    }
-
     fileprivate var serverKey: String {
         "\(host.lowercased()):\(port)"
     }
@@ -128,7 +124,6 @@ nonisolated enum AvailabilityProbe {
     }
 
     private static let queue = DispatchQueue(label: "io.nekohasekai.screensharing.availability", qos: .utility)
-    private static let timeout: TimeInterval = 3
 
     static func check(_ address: ComputerAddress, remoteProtocol: RemoteProtocol) async -> Answer {
         let attempt = Attempt(address: address, remoteProtocol: remoteProtocol)
@@ -137,7 +132,7 @@ nonisolated enum AvailabilityProbe {
                 attempt.start(continuation)
             }
         } onCancel: {
-            attempt.finish(.nothing)
+            attempt.cancel()
         }
     }
 
@@ -147,131 +142,287 @@ nonisolated enum AvailabilityProbe {
     }
 
     private final class Attempt: @unchecked Sendable {
-        private let lock = NSLock()
         private let connection: NWConnection
         private let remoteProtocol: RemoteProtocol
         private var continuation: CheckedContinuation<Answer, Never>?
+        private var finished = false
 
         init(address: ComputerAddress, remoteProtocol: RemoteProtocol) {
             self.remoteProtocol = remoteProtocol
-            let tcp = NWProtocolTCP.Options()
-            tcp.connectionTimeout = Int(AvailabilityProbe.timeout)
             connection = NWConnection(
                 host: NWEndpoint.Host(address.host),
                 port: NWEndpoint.Port(integerLiteral: UInt16(clamping: address.port)),
-                using: NWParameters(tls: nil, tcp: tcp)
+                using: .tcp
             )
         }
 
         func start(_ continuation: CheckedContinuation<Answer, Never>) {
-            lock.withLock { self.continuation = continuation }
-            connection.stateUpdateHandler = { [self] state in
-                switch state {
-                case .ready where remoteProtocol == .rdp:
-                    finish(.otherServer)
-                case .ready:
-                    connection.receive(minimumIncompleteLength: 12, maximumLength: 12) { [self] data, _, _, _ in
-                        finish(AvailabilityProbe.answer(for: data))
-                    }
-                case .waiting, .failed, .cancelled:
-                    finish(.nothing)
-                default:
-                    break
+            AvailabilityProbe.queue.async { [self] in
+                guard !finished else {
+                    continuation.resume(returning: .nothing)
+                    return
                 }
-            }
-            connection.start(queue: AvailabilityProbe.queue)
-            AvailabilityProbe.queue.asyncAfter(deadline: .now() + AvailabilityProbe.timeout) { [self] in
-                finish(.nothing)
+                self.continuation = continuation
+                connection.stateUpdateHandler = { [self] state in
+                    switch state {
+                    case .ready where remoteProtocol == .rdp:
+                        finish(.otherServer)
+                    case .ready:
+                        connection.receive(minimumIncompleteLength: 12, maximumLength: 12) { [self] data, _, _, _ in
+                            finish(AvailabilityProbe.answer(for: data))
+                        }
+                    case .waiting, .failed, .cancelled:
+                        finish(.nothing)
+                    default:
+                        break
+                    }
+                }
+                connection.start(queue: AvailabilityProbe.queue)
             }
         }
 
-        func finish(_ answer: Answer) {
-            let continuation = lock.withLock {
-                defer { self.continuation = nil }
-                return self.continuation
-            }
-            guard let continuation else { return }
+        func cancel() {
+            AvailabilityProbe.queue.async { [self] in finish(.nothing) }
+        }
+
+        private func finish(_ answer: Answer) {
+            guard !finished else { return }
+            finished = true
+            connection.stateUpdateHandler = nil
             connection.cancel()
-            continuation.resume(returning: answer)
+            let continuation = continuation
+            self.continuation = nil
+            continuation?.resume(returning: answer)
         }
     }
 }
 
 nonisolated enum PingProbe {
-    private static let timeout: TimeInterval = 3
+    private static let queue = DispatchQueue(label: "io.nekohasekai.screensharing.ping", qos: .utility)
+    private static let retryInterval: TimeInterval = 1
     private static let identifier = UInt16.random(in: 1...UInt16.max)
     private static let sequence = LockedState(initialState: UInt16(0))
 
-    static func check(_ host: String) async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(returning: ping(host))
+    static func check(_ host: String) async -> ComputerAvailability? {
+        let attempt = Attempt(host: host)
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                attempt.start(continuation)
             }
+        } onCancel: {
+            attempt.cancel()
         }
     }
 
-    private static func ping(_ host: String) -> Bool {
-        var hints = addrinfo()
-        hints.ai_socktype = SOCK_DGRAM
-        var list: UnsafeMutablePointer<addrinfo>?
-        guard getaddrinfo(host, nil, &hints, &list) == 0, let list else { return false }
-        defer { freeaddrinfo(list) }
-        var entry: UnsafeMutablePointer<addrinfo>? = list
-        while let current = entry {
-            if current.pointee.ai_family == AF_INET || current.pointee.ai_family == AF_INET6, ping(current.pointee) {
-                return true
+    private final class Attempt: @unchecked Sendable {
+        private struct Socket {
+            let descriptor: Int32
+            let reader: DispatchSourceRead
+            let address: Data
+            let request: [UInt8]
+            let sequence: UInt16
+            let isIPv6: Bool
+        }
+
+        private let host: String
+        private var continuation: CheckedContinuation<ComputerAvailability?, Never>?
+        private var finished = false
+        private var reference: DNSServiceRef?
+        private var sockets: [Data: Socket] = [:]
+        private var unansweredFamilies: Set<Int32> = []
+        private var moreComing = false
+        private var unreachable = false
+        private var inconclusive = false
+        private var retry: DispatchSourceTimer?
+
+        init(host: String) {
+            self.host = host
+        }
+
+        func start(_ continuation: CheckedContinuation<ComputerAvailability?, Never>) {
+            PingProbe.queue.async { [self] in
+                guard !finished else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                self.continuation = continuation
+                var hints = addrinfo()
+                hints.ai_flags = AI_NUMERICHOST
+                hints.ai_socktype = SOCK_DGRAM
+                var list: UnsafeMutablePointer<addrinfo>?
+                if getaddrinfo(host, nil, &hints, &list) == 0, let list {
+                    defer { freeaddrinfo(list) }
+                    add(list.pointee.ai_addr)
+                    guard !sockets.isEmpty else {
+                        finish(nil)
+                        return
+                    }
+                } else {
+                    // With protocol 0, mDNSResponder queries both A and AAAA with SuppressUnusable and, with
+                    // ReturnIntermediates, answers a suppressed family negatively (mDNSResponder-2881.0.25,
+                    // mDNSShared/ClientRequests.c:117-121, mDNSCore/mDNS.c:5482-5494).
+                    unansweredFamilies = [AF_INET, AF_INET6]
+                    let error = DNSServiceGetAddrInfo(
+                        &reference, DNSServiceFlags(kDNSServiceFlagsReturnIntermediates), 0, 0, host,
+                        { _, flags, _, error, _, address, _, context in
+                            guard let context else { return }
+                            let attempt = Unmanaged<Attempt>.fromOpaque(context).takeUnretainedValue()
+                            guard let address, error == kDNSServiceErr_NoError || error == kDNSServiceErr_NoSuchRecord else {
+                                attempt.finish(nil)
+                                return
+                            }
+                            attempt.moreComing = flags & DNSServiceFlags(kDNSServiceFlagsMoreComing) != 0
+                            attempt.unansweredFamilies.remove(Int32(address.pointee.sa_family))
+                            if error == kDNSServiceErr_NoError {
+                                if flags & DNSServiceFlags(kDNSServiceFlagsAdd) != 0 {
+                                    attempt.add(address)
+                                } else {
+                                    let key = Data(bytes: address, count: Int(address.pointee.sa_len))
+                                    attempt.sockets.removeValue(forKey: key)?.reader.cancel()
+                                }
+                            }
+                            attempt.settle()
+                        }, Unmanaged.passUnretained(self).toOpaque())
+                    guard error == kDNSServiceErr_NoError, let reference else {
+                        finish(nil)
+                        return
+                    }
+                    guard DNSServiceSetDispatchQueue(reference, PingProbe.queue) == kDNSServiceErr_NoError else {
+                        finish(nil)
+                        return
+                    }
+                }
+                let retry = DispatchSource.makeTimerSource(queue: PingProbe.queue)
+                retry.schedule(deadline: .now() + PingProbe.retryInterval, repeating: PingProbe.retryInterval)
+                retry.setEventHandler { [self] in
+                    for key in Array(sockets.keys) {
+                        send(key)
+                    }
+                }
+                self.retry = retry
+                retry.resume()
             }
-            entry = current.pointee.ai_next
         }
-        return false
-    }
 
-    private static func ping(_ entry: addrinfo) -> Bool {
-        let isIPv6 = entry.ai_family == AF_INET6
-        let socket = Darwin.socket(entry.ai_family, SOCK_DGRAM, isIPv6 ? IPPROTO_ICMPV6 : IPPROTO_ICMP)
-        guard socket >= 0 else { return false }
-        defer { close(socket) }
-        var wait = timeval(tv_sec: Int(timeout), tv_usec: 0)
-        setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
-
-        let sequence = Self.sequence.withLock { value in
-            value &+= 1
-            return value
-        }
-        var request = [UInt8](repeating: 0, count: 64)
-        request[0] = isIPv6 ? 128 : 8
-        request[4] = UInt8(identifier >> 8)
-        request[5] = UInt8(identifier & 0xff)
-        request[6] = UInt8(sequence >> 8)
-        request[7] = UInt8(sequence & 0xff)
-        for index in 8..<request.count {
-            request[index] = UInt8(truncatingIfNeeded: index)
-        }
-        if !isIPv6 {
-            let sum = checksum(request)
-            request[2] = UInt8(sum >> 8)
-            request[3] = UInt8(sum & 0xff)
-        }
-        guard sendto(socket, request, request.count, 0, entry.ai_addr, entry.ai_addrlen) == request.count else { return false }
-
-        let deadline = Date().addingTimeInterval(timeout)
-        var reply = [UInt8](repeating: 0, count: 2048)
-        while Date() < deadline {
-            let received = recv(socket, &reply, reply.count, 0)
-            guard received > 0 else { return false }
-            var offset = 0
+        private func add(_ address: UnsafePointer<sockaddr>) {
+            guard !finished else { return }
+            let family = Int32(address.pointee.sa_family)
+            guard family == AF_INET || family == AF_INET6 else { return }
+            let key = Data(bytes: address, count: Int(address.pointee.sa_len))
+            guard sockets[key] == nil else { return }
+            let isIPv6 = family == AF_INET6
+            let descriptor = Darwin.socket(family, SOCK_DGRAM, isIPv6 ? IPPROTO_ICMPV6 : IPPROTO_ICMP)
+            guard descriptor >= 0 else {
+                inconclusive = true
+                settle()
+                return
+            }
+            guard fcntl(descriptor, F_SETFL, O_NONBLOCK) == 0 else {
+                close(descriptor)
+                inconclusive = true
+                settle()
+                return
+            }
+            let sequence = PingProbe.sequence.withLock { value in
+                value &+= 1
+                return value
+            }
+            var request = [UInt8](repeating: 0, count: 64)
+            request[0] = isIPv6 ? 128 : 8
+            request[4] = UInt8(PingProbe.identifier >> 8)
+            request[5] = UInt8(PingProbe.identifier & 0xff)
+            request[6] = UInt8(sequence >> 8)
+            request[7] = UInt8(sequence & 0xff)
+            for index in 8..<request.count {
+                request[index] = UInt8(truncatingIfNeeded: index)
+            }
             if !isIPv6 {
-                guard received >= 20 else { continue }
-                offset = Int(reply[0] & 0x0f) * 4
+                let sum = PingProbe.checksum(request)
+                request[2] = UInt8(sum >> 8)
+                request[3] = UInt8(sum & 0xff)
             }
-            guard received >= offset + 8, reply[offset] == (isIPv6 ? 129 : 0) else { continue }
-            let replyIdentifier = UInt16(reply[offset + 4]) << 8 | UInt16(reply[offset + 5])
-            let replySequence = UInt16(reply[offset + 6]) << 8 | UInt16(reply[offset + 7])
-            if replyIdentifier == identifier, replySequence == sequence {
-                return true
+            let reader = DispatchSource.makeReadSource(fileDescriptor: descriptor, queue: PingProbe.queue)
+            reader.setCancelHandler { close(descriptor) }
+            reader.setEventHandler { [self] in read(key) }
+            sockets[key] = Socket(
+                descriptor: descriptor, reader: reader, address: key, request: request, sequence: sequence, isIPv6: isIPv6)
+            reader.resume()
+            send(key)
+        }
+
+        private func send(_ key: Data) {
+            guard let socket = sockets[key] else { return }
+            let sent = socket.address.withUnsafeBytes { address in
+                sendto(socket.descriptor, socket.request, socket.request.count, 0,
+                    address.baseAddress!.assumingMemoryBound(to: sockaddr.self), socklen_t(address.count))
+            }
+            guard sent < 0 else { return }
+            switch errno {
+            case EAGAIN, EWOULDBLOCK, EINTR:
+                return
+            case EHOSTDOWN, EHOSTUNREACH, ENETUNREACH, ENETDOWN:
+                unreachable = true
+            default:
+                inconclusive = true
+            }
+            sockets.removeValue(forKey: key)?.reader.cancel()
+            settle()
+        }
+
+        private func settle() {
+            guard sockets.isEmpty, !moreComing, unreachable || unansweredFamilies.isEmpty else { return }
+            finish(inconclusive ? nil : .unavailable)
+        }
+
+        private func read(_ key: Data) {
+            guard let socket = sockets[key], !finished else { return }
+            var reply = [UInt8](repeating: 0, count: 2048)
+            while true {
+                let received = recv(socket.descriptor, &reply, reply.count, 0)
+                guard received > 0 else {
+                    if received < 0, errno == EINTR { continue }
+                    if received == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) {
+                        inconclusive = true
+                        sockets.removeValue(forKey: key)?.reader.cancel()
+                        settle()
+                    }
+                    return
+                }
+                var offset = 0
+                if !socket.isIPv6 {
+                    guard received >= 20 else { continue }
+                    offset = Int(reply[0] & 0x0f) * 4
+                    guard offset >= 20 else { continue }
+                }
+                guard received >= offset + 8, reply[offset] == (socket.isIPv6 ? 129 : 0) else { continue }
+                let identifier = UInt16(reply[offset + 4]) << 8 | UInt16(reply[offset + 5])
+                let sequence = UInt16(reply[offset + 6]) << 8 | UInt16(reply[offset + 7])
+                if identifier == PingProbe.identifier, sequence == socket.sequence {
+                    finish(.available)
+                    return
+                }
             }
         }
-        return false
+
+        func cancel() {
+            PingProbe.queue.async { [self] in finish(nil) }
+        }
+
+        private func finish(_ result: ComputerAvailability?) {
+            guard !finished else { return }
+            finished = true
+            if let reference {
+                DNSServiceRefDeallocate(reference)
+            }
+            reference = nil
+            retry?.cancel()
+            retry = nil
+            sockets.values.forEach { $0.reader.cancel() }
+            sockets.removeAll()
+            let continuation = continuation
+            self.continuation = nil
+            continuation?.resume(returning: result)
+        }
     }
 
     private static func checksum(_ bytes: [UInt8]) -> UInt16 {

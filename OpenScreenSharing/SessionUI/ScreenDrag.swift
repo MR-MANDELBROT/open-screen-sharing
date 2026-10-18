@@ -11,6 +11,7 @@ final class ScreenDrag: NSObject, UIDragInteractionDelegate {
     private weak var attemptedTouch: UITouch?
     private(set) weak var takenTouch: UITouch?
     private weak var session: UIDragSession?
+    private var liftPreviews: [ObjectIdentifier: [UIView]] = [:]
     private var offer: RemoteDragOffer?
     private var touchType = UITouch.TouchType.direct
     private var relative = false
@@ -47,6 +48,14 @@ final class ScreenDrag: NSObject, UIDragInteractionDelegate {
         // -[UIDragInteraction _beginLiftForItems:session:animated:] 0x1853d3de0,
         // -[UIView(UIDragging) _beginDragWithTouches:orInitialCentroid:accessibilityEndpoint:] 0x1853fdc10..0x1853fdc7c,
         // -[UISheetPresentationController sheetInteraction:didChangeOffset:] 0x184f93f40..0x184f940a8).
+        // That lift is not animated, but UIKit still passes its animator to
+        // dragInteraction:willAnimateLiftWithAnimator:session: and finishes it, running its completions, when the
+        // session takes over the drag image (UIKitCore 9127.0.84, iPadOS 24A446,
+        // UUID AAC84A00-13AB-3B06-B622-A4E676971EB8,
+        // -[UIDragInteraction _beginLiftForItems:session:animated:] 0x1854dd8e0..0x1854dd928,
+        // -[UIDragInteraction _sessionHandedOffDragImage:] 0x1854de53c..0x1854de554,
+        // -[_UIDragSourceLiftEffect interaction:didChangeWithContext:] 0x1854e75f8..0x1854e760c,
+        // 0x1854e76d8..0x1854e771c).
         let selector = NSSelectorFromString("_immediatelyBeginDragWithTouch:completion:")
         guard interaction.responds(to: selector) else { return }
         typealias Begin = @convention(c) (AnyObject, Selector, UITouch, @convention(block) (Bool) -> Void) -> Void
@@ -191,11 +200,25 @@ final class ScreenDrag: NSObject, UIDragInteractionDelegate {
         let preview = previewView(index: item.localObject as? Int)
         preview.center = last?.location ?? .zero
         view.addSubview(preview)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { preview.removeFromSuperview() }
+        liftPreviews[ObjectIdentifier(session), default: []].append(preview)
         return UITargetedDragPreview(view: preview, parameters: previewParameters)
     }
 
+    func dragInteraction(_ interaction: UIDragInteraction, willAnimateLiftWith animator: UIDragAnimating, session: UIDragSession) {
+        let identifier = ObjectIdentifier(session)
+        guard let previews = liftPreviews[identifier] else { return }
+        animator.addCompletion { [weak self] _ in
+            previews.forEach { $0.removeFromSuperview() }
+            guard let self else { return }
+            self.liftPreviews[identifier]?.removeAll { preview in previews.contains { $0 === preview } }
+            if self.liftPreviews[identifier]?.isEmpty == true {
+                self.liftPreviews[identifier] = nil
+            }
+        }
+    }
+
     func dragInteraction(_ interaction: UIDragInteraction, session: UIDragSession, didEndWith operation: UIDropOperation) {
+        liftPreviews.removeValue(forKey: ObjectIdentifier(session))?.forEach { $0.removeFromSuperview() }
         if !droppedOnMac { controller.cancelRemoteDrag() }
         if droppedOnMac || operation == .cancel || operation == .forbidden, let folder = session.localContext as? URL {
             try? FileManager.default.removeItem(at: folder)

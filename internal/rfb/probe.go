@@ -12,7 +12,6 @@ import (
 
 func dial(ctx context.Context, options Options) (net.Conn, error) {
 	dialer := net.Dialer{
-		Timeout: options.DialTimeout,
 		KeepAliveConfig: net.KeepAliveConfig{
 			Enable:   true,
 			Idle:     5 * time.Second,
@@ -57,9 +56,6 @@ func exchange(ctx context.Context, options Options, steps func(h *handshake) err
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	if options.DialTimeout == 0 {
-		options.DialTimeout = 15 * time.Second
-	}
 	conn, err := dial(ctx, options)
 	if err != nil {
 		return ServerInfo{}, err
@@ -68,7 +64,6 @@ func exchange(ctx context.Context, options Options, steps func(h *handshake) err
 	stop := context.AfterFunc(ctx, func() {
 		conn.Close()
 	})
-	conn.SetDeadline(time.Now().Add(options.DialTimeout))
 	h := &handshake{conn: conn, stream: newStream(conn), options: &options, logger: logger}
 	err = steps(h)
 	if !stop() {

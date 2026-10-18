@@ -37,13 +37,6 @@ final class RemotePairingBrowser {
         cancelBrowsing()
     }
 
-    func waitForPort(timeout: TimeInterval) async {
-        let deadline = ProcessInfo.processInfo.systemUptime + timeout
-        while port == nil, ProcessInfo.processInfo.systemUptime < deadline, !Task.isCancelled {
-            try? await Task.sleep(seconds: 0.1)
-        }
-    }
-
     private func browse() {
         isReady = false
         let browser = NWBrowser(for: .bonjourWithTXTRecord(type: Self.serviceType, domain: "local."), using: .tcp)

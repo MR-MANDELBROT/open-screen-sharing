@@ -6,7 +6,6 @@ import (
 	"maps"
 	"slices"
 	"sync"
-	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -19,6 +18,7 @@ var (
 
 type Conn interface {
 	SendMessage(message []byte) error
+	QueueMessage(message []byte) error
 	SetDownloading(active bool) error
 }
 
@@ -86,16 +86,8 @@ func (m *Manager) Close(err error) {
 	if len(stopped) == 0 {
 		return
 	}
-	sent := make(chan struct{})
-	go func() {
-		for _, session := range stopped {
-			m.conn.SendMessage(sessionStateMessage(commandStop, session))
-		}
-		close(sent)
-	}()
-	select {
-	case <-sent:
-	case <-time.After(time.Second):
+	for _, session := range stopped {
+		m.conn.QueueMessage(sessionStateMessage(commandStop, session))
 	}
 }
 

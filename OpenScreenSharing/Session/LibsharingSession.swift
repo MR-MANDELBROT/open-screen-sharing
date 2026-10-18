@@ -83,6 +83,10 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         session?.disconnect()
     }
 
+    func abort() {
+        session?.abort()
+    }
+
     func answerSessionChoice(_ prompt: SessionChoicePrompt, choice: SessionChoice) {
         let answer =
             switch choice {
@@ -312,8 +316,9 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         try? session?.cancelDrag(id)
     }
 
-    func cancelRemoteDrag() {
-        try? session?.cancelRemoteDrag()
+    func cancelRemoteDrag() throws {
+        guard let session else { throw MessageError("not connected") }
+        try session.cancelRemoteDrag()
     }
 
     func cancelTransfer(_ id: Int64) {

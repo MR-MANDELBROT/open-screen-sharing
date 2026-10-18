@@ -53,6 +53,7 @@ const (
 )
 
 type Client struct {
+	ctx    context.Context
 	device *coredevice.Device
 	logger *slog.Logger
 
@@ -65,8 +66,8 @@ type Client struct {
 	buttons   map[Button]struct{}
 }
 
-func New(device *coredevice.Device, logger *slog.Logger) *Client {
-	return &Client{device: device, logger: logger}
+func New(ctx context.Context, device *coredevice.Device, logger *slog.Logger) *Client {
+	return &Client{ctx: ctx, device: device, logger: logger}
 }
 
 func (c *Client) SetTouches(ctx context.Context, touches []Touch, edge Edge) error {
@@ -125,14 +126,13 @@ func (c *Client) sendIndigo(ctx context.Context, messageType, feature string, pa
 		}
 		c.indigo = conn
 	}
-	err := c.indigo.Send(map[string]any{
+	err := c.indigo.SendContext(ctx, map[string]any{
 		"messageType":       messageType,
 		"featureIdentifier": feature,
 		"payload":           payload,
 	}, false)
 	if err != nil {
-		c.indigo.Close()
-		c.indigo = nil
+		c.closeIndigo()
 		return E.Cause(err, "hid: send ", messageType)
 	}
 	return nil
@@ -142,20 +142,29 @@ func (c *Client) ReleaseAll(ctx context.Context) error {
 	return E.Errors(c.LiftTouches(ctx, nil), c.releaseKeys(ctx), c.releaseButtons(ctx))
 }
 
-func (c *Client) Close() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if err := c.ReleaseAll(ctx); err != nil {
-		c.logger.Debug("release input on close", "error", err)
-	}
-	if err := c.removeKeyboard(); err != nil {
-		c.logger.Debug("remove keyboard on close", "error", err)
+func (c *Client) Close() error {
+	var err error
+	if c.ctx.Err() == nil {
+		err = E.Errors(c.ReleaseAll(c.ctx), c.removeKeyboard(c.ctx))
 	}
 	c.closeUniversal()
+	c.closeIndigo()
+	return err
+}
+
+// IndigoHIDSession ends its touchscreen contact then cancels its service pool
+// on peer teardown. Raw button events do not record held state there; their
+// explicit Up must be sent while the owning connection is alive (DDI 27B5028f,
+// dtuhidd 0x10001b09c, 0x100017bfc, 0x100027914, 0x10003023c; button events
+// 0x100018714, 0x1000281c0).
+func (c *Client) closeIndigo() {
 	if c.indigo != nil {
 		c.indigo.Close()
 		c.indigo = nil
 	}
+	c.touches = nil
+	c.edge = EdgeNone
+	c.buttons = nil
 }
 
 func (c *Client) sendReport(ctx context.Context, serviceID uint64, report []byte) error {
@@ -163,7 +172,7 @@ func (c *Client) sendReport(ctx context.Context, serviceID uint64, report []byte
 	if err != nil {
 		return err
 	}
-	err = conn.Send(universalRequest(map[string]any{
+	err = conn.SendContext(ctx, universalRequest(map[string]any{
 		"send": map[string]any{"_0": report, "_1": serviceID},
 	}), false)
 	if err != nil {
@@ -184,6 +193,9 @@ func universalRequest(payload map[string]any) map[string]any {
 }
 
 func (c *Client) universalConn(ctx context.Context) (*xpc.Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if c.universal == nil {
 		conn, err := c.device.DialXPC(ctx, universalService)
 		if err != nil {

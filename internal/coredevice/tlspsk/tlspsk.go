@@ -135,14 +135,16 @@ type recordState struct {
 }
 
 func Client(ctx context.Context, conn net.Conn, key []byte) (*Conn, error) {
+	if err := ctx.Err(); err != nil {
+		conn.Close()
+		return nil, err
+	}
 	c := &Conn{
 		conn:       conn,
 		reader:     bufio.NewReaderSize(conn, readerSize),
 		readBuffer: make([]byte, maxCiphertext),
 	}
-	stop := context.AfterFunc(ctx, func() {
-		conn.SetDeadline(time.Unix(1, 0))
-	})
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	err := c.runHandshake(key)
 	if !stop() || ctx.Err() != nil {
 		if err == nil {
@@ -155,7 +157,6 @@ func Client(ctx context.Context, conn net.Conn, key []byte) (*Conn, error) {
 		conn.Close()
 		return nil, E.Cause(err, "tlspsk")
 	}
-	conn.SetDeadline(time.Time{})
 	c.handshake = bytes.Buffer{}
 	c.transcript = bytes.Buffer{}
 	return c, nil

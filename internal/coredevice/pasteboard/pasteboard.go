@@ -9,15 +9,12 @@ package pasteboard
 
 import (
 	"context"
-	"crypto/sha1"
 	"log/slog"
-	"maps"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -32,9 +29,6 @@ const (
 	service = "com.apple.coredevice.pasteboardservice"
 
 	general = "general"
-
-	defaultRequestTimeout = 10 * time.Second
-	writeReplyTimeout     = 90 * time.Second
 )
 
 const (
@@ -89,31 +83,29 @@ var (
 )
 
 type Client struct {
+	ctx    context.Context
 	device *coredevice.Device
 	logger *slog.Logger
 	nonce  string
-	writes int64
 
-	access        sync.Mutex
-	own           []change
-	sent          map[[sha1.Size]byte]time.Time
-	pendingWrites int
-	writesDone    chan struct{}
+	access sync.Mutex
+	writes int64
 }
 
-const (
-	ownChangesKept = 16
-	echoWindow     = 3 * time.Second
-)
-
-func New(device *coredevice.Device, logger *slog.Logger) *Client {
-	return &Client{device: device, logger: logger, nonce: uuid.NewString(), sent: make(map[[sha1.Size]byte]time.Time)}
+func New(ctx context.Context, device *coredevice.Device, logger *slog.Logger) *Client {
+	return &Client{
+		ctx:    ctx,
+		device: device,
+		logger: logger,
+		nonce:  uuid.NewString(),
+	}
 }
 
 type Snapshot struct {
 	Items []Item
 
 	change change
+	source source
 }
 
 type Item struct {
@@ -121,17 +113,36 @@ type Item struct {
 	Data  map[string][]byte
 }
 
+// CoreDeviceUtilities reads UIPasteboard.changeCount into snapshot metadata
+// and returns the post-write changeCount after setItemProviders (DDI 27B5028f,
+// /Volumes/Solidigm/RE/DDI-27B5028f/CoreDeviceUtilities/disass-full.s,
+// 0x2c6fec..0x2c7064 and 0x2c8348..0x2c8384).
 type change struct {
 	nonce any
 	count any
 }
 
 func (c change) valid() bool {
-	return c.count != nil
+	return c.nonce != nil && c.count != nil
 }
 
 func (c change) equal(other change) bool {
 	return c.valid() && reflect.DeepEqual(c, other)
+}
+
+// CoreDeviceUtilities stores a SET's sourceMetadata in a hidden pasteboard
+// type and returns it as a PULL snapshot's sourceMetadata, or the current
+// metadata when the hidden type is absent. Its own cycle check matches the
+// nonce and pasteboard name and accepts any changeCount up to the caller's
+// (DDI 27B5028f, CoreDeviceUtilities UUID 91F11466-9587-3F02-9EDA-344FDCA4A0A3,
+// 0x2c7d00..0x2c7d7c, 0x2c6a9c..0x2c6ac0, 0x2c7008..0x2c702c,
+// PasteboardSnapshot.encode(to:) 0x2dc84c..0x2dc894,
+// PasteboardSnapshotMetadata.isCycle(nonce:pasteboardName:changeCount:)
+// 0x2d95b4..0x2d9654).
+type source struct {
+	nonce       string
+	name        string
+	changeCount int64
 }
 
 func (s Snapshot) Text() (string, bool) {
@@ -218,13 +229,13 @@ func (c *Client) Read(ctx context.Context) (Snapshot, error) {
 }
 
 func (c *Client) pull(ctx context.Context, policy map[string]any) (Snapshot, error) {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
-		defer cancel()
-	}
+	ctx, cancel := c.operationContext(ctx)
+	defer cancel()
 	conn, err := c.device.DialXPC(ctx, service)
 	if err != nil {
+		if ctx.Err() != nil {
+			err = context.Cause(ctx)
+		}
 		return Snapshot{}, E.Cause(err, "pasteboard")
 	}
 	defer conn.Close()
@@ -234,6 +245,9 @@ func (c *Client) pull(ctx context.Context, policy map[string]any) (Snapshot, err
 		"dataPolicy":     policy,
 	})
 	if err != nil {
+		if ctx.Err() != nil {
+			err = context.Cause(ctx)
+		}
 		return Snapshot{}, E.Cause(err, "pasteboard: PULL")
 	}
 	return snapshotReply(reply, "PULL_REPLY")
@@ -244,23 +258,27 @@ func (c *Client) WriteText(ctx context.Context, text string, written func(error)
 	for _, textType := range textTypes {
 		data[textType] = map[string]any{"data": []byte(text)}
 	}
-	return c.write(ctx, map[string]any{"types": textTypes, "data": data}, []byte(text), written)
+	return c.write(ctx, map[string]any{"types": textTypes, "data": data}, written)
 }
 
 func (c *Client) WriteImage(ctx context.Context, imageType string, image []byte, written func(error)) error {
 	return c.write(ctx, map[string]any{
 		"types": []string{imageType},
 		"data":  map[string]any{imageType: map[string]any{"data": image}},
-	}, image, written)
+	}, written)
 }
 
-func (c *Client) write(ctx context.Context, item map[string]any, payload []byte, written func(error)) error {
-	fingerprint := sha1.Sum(payload)
-	c.noteSent(fingerprint)
+func (c *Client) write(ctx context.Context, item map[string]any, written func(error)) error {
+	ctx, cancel := c.operationContext(ctx)
+	defer cancel()
 	conn, err := c.device.DialXPC(ctx, service)
 	if err != nil {
+		if ctx.Err() != nil {
+			err = context.Cause(ctx)
+		}
 		return E.Cause(err, "pasteboard")
 	}
+	stopOwner := context.AfterFunc(c.ctx, func() { conn.Close() })
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	err = conn.Send(map[string]any{
 		"command":        "SET",
@@ -269,20 +287,27 @@ func (c *Client) write(ctx context.Context, item map[string]any, payload []byte,
 		"sourceMetadata": c.sourceMetadata(),
 	}, true)
 	if !stop() {
-		err = ctx.Err()
+		err = context.Cause(ctx)
 	}
 	if err != nil {
+		stopOwner()
 		conn.Close()
 		return E.Cause(err, "pasteboard: send SET")
 	}
-	c.access.Lock()
-	if c.pendingWrites == 0 {
-		c.writesDone = make(chan struct{})
-	}
-	c.pendingWrites++
-	c.access.Unlock()
-	go c.finishWrite(conn, fingerprint, written)
+	go c.finishWrite(conn, stopOwner, written)
 	return nil
+}
+
+func (c *Client) operationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	operation, cancel := context.WithCancelCause(ctx)
+	stop := context.AfterFunc(c.ctx, func() { cancel(context.Cause(c.ctx)) })
+	if c.ctx.Err() != nil {
+		cancel(context.Cause(c.ctx))
+	}
+	return operation, func() {
+		stop()
+		cancel(context.Canceled)
+	}
 }
 
 // The DDI's CoreDeviceUtilities loads the snapshot sourceMetadata optional
@@ -291,84 +316,31 @@ func (c *Client) write(ctx context.Context, item map[string]any, payload []byte,
 // DDI 27A9266e, UUID 93303947-1F03-3EF7-8EB1-2AF348389899, sub_2c1744
 // 0x2c17e4..0x2c1800, 0x2c24e8..0x2c24fc).
 func (c *Client) sourceMetadata() map[string]any {
+	c.access.Lock()
+	defer c.access.Unlock()
 	c.writes++
 	return map[string]any{"nonce": c.nonce, "pasteboardName": general, "changeCount": c.writes}
 }
 
-func (c *Client) finishWrite(conn *xpc.Conn, fingerprint [sha1.Size]byte, written func(error)) {
-	timer := time.AfterFunc(writeReplyTimeout, func() { conn.Close() })
+func (c *Client) finishWrite(conn *xpc.Conn, stopOwner func() bool, written func(error)) {
+	defer stopOwner()
 	reply, err := conn.Receive()
-	expired := !timer.Stop()
 	conn.Close()
-	var snapshot Snapshot
 	switch {
-	case err != nil && expired:
-		err = E.New("pasteboard: no SET_REPLY in ", writeReplyTimeout)
+	case err != nil && c.ctx.Err() != nil:
+		err = context.Cause(c.ctx)
 	case err != nil:
 		err = E.Cause(err, "pasteboard: receive SET_REPLY")
 	default:
-		snapshot, err = snapshotReply(reply, "SET_REPLY")
+		_, err = snapshotReply(reply, "SET_REPLY")
 	}
-	c.access.Lock()
-	if err == nil {
-		if snapshot.change.valid() {
-			c.own = append(c.own, snapshot.change)
-			if len(c.own) > ownChangesKept {
-				c.own = slices.Delete(c.own, 0, len(c.own)-ownChangesKept)
-			}
-		}
-		c.sent[fingerprint] = time.Now()
-	}
-	c.pendingWrites--
-	if c.pendingWrites == 0 {
-		close(c.writesDone)
-	}
-	c.access.Unlock()
 	written(err)
-}
-
-func (c *Client) noteSent(fingerprint [sha1.Size]byte) {
-	c.access.Lock()
-	defer c.access.Unlock()
-	now := time.Now()
-	maps.DeleteFunc(c.sent, func(_ [sha1.Size]byte, at time.Time) bool {
-		return now.Sub(at) >= echoWindow
-	})
-	c.sent[fingerprint] = now
-}
-
-func (c *Client) waitWrites(ctx context.Context, limit time.Duration) {
-	c.access.Lock()
-	pending, done := c.pendingWrites, c.writesDone
-	c.access.Unlock()
-	if pending == 0 {
-		return
-	}
-	timer := time.NewTimer(limit)
-	defer timer.Stop()
-	select {
-	case <-done:
-	case <-timer.C:
-	case <-ctx.Done():
-	}
 }
 
 func (c *Client) isOwn(snapshot Snapshot) bool {
 	c.access.Lock()
 	defer c.access.Unlock()
-	if slices.ContainsFunc(c.own, snapshot.change.equal) {
-		return true
-	}
-	var payload []byte
-	if _, image, ok := snapshot.Image(); ok {
-		payload = image
-	} else if text, ok := snapshot.Text(); ok {
-		payload = []byte(text)
-	} else {
-		return false
-	}
-	at, ok := c.sent[sha1.Sum(payload)]
-	return ok && time.Since(at) < echoWindow
+	return snapshot.source.nonce == c.nonce && snapshot.source.name == general && snapshot.source.changeCount <= c.writes
 }
 
 // dtpasteboardd answers a request it refuses or fails with a dictionary that
@@ -393,7 +365,11 @@ func snapshotReply(reply map[string]any, replyCommand string) (Snapshot, error) 
 	if !ok {
 		return Snapshot{}, E.New("pasteboard: ", replyCommand, " without a pasteboard")
 	}
-	return parseSnapshot(pasteboard), nil
+	snapshot := parseSnapshot(pasteboard)
+	if !snapshot.change.valid() {
+		return Snapshot{}, E.New("pasteboard: ", replyCommand, " without a change identity")
+	}
+	return snapshot, nil
 }
 
 func parseSnapshot(pasteboard map[string]any) Snapshot {
@@ -420,5 +396,20 @@ func parseSnapshot(pasteboard map[string]any) Snapshot {
 			return item
 		}),
 		change: change{nonce: metadata["nonce"], count: metadata["changeCount"]},
+		source: parseSource(pasteboard["sourceMetadata"]),
 	}
+}
+
+func parseSource(value any) source {
+	metadata, _ := value.(map[string]any)
+	nonce, _ := metadata["nonce"].(string)
+	name, _ := metadata["pasteboardName"].(string)
+	var changeCount int64
+	switch count := metadata["changeCount"].(type) {
+	case int64:
+		changeCount = count
+	case uint64:
+		changeCount = int64(count)
+	}
+	return source{nonce: nonce, name: name, changeCount: changeCount}
 }

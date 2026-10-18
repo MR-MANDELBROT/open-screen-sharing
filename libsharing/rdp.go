@@ -8,7 +8,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
 	"github.com/nekohasekai/open-screen-sharing/internal/rdp"
@@ -44,15 +43,12 @@ func rdpLayout(width, height int, density float64) (int, int, int) {
 	return int(math.Round(float64(width) * density)), int(math.Round(float64(height) * density)), int(math.Round(density * 100))
 }
 
-func checkRDPLogin(options *SessionOptions, timeoutSeconds float64) (string, error) {
+func checkRDPLogin(ctx context.Context, options *SessionOptions) (string, error) {
 	var fingerprint string
 	rdpOptions, err := rdpOptions(options, func(seen string) { fingerprint = seen })
 	if err != nil {
 		return "", err
 	}
-	rdpOptions.DialTimeout = time.Duration(timeoutSeconds * float64(time.Second))
-	ctx, cancel := context.WithTimeout(context.Background(), rdpOptions.DialTimeout)
-	defer cancel()
 	err = rdp.CheckLogin(ctx, rdpOptions)
 	return fingerprint, err
 }

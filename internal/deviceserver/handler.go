@@ -22,6 +22,7 @@ func (h *viewerHandler) Screen() rfb.ServerScreen {
 
 func (h *viewerHandler) SessionStarted(session *rfb.ServerSession) {
 	h.server().notify(func(observer Observer) { observer.ViewerConnected(session) })
+	h.server().input.viewerConnected(session)
 }
 
 func (h *viewerHandler) SessionEnded(session *rfb.ServerSession, err error) {
@@ -41,6 +42,8 @@ func (h *viewerHandler) HandleEvent(session *rfb.ServerSession, event rfb.Viewer
 	case rfb.ViewerMode:
 		if event.Mode == rfb.ModeObserve {
 			s.input.sessionEnded(session)
+		} else {
+			s.input.sessionResumed(session)
 		}
 	case rfb.ViewerClipboard:
 		s.clip.viewerClipboard(event.Clipboard)

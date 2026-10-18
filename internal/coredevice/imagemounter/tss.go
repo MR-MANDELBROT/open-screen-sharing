@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -33,8 +32,6 @@ const (
 	tssVersion       = "libauthinstall-1155.0.5"
 	tssResponseLimit = 1 << 20
 )
-
-var tssHTTPClient = &http.Client{Timeout: time.Minute}
 
 type TSSError struct {
 	Status  int
@@ -56,7 +53,7 @@ func sendTSS(ctx context.Context, request map[string]any) (map[string]any, error
 	}
 	httpRequest.Header.Set("Content-Type", `text/xml; charset="utf-8"`)
 	httpRequest.Header.Set("Cache-Control", "no-cache")
-	response, err := tssHTTPClient.Do(httpRequest)
+	response, err := httpClient.Do(httpRequest)
 	if err != nil {
 		return nil, E.Cause(err, "imagemounter: send TSS request")
 	}

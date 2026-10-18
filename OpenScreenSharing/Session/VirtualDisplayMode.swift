@@ -11,7 +11,6 @@ nonisolated struct VirtualDisplayMode: Hashable, Sendable {
 
     static let minimumLongSide: CGFloat = 800
     static let minimumShortSide: CGFloat = 525
-    static let safeMinimumShortSide: CGFloat = 600
 
     static let minimumWindowPoints = CGSize(width: minimumLongSide * 0.75, height: minimumShortSide * 0.75)
 
@@ -27,7 +26,7 @@ nonisolated struct VirtualDisplayMode: Hashable, Sendable {
         self.density = density
     }
 
-    init?(matching area: CGSize, screenScale: CGFloat, resolutionScale: CGFloat = 1, minimumShortSide: CGFloat = VirtualDisplayMode.minimumShortSide) {
+    init?(matching area: CGSize, screenScale: CGFloat, resolutionScale: CGFloat = 1) {
         guard area.width >= 1, area.height >= 1 else { return nil }
         // ScreenSharing's -[SSSessionView setDynamicSize:] requests two pixels per point (ScreenSharing 776.27,
         // macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50, -[SSSessionView setDynamicSize:]
@@ -35,7 +34,7 @@ nonisolated struct VirtualDisplayMode: Hashable, Sendable {
         let density = screenScale >= 2 ? 2 : 1
         let points = CGSize(width: area.width * resolutionScale, height: area.height * resolutionScale)
         let grow = max(
-            1, Self.minimumLongSide / max(points.width, points.height), minimumShortSide / min(points.width, points.height))
+            1, Self.minimumLongSide / max(points.width, points.height), Self.minimumShortSide / min(points.width, points.height))
         self.init(
             width: Int((points.width * grow + 0.001).rounded(.down)),
             height: Int((points.height * grow + 0.001).rounded(.down)),
@@ -58,13 +57,6 @@ nonisolated struct VirtualDisplayMode: Hashable, Sendable {
         }
         return mode
     }
-
-    var correction: VirtualDisplayMode? {
-        let corrected = VirtualDisplayMode(
-            matching: CGSize(width: width, height: height), screenScale: CGFloat(density),
-            minimumShortSide: Self.safeMinimumShortSide)
-        return corrected == self ? nil : corrected
-    }
 }
 
 @MainActor
@@ -74,30 +66,19 @@ final class VirtualDisplayRequests {
     private var sizedByConnection = false
     private var framebufferSize: CGSize?
     private var sent: VirtualDisplayMode?
-    private var waiting: VirtualDisplayMode?
-    private var refused: Set<VirtualDisplayMode> = []
-    private var isCorrection = false
-    private var framebufferChanged = false
-    private var answerTask: Task<Void, Never>?
+    private var awaitsAnswer = false
     private(set) var isOpening = false
     var onIdle: (() -> Void)?
 
-    var isIdle: Bool { answerTask == nil && waiting == nil && !isOpening }
-
-    private static let answerTimeout: TimeInterval = 3
+    var isIdle: Bool { !awaitsAnswer && !isOpening }
 
     func reset(widthMultiple: Int = 1, sizedByConnection: Bool = false, sender: ((VirtualDisplayMode) -> Void)?) {
-        answerTask?.cancel()
-        answerTask = nil
         send = sender
         self.widthMultiple = widthMultiple
         self.sizedByConnection = sizedByConnection
         framebufferSize = nil
         sent = nil
-        waiting = nil
-        refused = []
-        isCorrection = false
-        framebufferChanged = false
+        awaitsAnswer = false
         isOpening = false
     }
 
@@ -109,110 +90,53 @@ final class VirtualDisplayRequests {
         guard isOpening else { return }
         isOpening = false
         if sizedByConnection, let sent, framebufferSize == CGSize(width: sent.pixelWidth, height: sent.pixelHeight) {
+            answered()
+        } else if !offersVirtualDisplay {
+            stopWaiting()
+        } else {
             reportIdle()
-            return
-        }
-        guard offersVirtualDisplay else {
-            sent = nil
-            return
-        }
-        if sent != nil {
-            awaitAnswer()
         }
     }
 
     func request(_ requested: VirtualDisplayMode) {
         let mode = requested.aligned(toWidthMultiple: widthMultiple)
-        if isOpening {
-            guard mode != sent, let send else { return }
-            sent = mode
-            send(mode)
-            return
-        }
-        if answerTask != nil {
-            waiting = mode == sent ? nil : mode
-            return
-        }
-        guard mode != sent, !refused.contains(mode) else { return }
-        transmit(mode, correction: false)
+        guard mode != sent, let send else { return }
+        sent = mode
+        awaitsAnswer = true
+        send(mode)
     }
 
-    func framebufferDidChange(width: Int, height: Int) {
-        framebufferSize = CGSize(width: width, height: height)
-        guard answerTask != nil, let sent else { return }
-        guard sent.pixelWidth == width, sent.pixelHeight == height else {
-            framebufferChanged = true
-            return
+    func framebufferDidChange(width: Int, height: Int, resized: Bool) {
+        let size = CGSize(width: width, height: height)
+        let previous = framebufferSize
+        if resized {
+            framebufferSize = size
         }
-        answered()
+        guard awaitsAnswer, let sent else { return }
+        if sent.pixelWidth == width && sent.pixelHeight == height || resized && previous != nil && previous != size {
+            answered()
+        }
     }
 
     func displaysDidChange(_ displays: [RemoteDisplay], framebufferWidth: Int, framebufferHeight: Int) {
-        guard answerTask != nil, let sent, sent.pixelWidth == framebufferWidth, sent.pixelHeight == framebufferHeight,
+        guard awaitsAnswer, let sent, sent.pixelWidth == framebufferWidth, sent.pixelHeight == framebufferHeight,
             displays.contains(where: { $0.isVirtual && $0.width == sent.width && $0.height == sent.height })
         else { return }
         answered()
     }
 
     func stopWaiting() {
-        guard let answerTask else { return }
-        answerTask.cancel()
-        self.answerTask = nil
-        waiting = nil
+        awaitsAnswer = false
+        sent = nil
         reportIdle()
     }
 
     private func answered() {
-        answerTask?.cancel()
-        answerTask = nil
-        sendWaiting()
+        awaitsAnswer = false
         reportIdle()
     }
 
-    private func transmit(_ mode: VirtualDisplayMode, correction: Bool) {
-        guard let send else { return }
-        sent = mode
-        waiting = nil
-        isCorrection = correction
-        framebufferChanged = false
-        send(mode)
-        awaitAnswer()
-    }
-
-    private func awaitAnswer() {
-        answerTask = Task { [weak self] in
-            try? await Task.sleep(seconds: Self.answerTimeout)
-            guard !Task.isCancelled else { return }
-            self?.timedOut()
-        }
-    }
-
-    private func timedOut() {
-        answerTask = nil
-        defer { reportIdle() }
-        guard let sent else { return }
-        if framebufferChanged {
-            refused.insert(sent)
-        }
-        if waiting != nil {
-            sendWaiting()
-        } else if framebufferChanged, !isCorrection, let correction = sent.correction?.aligned(toWidthMultiple: widthMultiple),
-            correction != sent, !refused.contains(correction)
-        {
-            transmit(correction, correction: true)
-        }
-    }
-
     private func reportIdle() {
-        if isIdle {
-            onIdle?()
-        }
-    }
-
-    private func sendWaiting() {
-        guard let next = waiting else { return }
-        waiting = nil
-        guard !refused.contains(next) else { return }
-        transmit(next, correction: false)
+        if isIdle { onIdle?() }
     }
 }

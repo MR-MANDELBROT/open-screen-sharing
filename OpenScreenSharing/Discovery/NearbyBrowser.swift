@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import Network
 import dnssd
+import os
 
 struct NearbyComputer: Identifiable, Hashable {
     var id: String { "\(remoteProtocol.rawValue):\(name)" }
@@ -40,11 +41,12 @@ final class NearbyBrowser: ObservableObject {
     private var restart: Task<Void, Never>?
     private var search: Task<Void, Never>?
     private var isReady = false
-    private var hasResults = false
     private var isFixed = false
+    private var currentResults: Set<RemoteProtocol> = []
 
     /// NWBrowser can reach .ready before any results callback (observed on macOS 27.0.1 26A434).
-    private static let searchTime: TimeInterval = 2
+    private static let searchPresentationDelay: TimeInterval = 2
+    private static let restartDelay: TimeInterval = 1
 
     #if DEBUG || DEMO
     convenience init(fixed computers: [NearbyComputer]) {
@@ -53,6 +55,7 @@ final class NearbyBrowser: ObservableObject {
         state = .browsing
         hasSearched = true
         isFixed = true
+        currentResults = [.vnc, .rdp]
     }
     #endif
 
@@ -62,7 +65,7 @@ final class NearbyBrowser: ObservableObject {
         guard browser == nil else { return }
         browse()
         search = Task {
-            try? await Task.sleep(seconds: Self.searchTime)
+            try? await Task.sleep(seconds: Self.searchPresentationDelay)
             guard !Task.isCancelled else { return }
             hasSearched = true
         }
@@ -70,14 +73,16 @@ final class NearbyBrowser: ObservableObject {
 
     private func browse() {
         isReady = false
-        hasResults = false
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = true
         let browser = NWBrowser(for: .bonjourWithTXTRecord(type: "_rfb._tcp", domain: "local."), using: parameters)
-        browser.stateUpdateHandler = { [weak self] newState in
-            Task { @MainActor in self?.handle(newState) }
+        browser.stateUpdateHandler = { [weak self, weak browser] newState in
+            Task { @MainActor in
+                guard let self, let browser, self.browser === browser else { return }
+                self.handle(newState)
+            }
         }
-        browser.browseResultsChangedHandler = { [weak self] results, _ in
+        browser.browseResultsChangedHandler = { [weak self, weak browser] results, _ in
             var names: [String] = []
             var models: [String: String] = [:]
             for result in results {
@@ -89,7 +94,10 @@ final class NearbyBrowser: ObservableObject {
                     models[name] = model
                 }
             }
-            Task { @MainActor in self?.update(names: names, models: models) }
+            Task { @MainActor in
+                guard let self, let browser, self.browser === browser else { return }
+                self.update(names: names, models: models)
+            }
         }
         browser.start(queue: .main)
         self.browser = browser
@@ -101,27 +109,34 @@ final class NearbyBrowser: ObservableObject {
     // (observed on Windows 11 26100 and 26200).
     private func browseWindows(using parameters: NWParameters) {
         let browser = NWBrowser(for: .bonjour(type: "_dosvc._tcp", domain: "local."), using: parameters)
-        browser.stateUpdateHandler = { [weak self] newState in
-            Task { @MainActor in self?.handle(newState) }
+        browser.stateUpdateHandler = { [weak self, weak browser] newState in
+            Task { @MainActor in
+                guard let self, let browser, self.windowsBrowser === browser else { return }
+                self.handle(newState)
+            }
         }
-        browser.browseResultsChangedHandler = { [weak self] results, _ in
+        browser.browseResultsChangedHandler = { [weak self, weak browser] results, _ in
             let names = results.compactMap { result -> String? in
                 guard case let .service(name, _, _, _) = result.endpoint,
                     !result.interfaces.contains(where: { $0.type == .loopback })
                 else { return nil }
                 return name
             }
-            Task { @MainActor in self?.updateWindows(names: Set(names)) }
+            Task { @MainActor in
+                guard let self, let browser, self.windowsBrowser === browser else { return }
+                self.updateWindows(names: Set(names))
+            }
         }
         browser.start(queue: .main)
         windowsBrowser = browser
     }
 
     private func updateWindows(names: Set<String>) {
+        currentResults.insert(.rdp)
+        computers.removeAll { $0.remoteProtocol == .rdp && !names.contains($0.name) }
         for name in windowsResolvers.keys where !names.contains(name) {
             windowsResolvers.removeValue(forKey: name)?.cancel()
             windowsProbes.removeValue(forKey: name)?.cancel()
-            computers.removeAll { $0.remoteProtocol == .rdp && $0.name == name }
         }
         for name in names where windowsResolvers[name] == nil {
             let resolver = ServiceResolver(name: name, type: "_dosvc._tcp") { [weak self] hostName, _ in
@@ -175,6 +190,8 @@ final class NearbyBrowser: ObservableObject {
     }
 
     private func cancelBrowsing() {
+        currentResults.removeAll()
+        computers.removeAll()
         browser?.cancel()
         browser = nil
         windowsBrowser?.cancel()
@@ -186,19 +203,22 @@ final class NearbyBrowser: ObservableObject {
         windowsProbes.values.forEach { $0.cancel() }
         windowsProbes.removeAll()
         models.removeAll()
+        serviceModels.removeAll()
     }
 
     private func restartBrowsing() {
         restart?.cancel()
         restart = Task {
-            try? await Task.sleep(seconds: 1)
+            try? await Task.sleep(seconds: Self.restartDelay)
             guard !Task.isCancelled else { return }
             cancelBrowsing()
             browse()
-            try? await Task.sleep(seconds: Self.searchTime)
-            guard !Task.isCancelled, !hasResults else { return }
-            update(names: [])
         }
+    }
+
+    func hasCurrentService(matching address: ComputerAddress, remoteProtocol: RemoteProtocol) -> Bool {
+        state == .browsing && currentResults.contains(remoteProtocol)
+            && computer(matching: address, remoteProtocol: remoteProtocol) != nil
     }
 
     func computer(matching address: ComputerAddress, remoteProtocol: RemoteProtocol) -> NearbyComputer? {
@@ -256,7 +276,7 @@ final class NearbyBrowser: ObservableObject {
     }
 
     private func update(names: [String], models: [String: String] = [:]) {
-        hasResults = true
+        currentResults.insert(.vnc)
         serviceModels = models
         let unique = Set(names)
         for name in resolvers.keys where !unique.contains(name) {
@@ -290,11 +310,23 @@ final class NearbyBrowser: ObservableObject {
 }
 
 final class ServiceResolver {
+    nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "discovery")
+
+    nonisolated struct Failure: LocalizedError {
+        let code: DNSServiceErrorType
+
+        var errorDescription: String? {
+            "Bonjour: \(NSError(domain: NSOSStatusErrorDomain, code: Int(code)).localizedDescription)"
+        }
+    }
+
     private let name: String
     private let type: String
     private let resolved: (String, Int) -> Void
     private let addressesChanged: ((Set<Data>) -> Void)?
     private let modelChanged: ((String) -> Void)?
+    private let failed: ((Error) -> Void)?
+    private var cancelled = false
     private var reference: DNSServiceRef?
     private var addressReference: DNSServiceRef?
     private var modelReference: DNSServiceRef?
@@ -303,35 +335,48 @@ final class ServiceResolver {
 
     init(
         name: String, type: String = "_rfb._tcp", resolved: @escaping (String, Int) -> Void,
-        addresses: ((Set<Data>) -> Void)? = nil, model: ((String) -> Void)? = nil
+        addresses: ((Set<Data>) -> Void)? = nil, model: ((String) -> Void)? = nil, failed: ((Error) -> Void)? = nil
     ) {
         self.name = name
         self.type = type
         self.resolved = resolved
         addressesChanged = addresses
         modelChanged = model
+        self.failed = failed
     }
 
     func start() {
+        guard !cancelled, reference == nil else { return }
         let context = Unmanaged.passUnretained(self).toOpaque()
         var serviceReference: DNSServiceRef?
         let error = DNSServiceResolve(
             &serviceReference, 0, 0, name, type, "local.",
             { _, _, _, errorCode, _, hostTarget, port, _, _, context in
-                guard errorCode == kDNSServiceErr_NoError, let hostTarget, let context else { return }
+                guard let context else { return }
                 let resolver = Unmanaged<ServiceResolver>.fromOpaque(context).takeUnretainedValue()
-                let qualifiedHostName = String(cString: hostTarget)
-                var hostName = qualifiedHostName
-                if hostName.hasSuffix(".") { hostName.removeLast() }
-                let hostPort = Int(UInt16(bigEndian: port))
                 MainActor.assumeIsolated {
-                    resolver.resolved(hostName, hostPort)
+                    guard errorCode == kDNSServiceErr_NoError, let hostTarget else {
+                        resolver.fail(errorCode == kDNSServiceErr_NoError ? DNSServiceErrorType(kDNSServiceErr_BadParam) : errorCode)
+                        return
+                    }
+                    let qualifiedHostName = String(cString: hostTarget)
+                    var hostName = qualifiedHostName
+                    if hostName.hasSuffix(".") { hostName.removeLast() }
+                    let hostPort = Int(UInt16(bigEndian: port))
                     resolver.lookUpAddresses(of: qualifiedHostName)
+                    resolver.resolved(hostName, hostPort)
                 }
             }, context)
-        guard error == kDNSServiceErr_NoError, let serviceReference else { return }
+        guard error == kDNSServiceErr_NoError, let serviceReference else {
+            fail(error == kDNSServiceErr_NoError ? DNSServiceErrorType(kDNSServiceErr_BadReference) : error)
+            return
+        }
         reference = serviceReference
-        DNSServiceSetDispatchQueue(serviceReference, .main)
+        let dispatchError = DNSServiceSetDispatchQueue(serviceReference, .main)
+        guard dispatchError == kDNSServiceErr_NoError else {
+            fail(dispatchError)
+            return
+        }
         lookUpModel()
     }
 
@@ -340,7 +385,9 @@ final class ServiceResolver {
     private func lookUpModel() {
         guard modelChanged != nil else { return }
         var fullName = [CChar](repeating: 0, count: Int(kDNSServiceMaxDomainName))
-        guard DNSServiceConstructFullName(&fullName, name, "_device-info._tcp", "local.") == kDNSServiceErr_NoError else {
+        let nameError = DNSServiceConstructFullName(&fullName, name, "_device-info._tcp", "local.")
+        guard nameError == kDNSServiceErr_NoError else {
+            Self.logger.error("Model query name failed: \(nameError)")
             return
         }
         let context = Unmanaged.passUnretained(self).toOpaque()
@@ -348,20 +395,35 @@ final class ServiceResolver {
         let error = DNSServiceQueryRecord(
             &serviceReference, 0, 0, fullName, UInt16(kDNSServiceType_TXT), UInt16(kDNSServiceClass_IN),
             { _, flags, _, errorCode, _, _, _, length, data, _, context in
-                guard errorCode == kDNSServiceErr_NoError, flags & DNSServiceFlags(kDNSServiceFlagsAdd) != 0, let data,
-                    let context
-                else { return }
+                guard let context else { return }
+                let resolver = Unmanaged<ServiceResolver>.fromOpaque(context).takeUnretainedValue()
+                guard errorCode == kDNSServiceErr_NoError else {
+                    ServiceResolver.logger.error("Model query failed: \(errorCode)")
+                    MainActor.assumeIsolated {
+                        if let reference = resolver.modelReference { DNSServiceRefDeallocate(reference) }
+                        resolver.modelReference = nil
+                    }
+                    return
+                }
+                guard flags & DNSServiceFlags(kDNSServiceFlagsAdd) != 0, let data else { return }
                 var valueLength: UInt8 = 0
                 guard let value = TXTRecordGetValuePtr(length, data, "model", &valueLength), valueLength > 0 else { return }
                 let model = String(decoding: UnsafeRawBufferPointer(start: value, count: Int(valueLength)), as: UTF8.self)
-                let resolver = Unmanaged<ServiceResolver>.fromOpaque(context).takeUnretainedValue()
                 MainActor.assumeIsolated {
                     resolver.modelChanged?(model)
                 }
             }, context)
-        guard error == kDNSServiceErr_NoError, let serviceReference else { return }
+        guard error == kDNSServiceErr_NoError, let serviceReference else {
+            Self.logger.error("Model query failed: \(error)")
+            return
+        }
         modelReference = serviceReference
-        DNSServiceSetDispatchQueue(serviceReference, .main)
+        let dispatchError = DNSServiceSetDispatchQueue(serviceReference, .main)
+        if dispatchError != kDNSServiceErr_NoError {
+            Self.logger.error("Model query dispatch failed: \(dispatchError)")
+            DNSServiceRefDeallocate(serviceReference)
+            modelReference = nil
+        }
     }
 
     private func lookUpAddresses(of host: String) {
@@ -377,10 +439,20 @@ final class ServiceResolver {
         let error = DNSServiceGetAddrInfo(
             &serviceReference, 0, 0, DNSServiceProtocol(kDNSServiceProtocol_IPv4 | kDNSServiceProtocol_IPv6), host,
             { _, flags, _, errorCode, _, address, _, context in
-                guard errorCode == kDNSServiceErr_NoError, let address, let context,
-                    let raw = ServiceResolver.rawAddress(address)
-                else { return }
+                guard let context else { return }
                 let resolver = Unmanaged<ServiceResolver>.fromOpaque(context).takeUnretainedValue()
+                guard errorCode == kDNSServiceErr_NoError else {
+                    ServiceResolver.logger.error("Address query failed: \(errorCode)")
+                    MainActor.assumeIsolated {
+                        if let reference = resolver.addressReference { DNSServiceRefDeallocate(reference) }
+                        resolver.addressReference = nil
+                        resolver.addressHost = nil
+                        resolver.addresses = []
+                        resolver.addressesChanged?([])
+                    }
+                    return
+                }
+                guard let address, let raw = ServiceResolver.rawAddress(address) else { return }
                 let added = flags & DNSServiceFlags(kDNSServiceFlagsAdd) != 0
                 let moreComing = flags & DNSServiceFlags(kDNSServiceFlagsMoreComing) != 0
                 MainActor.assumeIsolated {
@@ -394,9 +466,17 @@ final class ServiceResolver {
                     }
                 }
             }, context)
-        guard error == kDNSServiceErr_NoError, let serviceReference else { return }
+        guard error == kDNSServiceErr_NoError, let serviceReference else {
+            Self.logger.error("Address query failed: \(error)")
+            return
+        }
         addressReference = serviceReference
-        DNSServiceSetDispatchQueue(serviceReference, .main)
+        let dispatchError = DNSServiceSetDispatchQueue(serviceReference, .main)
+        if dispatchError != kDNSServiceErr_NoError {
+            Self.logger.error("Address query dispatch failed: \(dispatchError)")
+            DNSServiceRefDeallocate(serviceReference)
+            addressReference = nil
+        }
     }
 
     nonisolated static func rawAddress(_ address: UnsafePointer<sockaddr>) -> Data? {
@@ -414,7 +494,16 @@ final class ServiceResolver {
         }
     }
 
+    private func fail(_ code: DNSServiceErrorType) {
+        guard !cancelled else { return }
+        let error = Failure(code: code)
+        Self.logger.error("Service resolution failed: \(error.localizedDescription, privacy: .public)")
+        cancel()
+        failed?(error)
+    }
+
     func cancel() {
+        cancelled = true
         if let reference {
             DNSServiceRefDeallocate(reference)
         }
@@ -429,26 +518,51 @@ final class ServiceResolver {
         modelReference = nil
     }
 
-    static func resolve(name: String) async -> ComputerAddress? {
-        await withCheckedContinuation { continuation in
-            var finished = false
-            var resolver: ServiceResolver?
-            resolver = ServiceResolver(name: name) { hostName, port in
-                guard !finished else { return }
-                finished = true
-                resolver?.cancel()
-                resolver = nil
-                continuation.resume(returning: ComputerAddress(host: hostName, port: port))
+    static func resolve(name: String) async throws -> ComputerAddress {
+        let resolution = Resolution(name: name)
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                resolution.start(continuation)
             }
-            resolver?.start()
-            Task { @MainActor in
-                try? await Task.sleep(seconds: 5)
-                guard !finished else { return }
-                finished = true
-                resolver?.cancel()
-                resolver = nil
-                continuation.resume(returning: nil)
+        } onCancel: {
+            Task { @MainActor in resolution.finish(.failure(CancellationError())) }
+        }
+    }
+
+    private final class Resolution {
+        private let name: String
+        private var resolver: ServiceResolver?
+        private var continuation: CheckedContinuation<ComputerAddress, Error>?
+        private var finished = false
+
+        init(name: String) {
+            self.name = name
+        }
+
+        func start(_ continuation: CheckedContinuation<ComputerAddress, Error>) {
+            guard !finished else {
+                continuation.resume(throwing: CancellationError())
+                return
             }
+            self.continuation = continuation
+            let resolver = ServiceResolver(name: name) { [weak self] host, port in
+                self?.finish(.success(ComputerAddress(host: host, port: port)))
+            } failed: { [weak self] error in
+                self?.finish(.failure(error))
+            }
+            self.resolver = resolver
+            resolver.start()
+        }
+
+        func finish(_ result: Result<ComputerAddress, Error>) {
+            guard !finished else { return }
+            finished = true
+            resolver?.cancel()
+            resolver = nil
+            let continuation = continuation
+            self.continuation = nil
+            continuation?.resume(with: result)
         }
     }
 }

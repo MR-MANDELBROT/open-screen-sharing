@@ -264,23 +264,14 @@ func (o *Offer) LegacyFallback() (*Offer, error) {
 	if o.videoMode != negotiatorModeNearbyScreenSharing {
 		return nil, nil
 	}
-	fallback, err := o.Renewed()
+	fallback, err := NewOffer(o.options)
 	if err != nil {
 		return nil, err
 	}
 	fallback.videoMode = negotiatorModeRemoteDesktopScreenSharing
+	fallback.hdr.Store(o.hdr.Load())
+	fallback.decoderDimensions.Store(o.decoderDimensions.Load())
 	return fallback, nil
-}
-
-func (o *Offer) Renewed() (*Offer, error) {
-	renewed, err := NewOffer(o.options)
-	if err != nil {
-		return nil, err
-	}
-	renewed.videoMode = o.videoMode
-	renewed.hdr.Store(o.hdr.Load())
-	renewed.decoderDimensions.Store(o.decoderDimensions.Load())
-	return renewed, nil
 }
 
 func setUUIDVersion4(id *[16]byte) {

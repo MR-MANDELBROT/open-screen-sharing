@@ -6,13 +6,13 @@ final class ScreenWindowTracker {
     private let report: (_ area: CGSize, _ scale: CGFloat, _ screen: CGSize) -> Void
     private weak var scene: UIWindowScene?
     private var geometryObservation: NSKeyValueObservation?
-    private var settleTask: Task<Void, Never>?
+    private var reportTask: Task<Void, Never>?
     private var reportedArea: CGSize?
     private var reportedScale: CGFloat?
-    private var wasResizing = false
     private var restrictsSize = false
     private var replacedMinimumSize: CGSize?
     private var turnsLandscape = true
+    private var awaitsLandscape = false
 
     init(view: UIView, report: @escaping (_ area: CGSize, _ scale: CGFloat, _ screen: CGSize) -> Void) {
         self.view = view
@@ -57,29 +57,17 @@ final class ScreenWindowTracker {
 
     func geometryDidChange() {
         guard let scene, let area = screenArea?.size, area.width > 0, area.height > 0 else { return }
-        let landscape = updateOrientation(scene)
-        let resizing = scene.isInteractivelyResizingCompat
-        let resizeEnded = wasResizing && !resizing
-        wasResizing = resizing
-        settleTask?.cancel()
-        settleTask = nil
-        if !resizing, area == reportedArea, view.traitCollection.displayScale == reportedScale {
+        updateOrientation(scene)
+        guard !awaitsLandscape, !scene.isInteractivelyResizingCompat else {
+            reportTask?.cancel()
+            reportTask = nil
             return
         }
-        if resizeEnded {
-            reportArea()
-            return
-        }
-        let turning = landscape && !(scene.interfaceOrientationCompat.isLandscape && area.width > area.height)
-        let delay: TimeInterval = turning ? 2 : reportedArea == nil && !resizing ? 0.1 : 0.3
-        settleTask = Task { [weak self] in
-            try? await Task.sleep(seconds: delay)
+        guard reportTask == nil else { return }
+        reportTask = Task { [weak self] in
             guard let self, !Task.isCancelled else { return }
-            if resizing {
-                self.geometryDidChange()
-            } else {
-                self.reportArea()
-            }
+            self.reportTask = nil
+            self.reportArea()
         }
     }
 
@@ -97,11 +85,11 @@ final class ScreenWindowTracker {
 
     func detach() {
         geometryObservation = nil
-        settleTask?.cancel()
-        settleTask = nil
+        reportTask?.cancel()
+        reportTask = nil
         reportedArea = nil
         reportedScale = nil
-        wasResizing = false
+        awaitsLandscape = false
         guard let scene else { return }
         if let replacedMinimumSize {
             scene.sizeRestrictions?.minimumSize = replacedMinimumSize
@@ -114,6 +102,7 @@ final class ScreenWindowTracker {
     private func reportArea() {
         guard let scene, !scene.isInteractivelyResizingCompat, let area = screenArea?.size else { return }
         let scale = view.traitCollection.displayScale
+        guard area != reportedArea || scale != reportedScale else { return }
         reportedArea = area
         reportedScale = scale
         report(area, scale, scene.screen.bounds.size)
@@ -132,8 +121,8 @@ final class ScreenWindowTracker {
         }
     }
 
-    private func updateOrientation(_ scene: UIWindowScene) -> Bool {
-        guard let window = view.window else { return false }
+    private func updateOrientation(_ scene: UIWindowScene) {
+        guard let window = view.window else { return }
         let landscape: Bool
         if !turnsLandscape {
             landscape = false
@@ -146,8 +135,12 @@ final class ScreenWindowTracker {
                 (abs(size.width - screen.width) < 1 && abs(size.height - screen.height) < 1)
                 || (abs(size.width - screen.height) < 1 && abs(size.height - screen.width) < 1)
         }
-        SessionOrientation.update(scene, landscape: landscape)
-        return landscape
+        let requested = SessionOrientation.update(scene, landscape: landscape) { [weak self] in
+            guard let self, self.awaitsLandscape else { return }
+            self.awaitsLandscape = false
+            self.geometryDidChange()
+        }
+        awaitsLandscape = landscape && (requested || awaitsLandscape) && !scene.interfaceOrientationCompat.isLandscape
     }
 }
 
@@ -161,8 +154,9 @@ enum SessionOrientation {
         return UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown
     }
 
-    static func update(_ scene: UIWindowScene, landscape: Bool) {
-        guard landscapeScenes.contains(scene) != landscape else { return }
+    @discardableResult
+    static func update(_ scene: UIWindowScene, landscape: Bool, refused: @escaping @MainActor @Sendable () -> Void = {}) -> Bool {
+        guard landscapeScenes.contains(scene) != landscape else { return false }
         if landscape {
             landscapeScenes.add(scene)
         } else {
@@ -170,7 +164,7 @@ enum SessionOrientation {
         }
         guard #available(iOS 16, *) else {
             UIViewController.attemptRotationToDeviceOrientation()
-            return
+            return false
         }
         for window in scene.windows {
             var controller = window.rootViewController
@@ -179,9 +173,11 @@ enum SessionOrientation {
                 controller = current.presentedViewController
             }
         }
-        if landscape {
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscape))
+        guard landscape else { return false }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscape)) { _ in
+            Task { @MainActor in refused() }
         }
+        return true
     }
 }
 

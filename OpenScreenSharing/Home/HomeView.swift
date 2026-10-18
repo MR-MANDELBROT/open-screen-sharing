@@ -24,6 +24,11 @@ enum HomeTab: Hashable {
 }
 
 struct HomeView: View {
+    private struct LinkLookup {
+        let name: String
+        let task: Task<Void, Never>
+    }
+
     @Environment(\.openSessionWindow) private var openSessionWindow
     @EnvironmentObject private var nearby: NearbyBrowser
     @EnvironmentObject private var availabilityMonitor: AvailabilityMonitor
@@ -37,6 +42,7 @@ struct HomeView: View {
     @State private var alert: AlertState?
     @State private var actions = HomeActions()
     @State private var isWatchingConnections = false
+    @State private var linkLookup: LinkLookup?
     #if os(iOS) && (DEBUG || SIDELOAD)
     @ObservedObject private var server = ServerController.shared
     #endif
@@ -46,6 +52,26 @@ struct HomeView: View {
 
     var body: some View {
         layout
+            .overlay {
+                if let lookup = linkLookup {
+                    ZStack {
+                        Color.black.opacity(0.55)
+                            .ignoresSafeArea()
+                        VStack(spacing: 24) {
+                            ProgressView("Looking for “\(lookup.name)”…")
+                            Button("Cancel", role: .cancel) {
+                                lookup.task.cancel()
+                                linkLookup = nil
+                            }
+                            .keyboardShortcut(.cancelAction)
+                            .glassButtonStyleCompat()
+                            .controlSize(.large)
+                        }
+                        .padding()
+                    }
+                    .environment(\.colorScheme, .dark)
+                }
+            }
             #if os(iOS)
             .fullScreenCover(item: $activeSession) { controller in
                 SessionView(controller: controller, hasOwnWindow: false) {
@@ -71,10 +97,24 @@ struct HomeView: View {
             }
             .onOpenURL(perform: open)
             .onAppear(perform: appear)
-            .onDisappear { setWatchingConnections(false) }
-            .onChangeCompat(of: scenePhase) { watchConnections() }
+            .onDisappear {
+                linkLookup?.task.cancel()
+                linkLookup = nil
+                setWatchingConnections(false)
+            }
+            .onChangeCompat(of: scenePhase) {
+                if scenePhase == .background {
+                    linkLookup?.task.cancel()
+                    linkLookup = nil
+                }
+                watchConnections()
+            }
             .onChangeCompat(of: activeSession == nil) { watchConnections() }
-            .onChangeCompat(of: selection) { watchConnections() }
+            .onChangeCompat(of: selection) {
+                linkLookup?.task.cancel()
+                linkLookup = nil
+                watchConnections()
+            }
             .focusedSceneValue(\.homeActions, actions)
             #if os(macOS)
             .modifier(UpdatePresentation())
@@ -213,6 +253,8 @@ struct HomeView: View {
     }
 
     private func connect(_ route: SessionRoute) {
+        linkLookup?.task.cancel()
+        linkLookup = nil
         #if os(iOS)
         if activeSession != nil, let openSessionWindow {
             openSessionWindow(route)
@@ -231,21 +273,23 @@ struct HomeView: View {
     }
 
     private func newConnection() {
+        linkLookup?.task.cancel()
+        linkLookup = nil
         selection = .connections
         setup = SetupRequest()
     }
 
-    private func route(for link: RemoteLink) -> SessionRoute {
+    private func route(for link: RemoteLink, at address: ComputerAddress) -> SessionRoute {
         var route: SessionRoute
-        if let computer = ComputerStore.shared.computer(at: link.address, remoteProtocol: link.remoteProtocol, username: link.username) {
+        if let computer = ComputerStore.shared.computer(at: address, remoteProtocol: link.remoteProtocol, username: link.username) {
             route = SessionRoute(computer: computer)
             if let username = link.username {
                 route.username = username
             }
         } else {
-            let found = nearby.computer(matching: link.address, remoteProtocol: link.remoteProtocol)
+            let found = nearby.computer(matching: address, remoteProtocol: link.remoteProtocol)
             route = SessionRoute(
-                name: found?.name ?? link.address.bonjourServiceName ?? link.address.host, address: link.address,
+                name: link.address.bonjourServiceName ?? found?.name ?? address.host, address: address,
                 remoteProtocol: link.remoteProtocol, username: link.username, model: found?.model)
         }
         if let password = link.password {
@@ -255,20 +299,32 @@ struct HomeView: View {
     }
 
     private func open(_ url: URL) {
+        linkLookup?.task.cancel()
+        linkLookup = nil
         guard let link = RemoteLink(string: url.absoluteString) else {
             alert = AlertState(String(localized: "Couldn’t Open the Link"), errorMessage: String(localized: "“\(url.absoluteString)” isn’t a valid address."))
             return
         }
-        Task {
-            var resolved = link
-            if let serviceName = link.address.bonjourServiceName, let address = await ServiceResolver.resolve(name: serviceName) {
-                resolved.address = address
-            }
-            var route = route(for: resolved)
-            if route.computerID == nil, let serviceName = link.address.bonjourServiceName {
-                route.name = serviceName
-            }
-            connect(route)
+        guard let serviceName = link.address.bonjourServiceName else {
+            connect(route(for: link, at: link.address))
+            return
         }
+        if let address = nearby.computers.first(where: { $0.remoteProtocol == .vnc && $0.name == serviceName })?.address {
+            connect(route(for: link, at: address))
+            return
+        }
+        let task = Task {
+            do {
+                let address = try await ServiceResolver.resolve(name: serviceName)
+                try Task.checkCancellation()
+                connect(route(for: link, at: address))
+            } catch is CancellationError {
+            } catch {
+                guard !Task.isCancelled else { return }
+                linkLookup = nil
+                alert = AlertState(String(localized: "Couldn’t Open the Link"), error: error)
+            }
+        }
+        linkLookup = LinkLookup(name: serviceName, task: task)
     }
 }

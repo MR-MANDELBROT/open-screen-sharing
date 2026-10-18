@@ -87,7 +87,7 @@ func ProblemOf(err error) Problem {
 		return ProblemPairingRejected
 	case errors.Is(err, imagemounter.ErrDeveloperModeOff):
 		return ProblemDeveloperModeOff
-	case errors.Is(err, display.ErrNoMedia), display.IsMediaInUse(err):
+	case display.IsMediaInUse(err):
 		return ProblemScreenInUse
 	case display.IsUnsupported(err):
 		return ProblemUnsupported
@@ -104,7 +104,6 @@ func unreachable(err error) bool {
 	if E.IsMulti(err,
 		syscall.ECONNREFUSED, syscall.ETIMEDOUT, syscall.EHOSTUNREACH,
 		syscall.ENETUNREACH, syscall.ENETDOWN, syscall.EHOSTDOWN, syscall.EADDRNOTAVAIL,
-		context.DeadlineExceeded,
 	) {
 		return true
 	}

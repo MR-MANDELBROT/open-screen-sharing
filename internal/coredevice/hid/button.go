@@ -3,6 +3,8 @@ package hid
 import (
 	"context"
 	"time"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 type Button struct {
@@ -34,8 +36,11 @@ const (
 )
 
 func (c *Client) PressButton(ctx context.Context, button Button) error {
-	if err := c.sendButton(ctx, button, buttonDown); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if err := c.sendButton(c.ctx, button, buttonDown); err != nil {
+		return E.Errors(err, ctx.Err())
 	}
 	timer := time.NewTimer(button.Hold)
 	select {
@@ -43,7 +48,8 @@ func (c *Client) PressButton(ctx context.Context, button Button) error {
 	case <-ctx.Done():
 		timer.Stop()
 	}
-	return c.sendButton(context.WithoutCancel(ctx), button, buttonUp)
+	releaseErr := c.sendButton(c.ctx, button, buttonUp)
+	return E.Errors(ctx.Err(), releaseErr)
 }
 
 func (c *Client) releaseButtons(ctx context.Context) error {

@@ -115,6 +115,10 @@ struct ConnectToView: View {
             NearbyDetailsView(computer: computer)
         }
         .interactiveDismissDisabled(isChecking)
+        .onDisappear {
+            task?.cancel()
+            task = nil
+        }
     }
 
     @ViewBuilder

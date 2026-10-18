@@ -175,8 +175,8 @@ func run() error {
 		if err != nil && !E.IsMulti(err, net.ErrClosed, context.Canceled) && ctx.Err() == nil {
 			return err
 		}
-	case <-time.After(5 * time.Second):
-		return E.New("RDP receive loop did not stop within 5s after Close")
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	return nil
 }

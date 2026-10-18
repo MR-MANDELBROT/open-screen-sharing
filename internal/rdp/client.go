@@ -25,7 +25,6 @@ var (
 
 const (
 	refreshInterval  = time.Second
-	closeWriteLimit  = 2 * time.Second
 	defaultWidth     = 1280
 	defaultHeight    = 800
 	defaultLayout    = 0x0409
@@ -64,6 +63,8 @@ type Client struct {
 	writer     *outbox.Writer
 	writerDone chan struct{}
 	writeErr   error
+	ctx        context.Context
+	cancel     context.CancelCauseFunc
 	mcs        *mcsLayer
 	session    *session
 	channels   *channelRegistry
@@ -106,9 +107,6 @@ func normalizeOptions(opts Options) (Options, error) {
 	if opts.KeyboardLayout == 0 {
 		opts.KeyboardLayout = defaultLayout
 	}
-	if opts.DialTimeout <= 0 {
-		opts.DialTimeout = 20 * time.Second
-	}
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.DiscardHandler)
 	}
@@ -131,6 +129,11 @@ func CheckLogin(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
+	if opts.DialTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, opts.DialTimeout)
+		defer cancel()
+	}
 	t, err := negotiateTransport(ctx, opts, nil)
 	if err != nil {
 		return err
@@ -143,12 +146,20 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	if opts.DialTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, opts.DialTimeout)
+		defer cancel()
+	}
 	events.StateChanged(StateConnecting)
 	t, err := negotiateTransport(ctx, opts, func() { events.StateChanged(StateAuthenticating) })
 	if err != nil {
 		return nil, err
 	}
+	lifetime, cancelLifetime := context.WithCancelCause(context.Background())
 	c := &Client{
+		ctx:        lifetime,
+		cancel:     cancelLifetime,
 		events:     events,
 		logger:     opts.Logger,
 		transport:  t,
@@ -188,7 +199,7 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 		)
 	}
 	go func() {
-		err := c.writer.Run(c.outbox)
+		err := c.writer.Run(c.ctx, c.outbox)
 		if err != nil {
 			c.writeErr = E.Cause(err, "rdp: send data")
 			_ = c.transport.conn.Close()
@@ -196,13 +207,14 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 		close(c.writerDone)
 	}()
 	go c.input.run()
-	stop := context.AfterFunc(ctx, func() { _ = t.conn.Close() })
+	stop := context.AfterFunc(ctx, func() { _ = t.tcp.Close() })
 	err = c.connect(opts)
 	stop()
 	if err == nil {
 		err = ctx.Err()
 	}
 	if err != nil {
+		c.abort(err)
 		c.shutdown()
 		c.cleanup()
 		if ctx.Err() != nil {
@@ -218,11 +230,7 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 }
 
 func (c *Client) connect(opts Options) error {
-	err := c.transport.conn.SetReadDeadline(time.Now().Add(opts.DialTimeout))
-	if err != nil {
-		return err
-	}
-	err = c.mcs.connect(opts, c.channels.channels)
+	err := c.mcs.connect(opts, c.channels.channels)
 	if err != nil {
 		return err
 	}
@@ -237,7 +245,7 @@ func (c *Client) connect(opts Options) error {
 			return err
 		}
 	}
-	return c.transport.conn.SetReadDeadline(time.Time{})
+	return nil
 }
 
 func (c *Client) readOne() error {
@@ -267,12 +275,19 @@ func (c *Client) Run() error {
 	closed := c.closed
 	c.lifecycle.Unlock()
 	if closed {
-		return net.ErrClosed
+		<-c.writerDone
+		return c.writeErr
 	}
 	defer c.cleanup()
 	for {
 		err := c.readOne()
 		if err != nil {
+			c.lifecycle.Lock()
+			closed := c.closed
+			c.lifecycle.Unlock()
+			if !closed {
+				c.abort(err)
+			}
 			c.shutdown()
 			return c.result(err)
 		}
@@ -283,11 +298,11 @@ func (c *Client) result(err error) error {
 	c.lifecycle.Lock()
 	closed := c.closed
 	c.lifecycle.Unlock()
-	if closed {
-		return net.ErrClosed
-	}
 	if c.writeErr != nil && !errors.Is(c.writeErr, net.ErrClosed) {
 		return c.writeErr
+	}
+	if closed {
+		return nil
 	}
 	if !E.IsClosed(err) && !errors.Is(err, errDisconnected) {
 		return err
@@ -333,14 +348,25 @@ func (c *Client) Close() error {
 	if !running {
 		c.cleanup()
 	}
-	return nil
+	return c.writeErr
 }
 
 func (c *Client) shutdown() {
 	c.outbox.Close(net.ErrClosed)
-	c.writer.FinishWithin(closeWriteLimit)
 	<-c.writerDone
 	_ = c.transport.conn.Close()
+	c.cancel(nil)
+}
+
+func (c *Client) Abort() error {
+	c.abort(context.Canceled)
+	return nil
+}
+
+func (c *Client) abort(err error) {
+	c.cancel(err)
+	c.outbox.Abort(err)
+	_ = c.transport.tcp.Close()
 }
 
 func (c *Client) cleanup() {

@@ -27,51 +27,59 @@ nonisolated struct ProbedServer: Hashable, Sendable {
 }
 
 nonisolated enum ServerProber {
-    static let timeout: Double = 15
-
     static func probe(host: String, port: Int?, remoteProtocol: RemoteProtocol?) async -> Result<ProbedServer, SessionFailure> {
-        await Task.detached(priority: .userInitiated) {
-            LibsharingLog.installed
-            let probe: LibsharingServerProbe =
-                switch remoteProtocol {
-                case .vnc: LibsharingProbeServer(host, Int32(port ?? RemoteProtocol.vnc.defaultPort), timeout)!
-                case .rdp: LibsharingProbeRDPServer(host, Int32(port ?? RemoteProtocol.rdp.defaultPort), timeout)!
-                case nil: LibsharingProbeProtocol(host, Int32(port ?? 0), timeout)!
+        let request = UncheckedSendable(value: LibsharingNewProbeRequest()!)
+        return await withTaskCancellationHandler {
+            await Task.detached(priority: .userInitiated) { () -> Result<ProbedServer, SessionFailure> in
+                LibsharingLog.installed
+                let probe: LibsharingServerProbe =
+                    switch remoteProtocol {
+                    case .vnc: request.value.probeServer(host, port: Int32(port ?? RemoteProtocol.vnc.defaultPort))!
+                    case .rdp: request.value.probeRDPServer(host, port: Int32(port ?? RemoteProtocol.rdp.defaultPort))!
+                    case nil: request.value.probeProtocol(host, port: Int32(port ?? 0))!
+                    }
+                guard probe.errorCode == LibsharingErrorNone else {
+                    return .failure(failure(code: probe.errorCode, message: probe.errorMessage, fingerprint: probe.fingerprint))
                 }
-            guard probe.errorCode == LibsharingErrorNone else {
-                return .failure(failure(code: probe.errorCode, message: probe.errorMessage, fingerprint: probe.fingerprint))
-            }
-            return .success(
-                ProbedServer(
-                    address: ComputerAddress(host: host, port: Int(probe.port)),
-                    remoteProtocol: probe.protocol == LibsharingProtocolRDP ? .rdp : .vnc,
-                    authentication: ServerAuthentication(
-                        account: probe.supportsAccount,
-                        requestPermission: probe.supportsRequestControl || probe.supportsRequestObserve,
-                        vncPassword: probe.supportsVNCPassword,
-                        noPassword: probe.supportsNoPassword,
-                        grantsRequests: probe.grantsRequests
-                    ),
-                    fingerprint: probe.fingerprint
-                ))
-        }.value
+                return .success(
+                    ProbedServer(
+                        address: ComputerAddress(host: host, port: Int(probe.port)),
+                        remoteProtocol: probe.protocol == LibsharingProtocolRDP ? .rdp : .vnc,
+                        authentication: ServerAuthentication(
+                            account: probe.supportsAccount,
+                            requestPermission: probe.supportsRequestControl || probe.supportsRequestObserve,
+                            vncPassword: probe.supportsVNCPassword,
+                            noPassword: probe.supportsNoPassword,
+                            grantsRequests: probe.grantsRequests
+                        ),
+                        fingerprint: probe.fingerprint
+                    ))
+            }.value
+        } onCancel: {
+            request.value.cancel()
+        }
     }
 
     static func checkLogin(_ server: ProbedServer, credentials: SessionCredentials) async -> Result<Bool, SessionFailure> {
-        await Task.detached(priority: .userInitiated) {
-            LibsharingLog.installed
-            let options = LibsharingNewSessionOptions()!
-            options.protocol = server.remoteProtocol == .rdp ? LibsharingProtocolRDP : LibsharingProtocolRFB
-            options.host = server.address.host
-            options.port = Int32(server.address.port)
-            options.trustedFingerprint = server.fingerprint
-            credentials.apply(to: options, observes: false)
-            let check = LibsharingCheckLogin(options, timeout)!
-            guard check.errorCode == LibsharingErrorNone else {
-                return .failure(failure(code: check.errorCode, message: check.errorMessage, fingerprint: check.fingerprint))
-            }
-            return .success(check.supportsHighPerformance)
-        }.value
+        let request = UncheckedSendable(value: LibsharingNewProbeRequest()!)
+        return await withTaskCancellationHandler {
+            await Task.detached(priority: .userInitiated) { () -> Result<Bool, SessionFailure> in
+                LibsharingLog.installed
+                let options = LibsharingNewSessionOptions()!
+                options.protocol = server.remoteProtocol == .rdp ? LibsharingProtocolRDP : LibsharingProtocolRFB
+                options.host = server.address.host
+                options.port = Int32(server.address.port)
+                options.trustedFingerprint = server.fingerprint
+                credentials.apply(to: options, observes: false)
+                let check = request.value.checkLogin(options)!
+                guard check.errorCode == LibsharingErrorNone else {
+                    return .failure(failure(code: check.errorCode, message: check.errorMessage, fingerprint: check.fingerprint))
+                }
+                return .success(check.supportsHighPerformance)
+            }.value
+        } onCancel: {
+            request.value.cancel()
+        }
     }
 
     private static func failure(code: Int32, message: String, fingerprint: String) -> SessionFailure {

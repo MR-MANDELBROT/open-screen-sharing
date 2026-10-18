@@ -19,6 +19,8 @@ import (
 // TunnelProv/PacketTunnelProvider.swift:12).
 var fixedAddress = netip.AddrFrom4([4]byte{10, 7, 0, 1})
 
+const answerLimit = time.Second
+
 type tunnel struct {
 	name         string
 	gateways     []netip.Addr
@@ -57,12 +59,12 @@ type Peer struct {
 	LocalNetwork bool
 }
 
-func Find(ctx context.Context, port uint16, timeout time.Duration) (Peer, error) {
+func Find(ctx context.Context, port uint16) (Peer, error) {
 	addresses := candidates()
 	if len(addresses) == 0 {
 		return Peer{}, E.New("vpnpeer: no VPN address to try")
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, answerLimit)
 	defer cancel()
 	type result struct {
 		index int
