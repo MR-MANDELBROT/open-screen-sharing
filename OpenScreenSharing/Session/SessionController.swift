@@ -91,7 +91,6 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var quality = SessionQuality.adaptive
     var observes = false
     var sharesClipboard = true
-    var usesDynamicResolution = true
     var resolutionScale = VirtualDisplayMode.defaultResolutionScale
     var display: DisplaySelection?
     var usesHDR = false
@@ -110,7 +109,7 @@ final class SessionController: ObservableObject, Identifiable {
     @Published private(set) var displays: [RemoteDisplay] = []
     @Published private(set) var displaySelection: DisplaySelection = .display(1)
     @Published private(set) var capabilities: SessionCapabilities = []
-    @Published private(set) var highPerformance: Bool?
+    @Published private(set) var usesHighPerformance: Bool
     @Published private(set) var quality: SessionQuality = .adaptive
     @Published private var networkConfiguration = NetworkConfiguration()
     @Published private(set) var clipboardSharing = true
@@ -119,7 +118,6 @@ final class SessionController: ObservableObject, Identifiable {
     @Published private(set) var imageSize: CGSize = .zero
     @Published private(set) var picture = ScreenPicture.none
     @Published private(set) var isVideo = false
-    @Published private(set) var usesDynamicResolution = true
     @Published private(set) var resolutionScale = VirtualDisplayMode.defaultResolutionScale
     @Published private(set) var hdrEnabled = false
     @Published var displaySupportsHDR = false
@@ -225,7 +223,6 @@ final class SessionController: ObservableObject, Identifiable {
     private var chosenDisplay: DisplaySelection?
     private var restoresDisplay = false
     private var assistCursorShown = false
-    private var hasStartedHighPerformance = false
     private var highPerformanceStartPending = false
     private var awaitsVirtualDisplay = false {
         didSet { pipeline.setHoldsVideo(awaitsVirtualDisplay) }
@@ -267,7 +264,7 @@ final class SessionController: ObservableObject, Identifiable {
         computerID = route.computerID
         server = route.server
         device = route.model.map { DeviceInfo(model: $0, enclosureColor: "") }
-        highPerformance = route.remoteProtocol == .vnc ? route.usesHighPerformance : false
+        usesHighPerformance = route.remoteProtocol == .vnc && route.usesHighPerformance
         deviceType = route.deviceType ?? route.model.flatMap(DeviceType.init(model:))
         windowSize = route.computerID.flatMap { store.stored($0) }?.memory.windowSize
         virtualDisplayRequests.onIdle = { [weak self] in self?.virtualDisplayDidSettle() }
@@ -291,7 +288,7 @@ final class SessionController: ObservableObject, Identifiable {
         if let stored {
             restore(stored.memory)
             device = device ?? stored.device
-            highPerformance = stored.usesHighPerformance
+            usesHighPerformance = stored.usesHighPerformance
             deviceType = stored.deviceType
             keyboardSources = stored.keyboardSources.map(MacInputSource.init(id:))
             trustedFingerprint = stored.trustedFingerprint
@@ -372,7 +369,6 @@ final class SessionController: ObservableObject, Identifiable {
         quality = memory.quality
         mode = memory.observes ? .observe : .control
         clipboardSharing = memory.sharesClipboard
-        usesDynamicResolution = memory.usesDynamicResolution
         resolutionScale = memory.resolutionScale
         chosenDisplay = memory.display
         hdrEnabled = memory.usesHDR && DecoderCapabilities.current.supportsHDR
@@ -386,7 +382,6 @@ final class SessionController: ObservableObject, Identifiable {
             quality: quality,
             observes: mode == .observe,
             sharesClipboard: clipboardSharing,
-            usesDynamicResolution: usesDynamicResolution,
             resolutionScale: resolutionScale,
             display: chosenDisplay,
             usesHDR: hdrEnabled,
@@ -416,9 +411,8 @@ final class SessionController: ObservableObject, Identifiable {
                     address: route.address,
                     username: credentials.account?.username ?? "",
                     password: passwordUpdate,
-                    supportsHighPerformance: capabilities.contains(.highPerformance),
                     remoteProtocol: route.remoteProtocol,
-                    usesHighPerformance: highPerformance ?? false,
+                    usesHighPerformance: usesHighPerformance,
                     memory: memory,
                     device: device
                 ))
@@ -432,23 +426,6 @@ final class SessionController: ObservableObject, Identifiable {
             try body(store)
         } catch {
             alert = AlertState(String(localized: "Couldn’t Save “\(title)”"), error: error)
-        }
-    }
-
-    private var canDecodeVideo: Bool {
-        let decoder = DecoderCapabilities.current
-        return decoder.supportsHEVC || decoder.supportsH264
-    }
-
-    var usesHighPerformance: Bool { highPerformance == true }
-
-    private var mayUseHighPerformance: Bool { highPerformance ?? canDecodeVideo }
-
-    private func settleHighPerformance() {
-        guard highPerformance == nil else { return }
-        highPerformance = capabilities.contains(.highPerformance) && canDecodeVideo
-        if highPerformance == true {
-            highPerformanceStartPending = true
         }
     }
 
@@ -483,10 +460,9 @@ final class SessionController: ObservableObject, Identifiable {
             networkConfiguration = computer.networkConfiguration
         }
         hdrEnabled = hdrEnabled && networkSupportsHDR
-        hasStartedHighPerformance = false
         highPerformanceStartPending = usesHighPerformance
         hasPicture = false
-        pipeline.setExpectsVideo(mayUseHighPerformance)
+        pipeline.setExpectsVideo(usesHighPerformance)
         pipeline.setSchedulesPresentation(networkConfiguration.schedulesPresentation)
         let configuration = SessionConfiguration(
             address: route.address,
@@ -528,7 +504,7 @@ final class SessionController: ObservableObject, Identifiable {
         }
         awaitsVirtualDisplay = wantsVirtualDisplay
         virtualDisplayRequests.open()
-        highPerformanceAwaitsDisplay = mayUseHighPerformance
+        highPerformanceAwaitsDisplay = usesHighPerformance
         requestVirtualDisplay()
         if !wantsVirtualDisplay {
             startHighPerformanceWithConnection()
@@ -717,12 +693,8 @@ final class SessionController: ObservableObject, Identifiable {
 
     private func restartHighPerformance() {
         guard usesHighPerformance, phase == .connected, !isVideo else { return }
-        if needsReconnectToRestartStream {
-            reconnectNow()
-        } else {
-            highPerformanceStartPending = true
-            startHighPerformanceIfDisplayReady()
-        }
+        highPerformanceStartPending = true
+        startHighPerformanceIfDisplayReady()
     }
 
 
@@ -760,7 +732,6 @@ final class SessionController: ObservableObject, Identifiable {
         switch newPhase {
         case .connected:
             reconnectAttempts = 0
-            settleHighPerformance()
             if info.dialect != .apple {
                 deviceType = nil
             } else if deviceType == nil {
@@ -826,9 +797,6 @@ final class SessionController: ObservableObject, Identifiable {
         if isVideo != video {
             isVideo = video
             updateMicrophone()
-        }
-        if video {
-            hasStartedHighPerformance = true
         }
     }
 
@@ -912,7 +880,6 @@ final class SessionController: ObservableObject, Identifiable {
 
     fileprivate func handleVideoFailure(_ failure: MediaFailure) {
         if usesHighPerformance, failure.kind == .silent || failure.kind == .network, sceneInBackground {
-            hasStartedHighPerformance = true
             restartsHighPerformanceOnReturn = true
             return
         }
@@ -1353,17 +1320,12 @@ final class SessionController: ObservableObject, Identifiable {
         session?.setQuality(newQuality)
     }
 
-    private var needsReconnectToRestartStream: Bool {
-        hasStartedHighPerformance && !usesDynamicResolution && phase == .connected
-    }
-
     var networkSupportsHDR: Bool {
         networkConfiguration.chroma.pixelFormats(available: DecoderCapabilities.current.pixelFormats) & (1 << 5) != 0
     }
 
     var canUseHDR: Bool {
-        usesHighPerformance && capabilities.contains(.highPerformance) && usesDynamicResolution
-            && displaySupportsHDR && networkSupportsHDR
+        usesHighPerformance && capabilities.contains(.highPerformance) && displaySupportsHDR && networkSupportsHDR
     }
 
     func setHDR(_ enabled: Bool) {
@@ -1388,7 +1350,7 @@ final class SessionController: ObservableObject, Identifiable {
         let changed = audio != remoteAudio
         remoteAudio = audio
         rememberState()
-        if changed, capabilities.contains(.audio) ? phase == .connected : isVideo && needsReconnectToRestartStream {
+        if changed, capabilities.contains(.audio), phase == .connected {
             reconnectNow()
             return
         }
@@ -1482,17 +1444,6 @@ final class SessionController: ObservableObject, Identifiable {
         }
     }
 
-    func setUsesDynamicResolution(_ uses: Bool) {
-        guard uses != usesDynamicResolution else { return }
-        usesDynamicResolution = uses
-        rememberState()
-        if !uses, phase == .connected {
-            reconnectNow()
-        } else {
-            requestVirtualDisplay(holdingPicture: true)
-        }
-    }
-
     func setResolutionScale(_ scale: Double) {
         guard scale != resolutionScale else { return }
         resolutionScale = scale
@@ -1501,7 +1452,7 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     var wantsVirtualDisplay: Bool {
-        !isIOS && usesDynamicResolution
+        !isIOS && (usesHighPerformance || route.remoteProtocol == .rdp)
     }
 
     var pictureMatchesWindow: Bool {

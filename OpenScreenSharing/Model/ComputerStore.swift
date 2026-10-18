@@ -31,7 +31,6 @@ struct ConnectionRecord {
     var address: ComputerAddress
     var username: String
     var password: PasswordUpdate
-    var supportsHighPerformance: Bool
     var remoteProtocol: RemoteProtocol
     var usesHighPerformance: Bool
     var memory: SessionMemory
@@ -141,7 +140,6 @@ final class ComputerStore: ObservableObject {
                 computer.authenticates = false
             }
             computer.lastConnected = Date()
-            computer.supportsHighPerformance = connection.supportsHighPerformance
             computer.remoteProtocol = connection.remoteProtocol
             computer.usesHighPerformance = connection.usesHighPerformance
             if let device = connection.device {

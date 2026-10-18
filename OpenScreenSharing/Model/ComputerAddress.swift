@@ -72,7 +72,9 @@ nonisolated struct ConnectionTarget: Hashable, Sendable {
     var remoteProtocol: RemoteProtocol?
     var username: String?
     var password: String?
+}
 
+nonisolated extension ConnectionTarget {
     init?(parsing text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }

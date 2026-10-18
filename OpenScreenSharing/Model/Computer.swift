@@ -16,7 +16,6 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var lastConnected: Date?
     var thumbnail: Data?
     var createdAt = Date()
-    var supportsHighPerformance = false
     var usesHighPerformance = false
     var networkQuality = NetworkQuality.localNetwork
     var internetMaximumFrameRate = MaximumFrameRate.sixty
@@ -26,7 +25,6 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var quality = SessionQuality.adaptive
     var observes = false
     var sharesClipboard = true
-    var usesDynamicResolution = true
     var resolutionScale = VirtualDisplayMode.defaultResolutionScale
     var displayID: Int64 = -1
     var usesHDR = false
@@ -98,7 +96,6 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
             quality: quality,
             observes: observes,
             sharesClipboard: sharesClipboard,
-            usesDynamicResolution: usesDynamicResolution,
             resolutionScale: resolutionScale,
             display: displaySelection,
             usesHDR: usesHDR,
@@ -112,7 +109,6 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
         quality = memory.quality
         observes = memory.observes
         sharesClipboard = memory.sharesClipboard
-        usesDynamicResolution = memory.usesDynamicResolution
         resolutionScale = memory.resolutionScale
         displaySelection = memory.display
         usesHDR = memory.usesHDR

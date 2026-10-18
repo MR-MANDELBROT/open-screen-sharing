@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ConnectToView: View {
+    let link: RemoteLink?
     let close: () -> Void
     let signIn: (NewComputer) -> Void
     let signedIn: (SignedInComputer) -> Void
@@ -13,6 +14,7 @@ struct ConnectToView: View {
     @State private var checkedID: NearbyComputer.ID?
     @State private var nearbyProblem: SetupProblem?
     @State private var details: NearbyComputer?
+    @State private var opensLink = true
     @FocusState private var isFocused: Bool
 
     private var isChecking: Bool { task != nil }
@@ -115,6 +117,15 @@ struct ConnectToView: View {
             NearbyDetailsView(computer: computer)
         }
         .interactiveDismissDisabled(isChecking)
+        .onAppear {
+            guard opensLink, let link else { return }
+            opensLink = false
+            text = (link.username.map { "\($0)@" } ?? "") + link.address.description(defaultPort: link.remoteProtocol.defaultPort)
+            connect(
+                to: ConnectionTarget(
+                    host: link.address.host, port: link.address.port, remoteProtocol: link.remoteProtocol, username: link.username,
+                    password: link.password))
+        }
         .onDisappear {
             task?.cancel()
             task = nil
@@ -159,6 +170,10 @@ struct ConnectToView: View {
             problem = SetupProblem(summary: String(localized: "“\(typed)” isn’t a valid address."))
             return
         }
+        connect(to: target)
+    }
+
+    private func connect(to target: ConnectionTarget) {
         problem = nil
         nearbyProblem = nil
         task = Task {

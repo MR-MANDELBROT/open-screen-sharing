@@ -182,8 +182,7 @@ extension SessionController {
     }
 
     var offersResolution: Bool {
-        platform != .iOS && (usesHighPerformance || usesDynamicResolution)
-            && (capabilities.isEmpty || capabilities.contains(.virtualDisplay))
+        platform != .iOS && wantsVirtualDisplay && (capabilities.isEmpty || capabilities.contains(.virtualDisplay))
     }
 
     var audioOptions: [RemoteAudio] {
@@ -237,8 +236,7 @@ struct SessionCommandView: View {
         case .hdr:
             toggle(
                 isOn: Binding(get: { controller.hdrEnabled && controller.canUseHDR }, set: { controller.setHDR($0) }),
-                subtitle: !controller.usesDynamicResolution ? "Only available with Dynamic Resolution"
-                    : !DecoderCapabilities.current.supportsHDR ? "This Device Can’t Show HDR" : nil)
+                subtitle: !DecoderCapabilities.current.supportsHDR ? "This Device Can’t Show HDR" : nil)
         case .audio:
             items { AudioPicker(controller: controller).pickerStyle(.inline) }
         case .observe:

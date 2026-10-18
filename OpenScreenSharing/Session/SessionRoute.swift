@@ -10,7 +10,7 @@ nonisolated struct SessionRoute: Codable, Hashable, Identifiable, Sendable {
     var credentials: SessionCredentials?
     var model: String?
     var remoteProtocol: RemoteProtocol
-    var usesHighPerformance: Bool?
+    var usesHighPerformance: Bool
     var deviceType: DeviceType?
     var server: ServerAuthentication?
 
@@ -33,16 +33,6 @@ nonisolated struct SessionRoute: Codable, Hashable, Identifiable, Sendable {
         remoteProtocol = computer.remoteProtocol
         usesHighPerformance = computer.usesHighPerformance
         deviceType = computer.usesHighPerformance ? computer.deviceType : nil
-    }
-
-    init(name: String, address: ComputerAddress, remoteProtocol: RemoteProtocol, username: String? = nil, model: String? = nil) {
-        self.name = name
-        host = address.host
-        port = address.port
-        self.remoteProtocol = remoteProtocol
-        self.username = username
-        self.model = model
-        deviceType = model.flatMap(DeviceType.init(model:))
     }
 
     private enum CodingKeys: String, CodingKey {

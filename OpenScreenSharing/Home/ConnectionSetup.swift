@@ -8,7 +8,6 @@ struct NewComputer: Hashable {
     var server: ProbedServer
 
     func signedIn(_ credentials: SessionCredentials, supportsHighPerformance: Bool) -> SignedInComputer {
-        let decoder = DecoderCapabilities.current
         let account = credentials.account
         var saved = Computer(
             name: name, address: server.address, remoteProtocol: server.remoteProtocol, username: account?.username ?? "")
@@ -16,8 +15,7 @@ struct NewComputer: Hashable {
         saved.authenticates = account != nil
         saved.model = model ?? ""
         saved.trustedFingerprint = server.fingerprint
-        saved.supportsHighPerformance = supportsHighPerformance
-        saved.usesHighPerformance = supportsHighPerformance && (decoder.supportsHEVC || decoder.supportsH264)
+        saved.usesHighPerformance = supportsHighPerformance
         return SignedInComputer(computer: saved, credentials: credentials, server: server.authentication)
     }
 }
@@ -30,9 +28,11 @@ struct SignedInComputer: Hashable {
 
 struct SetupRequest: Identifiable {
     let id = UUID()
+    var link: RemoteLink?
 }
 
 struct ConnectionSetupView: View {
+    let link: RemoteLink?
     let connect: (SessionRoute) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -56,7 +56,7 @@ struct ConnectionSetupView: View {
                 .transition(Self.pushTransition)
             } else {
                 NavigationStackCompat {
-                    ConnectToView(close: { dismiss() }, signIn: signIn, signedIn: configure)
+                    ConnectToView(link: link, close: { dismiss() }, signIn: signIn, signedIn: configure)
                         .navigationDestinationCompat(isPresented: $isSigningIn) {
                             if let signingIn {
                                 SetupSignInView(computer: signingIn, next: configure)

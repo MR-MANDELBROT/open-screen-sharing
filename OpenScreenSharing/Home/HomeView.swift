@@ -90,8 +90,8 @@ struct HomeView: View {
             .sheet(item: $editing) { computer in
                 ComputerEditor(computer: computer)
             }
-            .sheet(item: $setup, onDismiss: openPendingRoute) { _ in
-                ConnectionSetupView { route in
+            .sheet(item: $setup, onDismiss: openPendingRoute) { request in
+                ConnectionSetupView(link: request.link) { route in
                     pendingRoute = route
                 }
             }
@@ -279,23 +279,24 @@ struct HomeView: View {
         setup = SetupRequest()
     }
 
-    private func route(for link: RemoteLink, at address: ComputerAddress) -> SessionRoute {
-        var route: SessionRoute
-        if let computer = ComputerStore.shared.computer(at: address, remoteProtocol: link.remoteProtocol, username: link.username) {
-            route = SessionRoute(computer: computer)
-            if let username = link.username {
-                route.username = username
-            }
-        } else {
-            let found = nearby.computer(matching: address, remoteProtocol: link.remoteProtocol)
-            route = SessionRoute(
-                name: link.address.bonjourServiceName ?? found?.name ?? address.host, address: address,
-                remoteProtocol: link.remoteProtocol, username: link.username, model: found?.model)
+    private func open(_ link: RemoteLink, at address: ComputerAddress) {
+        guard let computer = ComputerStore.shared.computer(at: address, remoteProtocol: link.remoteProtocol, username: link.username)
+        else {
+            var link = link
+            link.address = address
+            linkLookup = nil
+            selection = .connections
+            setup = SetupRequest(link: link)
+            return
+        }
+        var route = SessionRoute(computer: computer)
+        if let username = link.username {
+            route.username = username
         }
         if let password = link.password {
             route.credentials = route.username.map { .account(username: $0, password: password) } ?? .vncPassword(password)
         }
-        return route
+        connect(route)
     }
 
     private func open(_ url: URL) {
@@ -306,18 +307,18 @@ struct HomeView: View {
             return
         }
         guard let serviceName = link.address.bonjourServiceName else {
-            connect(route(for: link, at: link.address))
+            open(link, at: link.address)
             return
         }
         if let address = nearby.computers.first(where: { $0.remoteProtocol == .vnc && $0.name == serviceName })?.address {
-            connect(route(for: link, at: address))
+            open(link, at: address)
             return
         }
         let task = Task {
             do {
                 let address = try await ServiceResolver.resolve(name: serviceName)
                 try Task.checkCancellation()
-                connect(route(for: link, at: address))
+                open(link, at: address)
             } catch is CancellationError {
             } catch {
                 guard !Task.isCancelled else { return }
