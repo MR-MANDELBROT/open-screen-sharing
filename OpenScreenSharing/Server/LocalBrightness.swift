@@ -60,6 +60,11 @@ final class LocalBrightness {
     nonisolated private static let backlight = Backlight(observing: true)
     nonisolated private static let backlightChanged = Notification.Name("OpenScreenSharing.backlightChanged")
 
+    nonisolated static var backlightState: Int32 {
+        guard backlight != nil, let state = currentDisplayState else { return -1 }
+        return Int32(state.rawValue)
+    }
+
     // BLSBacklightState values; BLSBacklightStateIsActive is true for ActiveOn and Dimmed
     // (BacklightServices 24A446, NSStringFromBLSBacklightState 0x22582161c,
     // BLSBacklightStateIsActive 0x2258259c4).

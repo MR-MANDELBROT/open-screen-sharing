@@ -70,6 +70,37 @@ func New(ctx context.Context, device *coredevice.Device, logger *slog.Logger) *C
 	return &Client{ctx: ctx, device: device, logger: logger}
 }
 
+func (c *Client) PrepareTouches(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if c.indigo != nil {
+		return nil
+	}
+	conn, err := c.device.DialXPC(ctx, indigoService)
+	if err != nil {
+		return E.Cause(err, "hid")
+	}
+	c.indigo = conn
+	return nil
+}
+
+// Zero-hold taps reached the passcode page on iPhone18,2 / iOS 27.2 24B5110a
+// (RE/24B5110a/ScreenSharing/faceid-timing-20261017/review.json).
+func (c *Client) Tap(ctx context.Context, touch Touch) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.edge = EdgeNone
+	touches := []Touch{touch}
+	err := c.sendTouches(ctx, digitizerStart, touches)
+	var releaseErr error
+	if err == nil {
+		releaseErr = c.sendTouches(c.ctx, digitizerEnd, touches)
+	}
+	return E.Errors(err, ctx.Err(), releaseErr)
+}
+
 func (c *Client) SetTouches(ctx context.Context, touches []Touch, edge Edge) error {
 	eventType := uint64(digitizerPosition)
 	if len(c.touches) == 0 {
@@ -119,12 +150,8 @@ func digitizerPoint(touch Touch) map[string]any {
 // idevice sends Indigo events without a reply flag (idevice d32c818,
 // idevice/src/services/core_device/hid.rs:524-541).
 func (c *Client) sendIndigo(ctx context.Context, messageType, feature string, payload map[string]any) error {
-	if c.indigo == nil {
-		conn, err := c.device.DialXPC(ctx, indigoService)
-		if err != nil {
-			return E.Cause(err, "hid")
-		}
-		c.indigo = conn
+	if err := c.PrepareTouches(ctx); err != nil {
+		return err
 	}
 	err := c.indigo.SendContext(ctx, map[string]any{
 		"messageType":       messageType,

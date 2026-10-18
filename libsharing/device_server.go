@@ -38,19 +38,23 @@ const (
 )
 
 type DeviceServerOptions struct {
-	PairingRecord      []byte
-	RemotePairingPort  int32
-	Port               int32
-	NoAuthentication   bool
-	Username           string
-	Password           string
-	DiskImageDirectory string
+	PairingRecord          []byte
+	RemotePairingPort      int32
+	Port                   int32
+	NoAuthentication       bool
+	Username               string
+	Password               string
+	AutoUnlockPasscode     string
+	AutoUnlockPasscodeType int32
+	DiskImageDirectory     string
 }
 
 type DeviceServerHandler interface {
 	OnStateChanged(state int32, errorCode int32, message string)
 	OnViewerConnected(viewerID int64)
 	OnViewerDisconnected(viewerID int64)
+	OnAutoUnlockFailed(message string, inputStarted bool)
+	BacklightState() int32
 }
 
 const defaultRemotePairingPort = 49152
@@ -157,9 +161,12 @@ func NewDeviceServer(options *DeviceServerOptions, handler DeviceServerHandler) 
 				AudioPort: uint16(options.Port + 2),
 			},
 		},
-		Audio:              true,
-		SharedClipboard:    true,
-		DiskImageDirectory: options.DiskImageDirectory,
+		Audio:                  true,
+		SharedClipboard:        true,
+		DiskImageDirectory:     options.DiskImageDirectory,
+		AutoUnlockPasscode:     options.AutoUnlockPasscode,
+		AutoUnlockPasscodeType: deviceserver.PasscodeType(options.AutoUnlockPasscodeType),
+		BacklightState:         handler.BacklightState,
 	})
 	if err != nil {
 		return nil, err
@@ -187,6 +194,10 @@ func (s *DeviceServer) SetRemotePairingPort(port int32) {
 	if s.setPairingPort(port) {
 		s.server.Retry()
 	}
+}
+
+func (s *DeviceServer) DisableAutoUnlock() {
+	s.server.DisableAutoUnlock()
 }
 
 func (s *DeviceServer) setPairingPort(port int32) bool {
@@ -237,6 +248,10 @@ func (o *deviceObserver) ViewerDisconnected(session *rfb.ServerSession, err erro
 }
 
 func (o *deviceObserver) StreamingChanged(active bool) {}
+
+func (o *deviceObserver) AutoUnlockFailed(err error, inputStarted bool) {
+	o.handler.OnAutoUnlockFailed(err.Error(), inputStarted)
+}
 
 func stateCode(state deviceserver.State) int32 {
 	switch state {

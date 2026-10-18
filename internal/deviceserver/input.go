@@ -8,6 +8,7 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/hid"
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb"
+	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -20,6 +21,7 @@ type inputItem struct {
 	write     *rfb.Clipboard
 	release   bool
 	moves     bool
+	unlock    bool
 	forgotten chan error
 }
 
@@ -40,12 +42,14 @@ type inputWorker struct {
 	sessions map[*rfb.ServerSession]inputSession
 	wake     chan struct{}
 
-	device     *coredevice.Device
-	client     *hid.Client
-	generation uint64
-	touch      touchMapper
-	keys       *keyboard
-	closeErr   error
+	device        *coredevice.Device
+	client        *hid.Client
+	generation    uint64
+	touch         touchMapper
+	keys          *keyboard
+	unlockPending []inputItem
+	lockState     *coredevice.LockStateConn
+	closeErr      error
 }
 
 func newInputWorker(server *Server, logger *slog.Logger) *inputWorker {
@@ -142,6 +146,9 @@ func (w *inputWorker) viewerConnected(session *rfb.ServerSession) {
 	owner, cancel := context.WithCancel(session.Context())
 	w.sessions[session] = inputSession{context: owner, cancel: cancel}
 	w.access.Unlock()
+	if w.server.options.AutoUnlockPasscode != "" {
+		w.push(inputItem{session: session, owner: owner, unlock: true})
+	}
 }
 
 func (w *inputWorker) sessionResumed(session *rfb.ServerSession) {
@@ -150,6 +157,12 @@ func (w *inputWorker) sessionResumed(session *rfb.ServerSession) {
 	if _, present := w.sessions[session]; !present {
 		owner, cancel := context.WithCancel(session.Context())
 		w.sessions[session] = inputSession{context: owner, cancel: cancel}
+	}
+}
+
+func (w *inputWorker) videoReady() {
+	if w.server.options.AutoUnlockPasscode != "" {
+		w.push(inputItem{})
 	}
 }
 
@@ -189,7 +202,13 @@ func (w *inputWorker) closeClient() {
 	if w.client != nil {
 		err = w.client.Close()
 	}
+	if w.lockState != nil {
+		err = E.Append(err, w.lockState.Close(), func(err error) error {
+			return E.Cause(err, "close lock-state connection")
+		})
+	}
 	w.client = nil
+	w.lockState = nil
 	w.device = nil
 	w.resetState()
 	w.keys.capsLock = false
@@ -212,6 +231,14 @@ func (w *inputWorker) handle(item inputItem) {
 		item.forgotten <- w.closeErr
 		w.closeErr = nil
 		return
+	}
+	if item.unlock {
+		w.unlockPending = append(w.unlockPending, item)
+	}
+	if item.release {
+		w.unlockPending = common.Filter(w.unlockPending, func(request inputItem) bool {
+			return request.session != item.session
+		})
 	}
 	a := w.server.currentDevice()
 	if w.client != nil && (a == nil || a.device != w.device) {
@@ -238,7 +265,7 @@ func (w *inputWorker) handle(item inputItem) {
 			}
 		}
 		return
-	case item.event == nil:
+	case item.event == nil && len(w.unlockPending) == 0:
 		return
 	}
 	running, _, generation := w.server.streams.inputState()
@@ -250,7 +277,24 @@ func (w *inputWorker) handle(item inputItem) {
 		w.device = a.device
 		w.generation = generation
 	}
-	if item.owner.Err() != nil {
+	for len(w.unlockPending) > 0 {
+		request := w.unlockPending[0]
+		w.unlockPending[0] = inputItem{}
+		w.unlockPending = w.unlockPending[1:]
+		if request.owner.Err() != nil {
+			continue
+		}
+		unlockContext, cancel := inputContext(a, request.owner)
+		consumed := w.checkUnlock(unlockContext, a)
+		cancel()
+		if consumed {
+			if len(w.unlockPending) > 0 {
+				w.push(inputItem{})
+			}
+			return
+		}
+	}
+	if item.event == nil || item.owner.Err() != nil {
 		return
 	}
 	eventContext, cancel := inputContext(a, item.owner)

@@ -15,6 +15,9 @@ final class ServerSettings: ObservableObject {
         static let password = "serverPassword"
         static let runsInBackground = "serverRunsInBackground"
         static let backgroundMode = "serverBackgroundMode"
+        static let autoUnlocks = "serverAutoUnlocks"
+        static let autoUnlockPasscodeType = "serverAutoUnlockPasscodeType"
+        static let autoUnlockPasscode = "serverAutoUnlockPasscode"
     }
 
     @Published var isEnabled: Bool {
@@ -45,6 +48,18 @@ final class ServerSettings: ObservableObject {
         didSet { store.set(password, for: Key.password) }
     }
 
+    @Published var autoUnlocks: Bool {
+        didSet { store.set(autoUnlocks, for: Key.autoUnlocks) }
+    }
+
+    @Published var autoUnlockPasscodeType: ServerPasscodeType {
+        didSet { store.set(autoUnlockPasscodeType, for: Key.autoUnlockPasscodeType) }
+    }
+
+    @Published var autoUnlockPasscode: String {
+        didSet { store.set(autoUnlockPasscode, for: Key.autoUnlockPasscode) }
+    }
+
     private let store = PreferenceStore.shared
 
     init() {
@@ -55,6 +70,9 @@ final class ServerSettings: ObservableObject {
         runsInBackground = store.value(Bool.self, for: Key.runsInBackground) ?? true
         backgroundMode = store.value(ServerBackgroundMode.self, for: Key.backgroundMode) ?? .location
         password = store.value(String.self, for: Key.password) ?? ""
+        autoUnlocks = store.value(Bool.self, for: Key.autoUnlocks) ?? false
+        autoUnlockPasscodeType = store.value(ServerPasscodeType.self, for: Key.autoUnlockPasscodeType) ?? .pin
+        autoUnlockPasscode = store.value(String.self, for: Key.autoUnlockPasscode) ?? ""
     }
 
     var effectiveUsername: String {
@@ -62,7 +80,36 @@ final class ServerSettings: ObservableObject {
     }
 
     var isComplete: Bool {
-        !authenticates || (!effectiveUsername.isEmpty && !password.isEmpty)
+        (!authenticates || (!effectiveUsername.isEmpty && !password.isEmpty)) && autoUnlockProblem == nil
+    }
+
+    var autoUnlockProblem: String? {
+        autoUnlocks ? autoUnlockPasscodeType.problem(for: autoUnlockPasscode) : nil
+    }
+}
+
+enum ServerPasscodeType: Int32, Codable {
+    case pin = 0
+    case numeric = 1
+    case alphanumeric = 2
+
+    func problem(for passcode: String) -> String? {
+        guard !passcode.isEmpty else { return String(localized: "Enter this device’s lock screen passcode.") }
+        guard passcode.utf8.count <= 64 else { return String(localized: "Automatic unlock supports passcodes up to 64 characters.") }
+        let isNumeric = passcode.utf8.allSatisfy { (0x30...0x39).contains($0) }
+        switch self {
+        case .pin:
+            guard isNumeric && (passcode.utf8.count == 4 || passcode.utf8.count == 6) else {
+                return String(localized: "Enter a 4-digit or 6-digit passcode, or select the passcode type used by this device.")
+            }
+        case .numeric:
+            guard isNumeric else { return String(localized: "A custom numeric passcode can contain only digits from 0 to 9.") }
+        case .alphanumeric:
+            guard passcode.utf8.allSatisfy({ (0x20...0x7e).contains($0) }) else {
+                return String(localized: "Automatic unlock supports English letters, numbers, spaces, and standard punctuation. Other characters aren’t supported.")
+            }
+        }
+        return nil
     }
 }
 

@@ -358,6 +358,7 @@ func (s *Server) startVideo(ctx context.Context, a *attachment, request media.Se
 	s.setVideoProblem(nil)
 	s.videoSize(info.Width, info.Height)
 	s.checkDisplay()
+	s.input.videoReady()
 	return source, nil
 }
 

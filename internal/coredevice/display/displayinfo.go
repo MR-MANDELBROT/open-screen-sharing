@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 // pymobiledevice3 sends getdisplayinfo to deviceinfo with no action
@@ -23,6 +24,59 @@ type DisplayInfo struct {
 	NativeWidth, NativeHeight int
 	CurrentOrientation        string
 	PointScale                int
+}
+
+func (c *Client) BacklightState(ctx context.Context) (string, error) {
+	ctx, cancel := c.operationContext(ctx)
+	defer cancel()
+	if err := context.Cause(ctx); err != nil {
+		return "", err
+	}
+	conn, err := c.device.DialXPC(ctx, deviceInfoServiceName)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	output, err := invoke(ctx, conn, c.deviceIdentifier, featureDisplayInfo, "", map[string]any{})
+	if err != nil {
+		return "", err
+	}
+	return primaryBacklightState(output)
+}
+
+func primaryBacklightState(output map[string]any) (string, error) {
+	var selected map[string]any
+	for _, value := range array(output["displays"]) {
+		display := dictionary(value)
+		primary, ok := boolValue(display["primary"])
+		if !ok {
+			return "", E.New("the device did not identify its primary display")
+		}
+		if !primary {
+			continue
+		}
+		external, ok := boolValue(display["external"])
+		if !ok {
+			return "", E.New("the device did not report whether its primary display is external")
+		}
+		if external {
+			continue
+		}
+		if selected != nil {
+			return "", E.New("the device reported multiple primary integrated displays")
+		}
+		selected = display
+	}
+	if selected == nil {
+		return "", E.New("the device did not report a primary integrated display")
+	}
+	// The aggregate state can remain activeOn while the integrated display is
+	// inactiveOn (Always-On Display).
+	state, ok := selected["backlightState"].(string)
+	if !ok || state == "" {
+		return "", E.New("the device did not report its primary integrated display's backlight state")
+	}
+	return state, nil
 }
 
 func (c *Client) Displays(ctx context.Context) ([]DisplayInfo, error) {

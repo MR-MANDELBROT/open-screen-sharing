@@ -42,6 +42,8 @@ func main() {
 	audio := flag.Bool("audio", true, "send the device's sound")
 	clipboard := flag.Bool("clipboard", false, "share the device's clipboard with viewers that ask")
 	input := flag.Bool("input", true, "pass the viewers' pointer, keys, scroll and gestures to the device")
+	unlockPasscode := flag.String("unlock-passcode", os.Getenv("SHARESERVE_UNLOCK_PASSCODE"), "device passcode for automatic unlocking (or SHARESERVE_UNLOCK_PASSCODE)")
+	unlockType := flag.String("unlock-type", "pin", "device passcode type: pin, numeric, alphanumeric")
 	diskImage := flag.String("ddi", "", "directory with the Developer Disk Image's files, to mount it when it is not")
 	download := flag.Bool("download", false, "download the Developer Disk Image into -ddi when it has none")
 	statsInterval := flag.Duration("stats", 5*time.Second, "interval of media statistics, 0 for none")
@@ -136,20 +138,26 @@ func main() {
 	}
 
 	observer := &logObserver{logger: logger, failed: make(chan error, 1)}
+	passcodeType, err := parsePasscodeType(*unlockType)
+	if err != nil {
+		fatal(err)
+	}
 	deviceLogger := logger.With("component", "device")
 	server, err := deviceserver.New(deviceserver.Options{
 		Connect: func(ctx context.Context) (*coredevice.Device, error) {
 			return coredevice.ConnectUSBMux(ctx, *udid, deviceLogger)
 		},
-		Logger:             logger,
-		Observer:           observer,
-		Listen:             *listen,
-		RFB:                rfbOptions,
-		Audio:              *audio,
-		SharedClipboard:    *clipboard,
-		DisableInput:       !*input,
-		DiskImageDirectory: *diskImage,
-		DownloadDiskImage:  *download,
+		Logger:                 logger,
+		Observer:               observer,
+		Listen:                 *listen,
+		RFB:                    rfbOptions,
+		Audio:                  *audio,
+		SharedClipboard:        *clipboard,
+		DisableInput:           !*input,
+		AutoUnlockPasscode:     *unlockPasscode,
+		AutoUnlockPasscodeType: passcodeType,
+		DiskImageDirectory:     *diskImage,
+		DownloadDiskImage:      *download,
 	})
 	if err != nil {
 		fatal(err)
@@ -204,6 +212,19 @@ func parseWord(text string) (uint32, error) {
 	}
 	value, err := strconv.ParseUint(text, 0, 32)
 	return uint32(value), err
+}
+
+func parsePasscodeType(value string) (deviceserver.PasscodeType, error) {
+	switch value {
+	case "pin":
+		return deviceserver.PasscodePIN, nil
+	case "numeric":
+		return deviceserver.PasscodeNumeric, nil
+	case "alphanumeric":
+		return deviceserver.PasscodeAlphanumeric, nil
+	default:
+		return 0, E.New("-unlock-type must be pin, numeric or alphanumeric")
+	}
 }
 
 func parseCommands(text string) ([]uint8, error) {
@@ -277,6 +298,10 @@ func (o *logObserver) ViewerConnected(*rfb.ServerSession) {}
 func (o *logObserver) ViewerDisconnected(*rfb.ServerSession, error) {}
 
 func (o *logObserver) StreamingChanged(bool) {}
+
+func (o *logObserver) AutoUnlockFailed(err error, inputStarted bool) {
+	o.logger.Warn("automatic unlocking failed", "input_started", inputStarted, "error", err)
+}
 
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "shareserve:", err)

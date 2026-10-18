@@ -11,6 +11,7 @@ struct ServerView: View {
         case port
         case username
         case password
+        case devicePasscode
     }
 
     @ObservedObject private var controller = ServerController.shared
@@ -24,6 +25,7 @@ struct ServerView: View {
                 sharingSection
                 listenSection
                 authenticationSection
+                autoUnlockSection
                 backgroundSection
             }
             setupSection
@@ -205,6 +207,41 @@ struct ServerView: View {
         }
         .onChangeCompat(of: settings.runsInBackground) { controller.updateBackground() }
         .onChangeCompat(of: settings.backgroundMode) { controller.updateBackground() }
+    }
+
+    private var autoUnlockSection: some View {
+        Section {
+            Toggle("Enabled", isOn: $settings.autoUnlocks)
+            if settings.autoUnlocks {
+                Picker("Passcode Type", selection: $settings.autoUnlockPasscodeType) {
+                    Text("4-Digit or 6-Digit Code").tag(ServerPasscodeType.pin)
+                    Text("Custom Numeric Code").tag(ServerPasscodeType.numeric)
+                    Text("Custom Alphanumeric Code").tag(ServerPasscodeType.alphanumeric)
+                }
+                .pickerStyle(.menu)
+                LabeledContentCompat("Device Passcode") {
+                    TextField("Device Passcode", text: $settings.autoUnlockPasscode.masked { focusedField == .devicePasscode }, prompt: Text("Required"))
+                        .textContentType(.oneTimeCode)
+                        .keyboardType(settings.autoUnlockPasscodeType == .alphanumeric ? .asciiCapable : .asciiCapableNumberPad)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .devicePasscode)
+                        .submitLabel(.done)
+                }
+            }
+        } header: {
+            Text("Automatic Unlock")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Screen Sharing needs your passcode to automatically unlock the device when connected.")
+                if let problem = settings.autoUnlockProblem ?? controller.autoUnlockProblem {
+                    Text(problem)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .disabled(controller.isActive)
     }
 
     private var setupSection: some View {

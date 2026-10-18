@@ -4561,6 +4561,50 @@
         }
       }
     },
+    "4-Digit or 6-Digit Code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4-Digit or 6-Digit Code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4 位或 6 位数字密码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4 位或 6 位數字密碼"
+          }
+        }
+      }
+    },
+    "A custom numeric passcode can contain only digits from 0 to 9." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A custom numeric passcode can contain only digits from 0 to 9."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定数字密码只能包含 0 到 9 的数字。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自訂數字密碼只能包含 0 到 9 的數字。"
+          }
+        }
+      }
+    },
     "A New Nightly Build Is Available" : {
       "localizations" : {
         "ar" : {
@@ -12157,6 +12201,94 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "認證"
+          }
+        }
+      }
+    },
+    "Automatic Unlock" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic Unlock"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动解锁"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動解鎖"
+          }
+        }
+      }
+    },
+    "Automatic unlock supports English letters, numbers, spaces, and standard punctuation. Other characters aren’t supported." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic unlock supports English letters, numbers, spaces, and standard punctuation. Other characters aren’t supported."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动解锁支持英文字母、数字、空格和常用英文标点，不支持其他字符。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動解鎖支援英文字母、數字、空格及常用英文標點，不支援其他字元。"
+          }
+        }
+      }
+    },
+    "Automatic unlock supports passcodes up to 64 characters." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic unlock supports passcodes up to 64 characters."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动解锁支持最多 64 个字符的密码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動解鎖支援最多 64 個字元的密碼。"
+          }
+        }
+      }
+    },
+    "Automatic unlock was turned off. Stop sharing and check the device passcode before trying again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic unlock was turned off. Stop sharing and check the device passcode before trying again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动解锁已关闭。请先停止共享，检查设备锁屏密码，再重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動解鎖已關閉。請先停止共享，檢查裝置鎖定畫面密碼，再重試。"
           }
         }
       }
@@ -30401,6 +30533,50 @@
         }
       }
     },
+    "Custom Alphanumeric Code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom Alphanumeric Code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定字母数字密码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自訂英數字密碼"
+          }
+        }
+      }
+    },
+    "Custom Numeric Code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom Numeric Code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定数字密码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自訂數字密碼"
+          }
+        }
+      }
+    },
     "Customize Toolbar" : {
       "localizations" : {
         "ar" : {
@@ -33133,6 +33309,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "開發者模式已關閉"
+          }
+        }
+      }
+    },
+    "Device Passcode" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Device Passcode"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备锁屏密码"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裝置鎖定畫面密碼"
           }
         }
       }
@@ -39224,6 +39422,28 @@
         }
       }
     },
+    "Enter a 4-digit or 6-digit passcode, or select the passcode type used by this device." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a 4-digit or 6-digit passcode, or select the passcode type used by this device."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入 4 位或 6 位数字密码，或选择本设备使用的密码类型。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入 4 位或 6 位數字密碼，或選擇本裝置使用的密碼類型。"
+          }
+        }
+      }
+    },
     "Enter a name." : {
       "localizations" : {
         "ar" : {
@@ -40436,6 +40656,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "輸入用户名稱和密碼以登入「%@」。"
+          }
+        }
+      }
+    },
+    "Enter this device’s lock screen passcode." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter this device’s lock screen passcode."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入本设备的锁屏密码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入本裝置的鎖定畫面密碼。"
           }
         }
       }
@@ -73880,6 +74122,28 @@
         }
       }
     },
+    "Passcode Type" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passcode Type"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "密码类型"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "密碼類型"
+          }
+        }
+      }
+    },
     "Passphrase" : {
       "localizations" : {
         "ar" : {
@@ -85428,6 +85692,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Screen Sharing 需要在背景保持執行，才能持續共享此裝置的螢幕。"
+          }
+        }
+      }
+    },
+    "Screen Sharing needs your passcode to automatically unlock the device when connected." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing needs your passcode to automatically unlock the device when connected."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing 需要您的密码，以在连接时自动解锁设备。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing 需要您的密碼，以在連線時自動解鎖裝置。"
           }
         }
       }

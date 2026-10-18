@@ -39,6 +39,7 @@ final class ServerController: ObservableObject {
     @Published private(set) var advertisedName: String?
     @Published private(set) var localNetworkDenied = false
     @Published private(set) var backgroundProblem: String?
+    @Published private(set) var autoUnlockProblem: String?
     @Published private(set) var tunnelFound: Bool?
     @Published private(set) var tunnelThroughLocalNetwork = false
 
@@ -165,6 +166,7 @@ final class ServerController: ObservableObject {
             return
         }
         settings.isEnabled = true
+        autoUnlockProblem = nil
         generation += 1
         let generation = generation
         phase = .starting
@@ -194,6 +196,8 @@ final class ServerController: ObservableObject {
         options.noAuthentication = !settings.authenticates
         options.username = settings.effectiveUsername
         options.password = settings.password
+        options.autoUnlockPasscode = settings.autoUnlocks ? settings.autoUnlockPasscode : ""
+        options.autoUnlockPasscodeType = settings.autoUnlockPasscodeType.rawValue
         do {
             options.diskImageDirectory = try DiskImageStore.directory.get().path
         } catch {
@@ -215,6 +219,16 @@ final class ServerController: ObservableObject {
                     self.volume.setWatched(!self.viewers.isEmpty)
                     self.brightness.setWatched(!self.viewers.isEmpty, server: self.server)
                 }
+            },
+            autoUnlockFailed: { [weak self] message, inputStarted in
+                DispatchQueue.main.async {
+                    guard let self, generation == self.generation else { return }
+                    if inputStarted {
+                        self.autoUnlockProblem = String(localized: "Automatic unlock was turned off. Stop sharing and check the device passcode before trying again.") + "\n" + message
+                    } else {
+                        self.autoUnlockProblem = message
+                    }
+                }
             })
         let request = UncheckedSendable(value: options)
         let result = await withCheckedContinuation { continuation in
@@ -233,6 +247,9 @@ final class ServerController: ObservableObject {
             }
             if let port = remotePairing.port, Int32(port) != options.remotePairingPort {
                 box.value.setRemotePairingPort(Int32(port))
+            }
+            if !settings.autoUnlocks {
+                box.value.disableAutoUnlock()
             }
             do {
                 try box.value.start()

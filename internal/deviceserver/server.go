@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
@@ -70,6 +71,7 @@ type Observer interface {
 	ViewerConnected(session *rfb.ServerSession)
 	ViewerDisconnected(session *rfb.ServerSession, err error)
 	StreamingChanged(active bool)
+	AutoUnlockFailed(err error, inputStarted bool)
 }
 
 type Options struct {
@@ -83,6 +85,12 @@ type Options struct {
 	Audio           bool
 	SharedClipboard bool
 	DisableInput    bool
+
+	AutoUnlockPasscode     string
+	AutoUnlockPasscodeType PasscodeType
+	// BLSBacklightState: 0 off, 1 inactiveOn, 2 activeOn, 3 dimmed (BacklightServices
+	// 24A446, NSStringFromBLSBacklightState 0x22582161c, table 0x268a47640); -1 unavailable.
+	BacklightState func() int32
 
 	DiskImageDirectory string
 	DownloadDiskImage  bool
@@ -117,8 +125,9 @@ type Server struct {
 	display       displayGeometry
 	videoProblem  error
 
-	listener net.Listener
-	relisted bool
+	listener           net.Listener
+	relisted           bool
+	autoUnlockDisabled atomic.Bool
 }
 
 type attachment struct {
@@ -131,6 +140,9 @@ type attachment struct {
 }
 
 func New(options Options) (*Server, error) {
+	if err := validateAutoUnlock(options); err != nil {
+		return nil, err
+	}
 	logger := options.Logger
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
@@ -205,6 +217,10 @@ func (s *Server) Retry() {
 
 func (s *Server) Sessions() []*rfb.ServerSession {
 	return s.rfb.Sessions()
+}
+
+func (s *Server) DisableAutoUnlock() {
+	s.autoUnlockDisabled.Store(true)
 }
 
 func (s *Server) Close() error {
