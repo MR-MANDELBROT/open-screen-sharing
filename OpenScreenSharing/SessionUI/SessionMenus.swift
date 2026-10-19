@@ -66,32 +66,6 @@ struct QualityPicker: View {
     }
 }
 
-extension RemoteAudio {
-    var title: String.LocalizationValue {
-        switch self {
-        case .off: "No Audio"
-        case .fromMac: "Receive Audio"
-        case .toMac: "Send Audio"
-        }
-    }
-}
-
-struct AudioPicker: View {
-    let controller: SessionController
-
-    var body: some View {
-        WithPerceptionTracking {
-            Picker(selection: Binding(get: { controller.remoteAudio }, set: { controller.setRemoteAudio($0) })) {
-                ForEach(controller.audioOptions) { audio in
-                    Text(String(localized: audio.title)).tag(audio)
-                }
-            } label: {
-                Label("Sound", systemImage: SessionCommand.audio.systemImage)
-            }
-        }
-    }
-}
-
 struct ResolutionOptions: View {
     let controller: SessionController
 

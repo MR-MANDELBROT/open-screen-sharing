@@ -198,15 +198,9 @@ private struct SoundCommandItems: View {
 
     var body: some View {
         WithPerceptionTracking {
-            ForEach(session?.audioOptions ?? RemoteAudio.allCases) { audio in
-                WithPerceptionTracking {
-                    Toggle(isOn: Binding(get: { session?.remoteAudio == audio }, set: { _ in session?.setRemoteAudio(audio) })) {
-                        Text(String(localized: audio.title))
-                    }
-                    .modifier(ActionShortcut(action: ShortcutAction.audio(audio)))
-                }
-            }
-            .disabled(session.map { !SessionCommand.audio.isOffered(by: $0) } ?? true)
+            Toggle("Receive Audio", isOn: Binding(get: { session?.receivesAudio ?? false }, set: { session?.setReceivesAudio($0) }))
+                .modifier(ActionShortcut(action: .receiveAudio))
+                .disabled(session.map { !SessionCommand.audio.isOffered(by: $0) } ?? true)
         }
     }
 }

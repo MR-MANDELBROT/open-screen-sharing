@@ -335,11 +335,11 @@ func logStreamStatistics(h *handler, client *rfb.Client) {
 }
 
 func parseMediaOptions(flags []string) media.OfferOptions {
-	options := media.OfferOptions{Codecs: []media.Codec{media.CodecHEVC}, FrameRate60: true, Audio: media.AudioOff}
+	options := media.OfferOptions{Codecs: []media.Codec{media.CodecHEVC}, FrameRate60: true}
 	for _, flag := range flags {
 		switch flag {
 		case "audio":
-			options.Audio = media.AudioFromServer
+			options.Audio = true
 		case "420":
 			options.PixelFormats = media.PixelFormatsChroma420
 		case "h264":

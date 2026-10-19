@@ -1,8 +1,6 @@
 package media
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"errors"
 	"net"
 	"net/netip"
@@ -95,12 +93,6 @@ type Stream struct {
 	keyframe chan struct{}
 
 	rate                rateFeedback
-	microphone          *srtpSender
-	microphoneIndex     uint64
-	microphoneTimestamp uint32
-	microphoneStarted   bool
-	microphoneAccess    sync.Mutex
-	microphonePacket    []byte
 	lastKeyframeRequest time.Time
 	refusedAt           time.Time
 	restartExpected     bool
@@ -191,13 +183,6 @@ func (s *Stream) handlePorts(ports *Ports) error {
 			return err
 		}
 	}
-	if audio != nil && offer.options.Audio == AudioToServer {
-		s.microphone = newSRTPSender(offer.audioSend[:])
-		var random [6]byte
-		_, _ = rand.Read(random[:])
-		s.microphoneIndex = uint64(binary.BigEndian.Uint16(random[:]) & 0x7fff)
-		s.microphoneTimestamp = binary.BigEndian.Uint32(random[2:])
-	}
 	s.ports = ports
 	s.video = video
 	s.audio = audio
@@ -273,48 +258,6 @@ func (s *Stream) ExpectRestart() {
 	defer s.access.Unlock()
 	s.restartExpected = true
 	s.refusedAt = time.Time{}
-}
-
-func (s *Stream) SendAudio(data []byte) error {
-	s.microphoneAccess.Lock()
-	defer s.microphoneAccess.Unlock()
-	s.access.Lock()
-	if s.isDone() {
-		s.access.Unlock()
-		return E.New("media: the stream is closed")
-	}
-	if s.microphone == nil {
-		s.access.Unlock()
-		return E.New("media: the offer did not ask for AudioToServer, or the server has not named its ports")
-	}
-	if len(data) == 0 || len(data) > 0x1fff {
-		s.access.Unlock()
-		return E.New("media: audio access unit of ", len(data), " bytes, expected 1 to ", 0x1fff)
-	}
-	packet := append(s.microphonePacket[:0], make([]byte, 12)...)
-	packet[0] = 0x80
-	packet[1] = payloadTypeAudio
-	if !s.microphoneStarted {
-		packet[1] |= 0x80
-		s.microphoneStarted = true
-	}
-	binary.BigEndian.PutUint16(packet[2:], uint16(s.microphoneIndex))
-	binary.BigEndian.PutUint32(packet[4:], s.microphoneTimestamp)
-	binary.BigEndian.PutUint32(packet[8:], s.config.Offer.audioSSRC)
-	packet = binary.BigEndian.AppendUint16(packet, 16)
-	packet = binary.BigEndian.AppendUint16(packet, uint16(len(data)<<3))
-	packet = append(packet, data...)
-	protected := s.microphone.protect(packet, 12, s.microphoneIndex)
-	s.microphonePacket = protected
-	s.microphoneIndex++
-	s.microphoneTimestamp += audioFramesPerPacket
-	audio := s.audio
-	s.access.Unlock()
-	_, err := audio.conn.Write(protected)
-	if err != nil && !s.refused(audio, err) {
-		return err
-	}
-	return nil
 }
 
 func (s *Stream) RequestKeyframe() {

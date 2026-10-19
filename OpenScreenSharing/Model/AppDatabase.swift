@@ -71,8 +71,13 @@ enum AppDatabase {
                 t.add(column: "locksPointer", .boolean).notNull().defaults(to: false)
                 t.add(column: "usesNativeTouch", .boolean).notNull().defaults(to: true)
                 t.add(column: "keepsAlive", .boolean).notNull().defaults(to: false)
+                t.add(column: "receivesAudio", .boolean).notNull().defaults(to: true)
+            }
+            try db.execute(sql: "UPDATE computers SET receivesAudio = remoteAudio = 'fromMac'")
+            try db.alter(table: "computers") { t in
                 t.drop(column: "supportsHighPerformance")
                 t.drop(column: "usesDynamicResolution")
+                t.drop(column: "remoteAudio")
             }
         }
         return migrator

@@ -48,14 +48,6 @@ func classifyMediaError(err error) int32 {
 }
 
 const (
-	AudioFromMac int32 = 0
-
-	AudioOff int32 = 1
-
-	AudioToMac int32 = 2
-)
-
-const (
 	// AVConference mode 5 uses CoreDeviceScreenSharing settings
 	// (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
 	// UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
@@ -79,7 +71,7 @@ type HighPerformanceOptions struct {
 
 	PixelFormats int32
 
-	Audio int32
+	Audio bool
 
 	Bands int32
 
@@ -89,7 +81,7 @@ type HighPerformanceOptions struct {
 }
 
 func NewHighPerformanceOptions() *HighPerformanceOptions {
-	return &HighPerformanceOptions{SupportedCodecs: DecoderCodecHEVC, Audio: AudioFromMac, Bands: 1}
+	return &HighPerformanceOptions{SupportedCodecs: DecoderCodecHEVC, Audio: true, Bands: 1}
 }
 
 type VideoFormat struct {
@@ -173,7 +165,7 @@ func (s *Session) StartHighPerformance(options *HighPerformanceOptions) error {
 
 func offerOptions(options *HighPerformanceOptions) (media.OfferOptions, error) {
 	offer := media.OfferOptions{
-		Audio:            media.AudioMode(options.Audio),
+		Audio:            options.Audio,
 		TilesPerFrame:    int(options.Bands),
 		VideoMode:        media.VideoMode(options.VideoMode),
 		PixelFormats:     media.PixelFormats(options.PixelFormats),
@@ -258,14 +250,6 @@ func (s *Session) RequestKeyframe() error {
 	}
 	stream.RequestKeyframe()
 	return nil
-}
-
-func (s *Session) SendMicrophoneAudio(data []byte) error {
-	stream, err := s.mediaStream()
-	if err != nil {
-		return err
-	}
-	return stream.SendAudio(data)
 }
 
 type mediaEvents struct {

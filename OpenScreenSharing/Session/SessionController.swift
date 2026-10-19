@@ -1,4 +1,3 @@
-import AVFoundation
 import Atomics
 import CoreGraphics
 import Foundation
@@ -95,7 +94,7 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var resolutionScale = VirtualDisplayMode.defaultResolutionScale
     var display: DisplaySelection?
     var usesHDR = false
-    var remoteAudio = RemoteAudio.fromMac
+    var receivesAudio = true
     var windowSize: CGSize?
     var locksPointer = false
     var usesNativeTouch = true
@@ -126,7 +125,7 @@ final class SessionController: Identifiable {
     private(set) var resolutionScale = VirtualDisplayMode.defaultResolutionScale
     private(set) var hdrEnabled = false
     var displaySupportsHDR = false
-    private(set) var remoteAudio: RemoteAudio = .fromMac
+    private(set) var receivesAudio = true
     var scaleMode: ScaleMode = .fit
     var isFullScreen = false
     var isToolbarVisible = false
@@ -223,7 +222,6 @@ final class SessionController: Identifiable {
     @PerceptionIgnored private var hasConnected = false
     @PerceptionIgnored private var cursorAssets: MacCursorAssets?
     @PerceptionIgnored private var cursorAssetsAttempted = false
-    @PerceptionIgnored private var microphone: MicrophoneSender?
     @PerceptionIgnored private var reconnectAttempts = 0
     @PerceptionIgnored private var reconnectTask: Task<Void, Never>?
     @PerceptionIgnored private var chosenDisplay: DisplaySelection?
@@ -375,7 +373,7 @@ final class SessionController: Identifiable {
         resolutionScale = memory.resolutionScale
         chosenDisplay = memory.display
         hdrEnabled = memory.usesHDR && DecoderCapabilities.current.supportsHDR
-        remoteAudio = memory.remoteAudio
+        receivesAudio = memory.receivesAudio
         windowSize = memory.windowSize
         isPointerLockOn = memory.locksPointer
         isNativeTouchOn = memory.usesNativeTouch
@@ -389,7 +387,7 @@ final class SessionController: Identifiable {
             resolutionScale: resolutionScale,
             display: chosenDisplay,
             usesHDR: hdrEnabled,
-            remoteAudio: remoteAudio,
+            receivesAudio: receivesAudio,
             windowSize: windowSize,
             locksPointer: isPointerLockOn,
             usesNativeTouch: isNativeTouchOn
@@ -482,7 +480,7 @@ final class SessionController: Identifiable {
             quality: quality,
             startsInObserveMode: mode == .observe,
             sharesClipboard: clipboardSharing,
-            remoteAudio: remoteAudio,
+            receivesAudio: receivesAudio,
             updateRate: screenRefreshRate,
             networkConfiguration: networkConfiguration,
             keepsAlive: keepsAlive
@@ -573,8 +571,6 @@ final class SessionController: Identifiable {
         probeTask?.cancel()
         probeTask = nil
         restartsHighPerformanceOnReturn = false
-        microphone?.stop()
-        microphone = nil
         sink?.detach()
         awaitsResolutionChange = false
         pipeline.holdPicture()
@@ -604,7 +600,6 @@ final class SessionController: Identifiable {
         captureThumbnail()
         releaseAllKeys()
         stopScrollMomentum()
-        updateMicrophone()
         sink?.setSceneInBackground(true)
         #if os(iOS)
         screen?.backgroundStateDidChange()
@@ -626,7 +621,6 @@ final class SessionController: Identifiable {
         #if os(iOS)
         screen?.backgroundStateDidChange()
         #endif
-        updateMicrophone()
         let wasActive = activeWhenBackgrounded
         activeWhenBackgrounded = false
         let restartsHighPerformance = restartsHighPerformanceOnReturn
@@ -831,7 +825,6 @@ final class SessionController: Identifiable {
         virtualDisplayRequests.framebufferDidChange(width: screenWidth, height: height, resized: resized)
         if isVideo != video {
             isVideo = video
-            updateMicrophone()
         }
     }
 
@@ -1370,79 +1363,15 @@ final class SessionController: Identifiable {
         alert = AlertState(String(localized: "This Device Can’t Show HDR"), error: error)
     }
 
-    func setRemoteAudio(_ audio: RemoteAudio) {
-        let changed = audio != remoteAudio
-        remoteAudio = audio
+    func setReceivesAudio(_ receivesAudio: Bool) {
+        let changed = receivesAudio != self.receivesAudio
+        self.receivesAudio = receivesAudio
         rememberState()
         if changed, capabilities.contains(.audio), phase == .connected {
             reconnectNow()
             return
         }
-        session?.setRemoteAudio(audio)
-        updateMicrophone()
-    }
-
-    private func updateMicrophone() {
-        let wanted = isVideo && remoteAudio == .toMac && phase == .connected && !sceneInBackground
-        if !wanted {
-            microphone?.stop()
-            microphone = nil
-            return
-        }
-        guard microphone == nil else { return }
-        Task { [self] in
-            let granted: Bool
-            if #available(iOS 17, *) {
-                granted = await AVAudioApplication.requestRecordPermission()
-            } else {
-                #if os(iOS)
-                granted = await withCheckedContinuation { continuation in
-                    AVAudioSession.sharedInstance().requestRecordPermission { @Sendable granted in
-                        continuation.resume(returning: granted)
-                    }
-                }
-                #else
-                granted = false
-                #endif
-            }
-            guard microphone == nil, isVideo, remoteAudio == .toMac, phase == .connected, !sceneInBackground else { return }
-            guard granted else {
-                #if os(iOS)
-                alert = AlertState(String(localized: "Can’t Use the Microphone"), errorMessage: String(localized: "Microphone access is turned off in Settings."))
-                #else
-                alert = AlertState(
-                    title: String(localized: "Can’t Use the Microphone"),
-                    message: String(localized: "Microphone access is turned off in System Settings."),
-                    actions: [
-                        AlertState.Action(label: String(localized: "Open System Settings"), role: nil) {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        },
-                        AlertState.Action(label: String(localized: "OK"), role: .cancel) {},
-                    ]
-                )
-                #endif
-                return
-            }
-            let session = self.session
-            do {
-                let sender = try MicrophoneSender(
-                    send: { data in session?.sendMicrophoneAudio(data) },
-                    failed: { [weak self] error in
-                        DispatchQueue.main.async {
-                            guard let self, let microphone = self.microphone else { return }
-                            microphone.stop()
-                            self.microphone = nil
-                            self.alert = AlertState(String(localized: "Can’t Use the Microphone"), error: error)
-                        }
-                    })
-                try sender.start()
-                microphone = sender
-            } catch {
-                alert = AlertState(String(localized: "Can’t Use the Microphone"), error: error)
-            }
-        }
+        session?.setReceivesAudio(receivesAudio)
     }
 
     func setClipboardSharing(_ enabled: Bool) {

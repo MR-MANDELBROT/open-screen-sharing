@@ -103,14 +103,6 @@ nonisolated struct MediaFailure: Equatable, Sendable {
     }
 }
 
-nonisolated enum RemoteAudio: String, Codable, CaseIterable, Identifiable, Sendable {
-    case off
-    case fromMac
-    case toMac
-
-    var id: Self { self }
-}
-
 nonisolated enum SessionEvent: Sendable {
     case bell
     case pointerVisible(Bool)
@@ -233,7 +225,7 @@ nonisolated struct SessionConfiguration: Sendable {
     var quality: SessionQuality
     var startsInObserveMode: Bool
     var sharesClipboard: Bool
-    var remoteAudio: RemoteAudio
+    var receivesAudio: Bool
     var updateRate: Int
     var networkConfiguration = NetworkConfiguration()
     var keepsAlive = false

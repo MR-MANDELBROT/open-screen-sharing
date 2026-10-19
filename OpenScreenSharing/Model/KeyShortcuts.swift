@@ -40,7 +40,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case toolbar
     #endif
     case customizeToolbar
-    case noAudio, receiveAudio, sendAudio
+    case receiveAudio
     case observe, pointerLock
     #if os(iOS)
     case keyboard
@@ -64,14 +64,6 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         }
     }
 
-    static func audio(_ audio: RemoteAudio) -> ShortcutAction {
-        switch audio {
-        case .off: .noAudio
-        case .fromMac: .receiveAudio
-        case .toMac: .sendAudio
-        }
-    }
-
     static func system(_ command: SystemCommand) -> ShortcutAction {
         switch command {
         case .missionControl: .missionControl
@@ -85,7 +77,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         switch self {
         case .newConnection, .disconnect: .file
         case .syncClipboard, .receiveClipboard, .sendClipboard: .edit
-        case .noAudio, .receiveAudio, .sendAudio: .sound
+        case .receiveAudio: .sound
         case .observe, .pointerLock, .home, .appSwitcher, .lock, .missionControl, .appWindows, .showDesktop, .launchpad:
             .control
         #if os(iOS)
@@ -122,9 +114,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         #if os(iOS)
         case .keyboard: return String(localized: "Show/Hide Keyboard")
         #endif
-        case .noAudio: return String(localized: RemoteAudio.off.title)
-        case .receiveAudio: return String(localized: RemoteAudio.fromMac.title)
-        case .sendAudio: return String(localized: RemoteAudio.toMac.title)
+        case .receiveAudio: return String(localized: "Receive Audio")
         case .observe: return String(localized: "Observe Mode")
         case .pointerLock: return String(localized: "Pointer Lock")
         case .home: return String(localized: SessionCommand.home.title)

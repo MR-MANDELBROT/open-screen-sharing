@@ -22,7 +22,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .quality: "Quality"
         case .resolution: "Resolution"
         case .hdr: "High Dynamic Range"
-        case .audio: "Sound"
+        case .audio: "Receive Audio"
         case .observe: "Observe Mode"
         case .pointerLock: "Pointer Lock"
         case .nativeTouch: "Native Touch"
@@ -180,10 +180,6 @@ extension SessionController {
     var offersResolution: Bool {
         platform != .iOS && wantsVirtualDisplay && (capabilities.isEmpty || capabilities.contains(.virtualDisplay))
     }
-
-    var audioOptions: [RemoteAudio] {
-        platform == .iOS || capabilities.contains(.audio) ? [.off, .fromMac] : RemoteAudio.allCases
-    }
 }
 
 enum SessionCommandStyle {
@@ -236,11 +232,7 @@ struct SessionCommandView: View {
         case .hdr:
             toggle(isOn: Binding(get: { controller.hdrEnabled && controller.canUseHDR }, set: { controller.setHDR($0) }))
         case .audio:
-            if controller.audioOptions.contains(.toMac) {
-                items { AudioPicker(controller: controller).pickerStyle(.inline) }
-            } else {
-                toggle(isOn: Binding(get: { controller.remoteAudio == .fromMac }, set: { controller.setRemoteAudio($0 ? .fromMac : .off) }))
-            }
+            toggle(isOn: Binding(get: { controller.receivesAudio }, set: { controller.setReceivesAudio($0) }))
         case .observe:
             toggle(isOn: Binding(get: { controller.mode == .observe }, set: { controller.setMode($0 ? .observe : .control) }))
         case .pointerLock:

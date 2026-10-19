@@ -11,7 +11,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
     private let session: LibsharingSession?
     private let handler: LibsharingHandler
     private var transfers: [Int64: LibsharingFileTransfer] = [:]
-    private var remoteAudio: RemoteAudio
+    private var receivesAudio: Bool
     private var highPerformanceRunning = false
     private var restartingHighPerformance = false
     private var supportsHighPerformance = false
@@ -21,7 +21,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         LibsharingLog.installed
         self.configuration = configuration
         self.delegate = delegate
-        remoteAudio = configuration.remoteAudio
+        receivesAudio = configuration.receivesAudio
         let options = LibsharingNewSessionOptions()!
         options.protocol = configuration.remoteProtocol == .rdp ? LibsharingProtocolRDP : LibsharingProtocolRFB
         options.platform =
@@ -32,7 +32,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             }
         options.trustedFingerprint = configuration.trustedFingerprint
         options.keyboardLayout = Int32(configuration.keyboardLayout)
-        options.audio = configuration.remoteAudio == .fromMac
+        options.audio = configuration.receivesAudio
         options.host = configuration.address.host
         options.port = Int32(configuration.address.port)
         configuration.credentials.apply(to: options, observes: configuration.startsInObserveMode)
@@ -287,14 +287,8 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             options.supportedCodecs = LibsharingDecoderCodecHEVC
         }
         lock.lock()
-        let audio = remoteAudio
+        options.audio = receivesAudio
         lock.unlock()
-        options.audio =
-            switch audio {
-            case .off: LibsharingAudioOff
-            case .fromMac: LibsharingAudioFromMac
-            case .toMac: LibsharingAudioToMac
-            }
         options.videoMode = network.usesCoreDevice ? LibsharingVideoModeCoreDevice : LibsharingVideoModeRemoteDesktop
         options.bands = Int32(network.bands)
         options.immediatePlayout = network.schedulesPresentation
@@ -359,10 +353,10 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         lock.unlock()
     }
 
-    func setRemoteAudio(_ audio: RemoteAudio) {
+    func setReceivesAudio(_ receivesAudio: Bool) {
         lock.lock()
-        let changed = audio != remoteAudio
-        remoteAudio = audio
+        let changed = receivesAudio != self.receivesAudio
+        self.receivesAudio = receivesAudio
         let running = highPerformanceRunning
         lock.unlock()
         guard changed, running, let session, let options = try? highPerformanceOptions() else { return }
@@ -376,10 +370,6 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             restartingHighPerformance = false
             lock.unlock()
         }
-    }
-
-    func sendMicrophoneAudio(_ data: Data) {
-        try? session?.sendMicrophoneAudio(data)
     }
 
     func requestRefresh() {

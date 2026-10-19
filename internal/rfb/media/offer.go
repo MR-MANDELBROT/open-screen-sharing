@@ -88,14 +88,6 @@ const (
 	maximumVideoBitrate         = 60_000_000
 )
 
-type AudioMode int
-
-const (
-	AudioFromServer AudioMode = iota
-	AudioOff
-	AudioToServer
-)
-
 // AVConference maps modes 5/7/9 to CoreDeviceScreenSharing, RemoteDesktopScreenSharing,
 // and NearbyScreenSharing settings (AVConference 2235.63.5.2, macOS 27.0.1 26A434,
 // UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
@@ -172,7 +164,7 @@ type OfferOptions struct {
 	PixelFormats        PixelFormats
 	TilesPerFrame       int
 	VideoMode           VideoMode
-	Audio               AudioMode
+	Audio               bool
 	ImmediatePlayout    bool
 }
 
@@ -193,9 +185,6 @@ type Offer struct {
 }
 
 func NewOffer(options OfferOptions) (*Offer, error) {
-	if options.Audio < AudioFromServer || options.Audio > AudioToServer {
-		return nil, E.New("media: unsupported audio mode ", int(options.Audio))
-	}
 	if options.PixelFormats == 0 {
 		options.PixelFormats = PixelFormatsSDR420
 	}
@@ -338,7 +327,11 @@ func ntpTime(t time.Time) uint64 {
 func (o *Offer) Message() []byte {
 	created := ntpTime(time.Now())
 	audioMode := int64(negotiatorModeRemoteDesktopSystemAudio)
-	if o.options.Audio != AudioFromServer {
+	if !o.options.Audio {
+		// RemoteMic settings make the answerer receive-only, so the server sends no audio
+		// (AVConference 2235.63.5.2, macOS 27.0.1 26A434, UUID 93D8C8C0-8B9C-3A5E-A47D-01B5FAF73E1B,
+		// -[AVCMediaStreamNegotiator initWithOffer:options:error:] 0x1c12dffb4,
+		// -[AVCMediaStreamNegotiatorSettingsRemoteMic initWithOptions:deviceRole:error:] 0x1c1021f6c..0x1c1021f74).
 		audioMode = negotiatorModeRemoteMic
 	}
 	audioOffer := o.streamOffer(audioMode, o.audioCallID, o.audioBlob(created))

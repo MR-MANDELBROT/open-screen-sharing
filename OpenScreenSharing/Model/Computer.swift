@@ -29,7 +29,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var resolutionScale = VirtualDisplayMode.defaultResolutionScale
     var displayID: Int64 = -1
     var usesHDR = false
-    var remoteAudio = RemoteAudio.fromMac
+    var receivesAudio = true
     var keyboardSources: [String] = []
     var windowWidth: Double = 0
     var windowHeight: Double = 0
@@ -101,7 +101,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
             resolutionScale: resolutionScale,
             display: displaySelection,
             usesHDR: usesHDR,
-            remoteAudio: remoteAudio,
+            receivesAudio: receivesAudio,
             windowSize: windowWidth > 0 && windowHeight > 0 ? CGSize(width: windowWidth, height: windowHeight) : nil,
             locksPointer: locksPointer,
             usesNativeTouch: usesNativeTouch
@@ -115,7 +115,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
         resolutionScale = memory.resolutionScale
         displaySelection = memory.display
         usesHDR = memory.usesHDR
-        remoteAudio = memory.remoteAudio
+        receivesAudio = memory.receivesAudio
         windowWidth = memory.windowSize.map { Double($0.width) } ?? 0
         windowHeight = memory.windowSize.map { Double($0.height) } ?? 0
         locksPointer = memory.locksPointer
