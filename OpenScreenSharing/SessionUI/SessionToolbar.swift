@@ -18,6 +18,9 @@ struct ToolbarDock: Equatable {
         } else if letterbox.top.height >= thickness {
             edge = .top
             area = letterbox.top
+        } else if let top = letterbox.topBetweenCorners, top.height >= thickness {
+            edge = .top
+            area = top
         } else {
             return nil
         }

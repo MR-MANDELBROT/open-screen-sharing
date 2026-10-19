@@ -3,22 +3,12 @@ import Foundation
 import SwiftUI
 
 final class ToolbarLayout: ObservableObject {
-    #if os(iOS)
     static let mac = ToolbarLayout(
-        platform: .mac, key: "SessionToolbar",
-        defaultBar: [.keyboard, .displays, .resolution, .audio, .pointerLock, .clipboard, .missionControl])
+        platform: .mac, key: "SessionToolbar", defaultBar: [.displays, .audio, .pointerLock, .keyboard, .clipboard])
     static let iOS = ToolbarLayout(
-        platform: .iOS, key: "SessionToolbar.iOS", defaultBar: [.keyboard, .audio, .pointerLock, .clipboard, .home, .appSwitcher])
+        platform: .iOS, key: "SessionToolbar.iOS", defaultBar: [.pointerLock, .keyboard, .home, .appSwitcher, .clipboard])
     static let pc = ToolbarLayout(
-        platform: .pc, key: "SessionToolbar.PC", defaultBar: [.keyboard, .displays, .resolution, .audio, .pointerLock, .clipboard])
-    #else
-    static let mac = ToolbarLayout(
-        platform: .mac, key: "SessionToolbar", defaultBar: [.displays, .resolution, .audio, .pointerLock, .clipboard, .missionControl])
-    static let iOS = ToolbarLayout(
-        platform: .iOS, key: "SessionToolbar.iOS", defaultBar: [.audio, .pointerLock, .clipboard, .home, .appSwitcher])
-    static let pc = ToolbarLayout(
-        platform: .pc, key: "SessionToolbar.PC", defaultBar: [.displays, .resolution, .audio, .pointerLock, .clipboard])
-    #endif
+        platform: .pc, key: "SessionToolbar.PC", defaultBar: [.displays, .audio, .pointerLock, .keyboard, .clipboard])
 
     static func layout(for controller: SessionController) -> ToolbarLayout {
         switch controller.platform {
@@ -41,6 +31,7 @@ final class ToolbarLayout: ObservableObject {
     private init(platform: RemotePlatform, key: String, defaultBar: [SessionCommand]) {
         self.platform = platform
         self.key = key
+        let defaultBar = defaultBar.filter { $0.applies(to: platform) }
         self.defaultBar = defaultBar
         if let stored = store.value([String].self, for: key) {
             bar = stored.compactMap(SessionCommand.init(rawValue:))

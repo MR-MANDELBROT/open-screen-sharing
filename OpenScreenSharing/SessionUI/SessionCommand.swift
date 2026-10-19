@@ -234,11 +234,13 @@ struct SessionCommandView: View {
                 #endif
             }
         case .hdr:
-            toggle(
-                isOn: Binding(get: { controller.hdrEnabled && controller.canUseHDR }, set: { controller.setHDR($0) }),
-                subtitle: !DecoderCapabilities.current.supportsHDR ? "This Device Can’t Show HDR" : nil)
+            toggle(isOn: Binding(get: { controller.hdrEnabled && controller.canUseHDR }, set: { controller.setHDR($0) }))
         case .audio:
-            items { AudioPicker(controller: controller).pickerStyle(.inline) }
+            if controller.audioOptions.contains(.toMac) {
+                items { AudioPicker(controller: controller).pickerStyle(.inline) }
+            } else {
+                toggle(isOn: Binding(get: { controller.remoteAudio == .fromMac }, set: { controller.setRemoteAudio($0 ? .fromMac : .off) }))
+            }
         case .observe:
             toggle(isOn: Binding(get: { controller.mode == .observe }, set: { controller.setMode($0 ? .observe : .control) }))
         case .pointerLock:
@@ -286,17 +288,11 @@ struct SessionCommandView: View {
     }
 
     @ViewBuilder
-    private func toggle(isOn: Binding<Bool>, subtitle: LocalizedStringKey? = nil) -> some View {
+    private func toggle(isOn: Binding<Bool>) -> some View {
         switch style {
         case .barItem: Toggle(isOn: isOn) { label }.toggleStyle(BarToggleStyle())
         case .windowToolbarItem: Toggle(isOn: isOn) { label }.toggleStyle(.button)
-        case .menuItem:
-            Toggle(isOn: isOn) {
-                label
-                if let subtitle {
-                    Text(subtitle)
-                }
-            }
+        case .menuItem: Toggle(isOn: isOn) { label }
         }
     }
 

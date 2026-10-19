@@ -161,11 +161,14 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
             column = bounds.inset(by: safeAreaInsets)
             row = safeAreaInsets
         }
-        let side = max(row.left, row.right)
+        let side = max(column.minX - bounds.minX, bounds.maxX - column.maxX)
+        let cornerSide = max(row.left, row.right)
         let bottom = min(column.maxY, keyboardTop ?? column.maxY)
         return Letterbox(
             left: CGRect(x: column.minX, y: column.minY, width: max(0, picture.minX - column.minX), height: max(0, bottom - column.minY)),
-            top: CGRect(x: side, y: row.top, width: max(0, bounds.width - 2 * side), height: max(0, picture.minY - row.top))
+            top: CGRect(x: side, y: column.minY, width: max(0, bounds.width - 2 * side), height: max(0, picture.minY - column.minY)),
+            topBetweenCorners: CGRect(
+                x: cornerSide, y: row.top, width: max(0, bounds.width - 2 * cornerSide), height: max(0, picture.minY - row.top))
         )
     }
 

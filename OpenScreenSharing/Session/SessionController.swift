@@ -21,6 +21,7 @@ enum ScaleMode: Equatable {
 struct Letterbox: Equatable {
     var left: CGRect
     var top: CGRect
+    var topBetweenCorners: CGRect?
 }
 
 struct CredentialPrompt: Identifiable {
