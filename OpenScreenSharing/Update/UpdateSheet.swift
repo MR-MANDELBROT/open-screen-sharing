@@ -4,7 +4,7 @@ import SwiftUI
 struct UpdateSheet: View {
     let update: AvailableUpdate
 
-    @ObservedObject private var updates = UpdateManager.shared
+    @Bindable private var updates = UpdateManager.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -69,7 +69,7 @@ struct UpdateSheet: View {
 }
 
 struct UpdatePresentation: ViewModifier {
-    @ObservedObject private var updates = UpdateManager.shared
+    @Bindable private var updates = UpdateManager.shared
 
     func body(content: Content) -> some View {
         content

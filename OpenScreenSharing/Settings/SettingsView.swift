@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -41,43 +42,49 @@ struct SettingsView: View {
 }
 
 private struct ControlSettingsView: View {
-    @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var themes = CursorThemeStore.shared
+    #if os(iOS)
+    @Perception.Bindable private var settings = AppSettings.shared
+    #else
+    private let settings = AppSettings.shared
+    #endif
+    private let themes = CursorThemeStore.shared
 
     var body: some View {
-        Form {
-            Section("Custom") {
-                NavigationLink {
-                    CursorStyleView()
-                } label: {
-                    LabeledContentCompat {
-                        switch settings.cursorStyle {
-                        case .system: Text(CursorStyleView.systemStyleName)
-                        case .remote: Text("Remote Style")
-                        case .theme(let id): Text(verbatim: themes.theme(id: id)?.name ?? "")
-                        }
+        WithPerceptionTracking {
+            Form {
+                Section("Custom") {
+                    NavigationLink {
+                        CursorStyleView()
                     } label: {
-                        Label("Cursor Style", systemImage: "cursorarrow")
+                        LabeledContentCompat {
+                            switch settings.cursorStyle {
+                            case .system: Text(CursorStyleView.systemStyleName)
+                            case .remote: Text("Remote Style")
+                            case .theme(let id): Text(verbatim: themes.theme(id: id)?.name ?? "")
+                            }
+                        } label: {
+                            Label("Cursor Style", systemImage: "cursorarrow")
+                        }
                     }
                 }
-            }
-            #if os(iOS)
-            Section {
-                Toggle(isOn: $settings.usesTraditionalPressGesture) {
-                    Label("Traditional Press Gesture", systemImage: "hand.tap")
+                #if os(iOS)
+                Section {
+                    Toggle(isOn: $settings.usesTraditionalPressGesture) {
+                        Label("Traditional Press Gesture", systemImage: "hand.tap")
+                    }
+                } header: {
+                    Text("Behavior")
+                } footer: {
+                    Text("When controlling the pointer by touch, double-tap quickly and hold instead of pressing for a while to hold down the left button and drag.")
                 }
-            } header: {
-                Text("Behavior")
-            } footer: {
-                Text("When controlling the pointer by touch, double-tap quickly and hold instead of pressing for a while to hold down the left button and drag.")
+                #endif
             }
+            #if os(macOS)
+            .formStyle(.grouped)
+            .unboundedFormWidth()
             #endif
+            .navigationTitle("Control")
         }
-        #if os(macOS)
-        .formStyle(.grouped)
-        .unboundedFormWidth()
-        #endif
-        .navigationTitle("Control")
     }
 }
 
@@ -86,7 +93,7 @@ private struct AppSettingsView: View {
     @State private var cacheSize: Int64?
     @State private var alert: AlertState?
     #if os(iOS)
-    @ObservedObject private var settings = AppSettings.shared
+    private let settings = AppSettings.shared
     @State private var replayedTutorials: [SessionTutorial] = []
     #endif
 
@@ -141,13 +148,15 @@ private struct AppSettingsView: View {
                 }
             }
             #if os(iOS)
-            Section("Tips") {
-                Button {
-                    setReplayedTutorials(SessionTutorial.allCases.filter(settings.seenTutorials.contains))
-                } label: {
-                    Label("Show Tips", systemImage: "lightbulb")
+            WithPerceptionTracking {
+                Section("Tips") {
+                    Button {
+                        setReplayedTutorials(SessionTutorial.allCases.filter(settings.seenTutorials.contains))
+                    } label: {
+                        Label("Show Tips", systemImage: "lightbulb")
+                    }
+                    .disabled(settings.seenTutorials.isEmpty)
                 }
-                .disabled(settings.seenTutorials.isEmpty)
             }
             #endif
             #if os(macOS)
@@ -213,7 +222,7 @@ private struct AppSettingsView: View {
 
 #if os(macOS)
 private struct UpdatesSection: View {
-    @ObservedObject private var updates = UpdateManager.shared
+    @SwiftUI.Bindable private var updates = UpdateManager.shared
     @State private var isEditingToken = false
 
     var body: some View {
@@ -258,7 +267,7 @@ private struct UpdatesSection: View {
 private struct GitHubTokenSheet: View {
     private static let newToken = URL(string: "https://github.com/settings/personal-access-tokens/new")!
 
-    @ObservedObject private var updates = UpdateManager.shared
+    private let updates = UpdateManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var token = UpdateManager.shared.githubToken
     @State private var isUsable = false

@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 struct ConnectToView: View {
@@ -6,8 +7,8 @@ struct ConnectToView: View {
     let signIn: (NewComputer) -> Void
     let signedIn: (SignedInComputer) -> Void
 
-    @EnvironmentObject private var nearby: NearbyBrowser
-    @ObservedObject private var store = ComputerStore.shared
+    @Environment(NearbyBrowser.self) private var nearby
+    private let store = ComputerStore.shared
     @State private var text = ""
     @State private var problem: SetupProblem?
     @State private var task: Task<Void, Never>?
@@ -37,98 +38,100 @@ struct ConnectToView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                TextField("Server Address", text: $text, prompt: Text("Hostname"))
-                    #if os(iOS)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    #endif
-                    .autocorrectionDisabled()
-                    .focused($isFocused)
-                    .submitLabel(.next)
-                    .onSubmit(start)
-                    .disabled(isChecking)
-                    .onChangeCompat(of: text) { problem = nil }
-            } footer: {
-                if isChecking, checkedID == nil {
-                    InlineProgress("Connecting…")
-                } else if let problem {
-                    SetupProblemView(problem: problem)
+        WithPerceptionTracking {
+            Form {
+                Section {
+                    TextField("Server Address", text: $text, prompt: Text("Hostname"))
+                        #if os(iOS)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                        .autocorrectionDisabled()
+                        .focused($isFocused)
+                        .submitLabel(.next)
+                        .onSubmit(start)
+                        .disabled(isChecking)
+                        .onChangeCompat(of: text) { problem = nil }
+                } footer: {
+                    if isChecking, checkedID == nil {
+                        InlineProgress("Connecting…")
+                    } else if let problem {
+                        SetupProblemView(problem: problem)
+                    }
                 }
-            }
-            Section {
-                if found.isEmpty {
-                    placeholder
-                }
-                ForEach(found) { computer in
-                    Button {
-                        choose(computer)
-                    } label: {
-                        HStack {
-                            ComputerRow(
-                                name: computer.name,
-                                detail: computer.address?.description(defaultPort: computer.remoteProtocol.defaultPort),
-                                device: DeviceAppearance(model: computer.model ?? ""), availability: .available)
-                            if checkedID == computer.id {
-                                ProgressView()
-                                    .controlSize(.small)
+                Section {
+                    if found.isEmpty {
+                        placeholder
+                    }
+                    ForEach(found) { computer in
+                        Button {
+                            choose(computer)
+                        } label: {
+                            HStack {
+                                ComputerRow(
+                                    name: computer.name,
+                                    detail: computer.address?.description(defaultPort: computer.remoteProtocol.defaultPort),
+                                    device: DeviceAppearance(model: computer.model ?? ""), availability: .available)
+                                if checkedID == computer.id {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                }
                             }
                         }
+                        #if os(macOS)
+                        .buttonStyle(.plain)
+                        #endif
+                        .foregroundStyle(.primary)
+                        .disabled(computer.address == nil || isChecking)
+                        .contextMenu {
+                            Button {
+                                details = computer
+                            } label: { Label("View Details", systemImage: "info.circle") }
+                        }
                     }
-                    #if os(macOS)
-                    .buttonStyle(.plain)
-                    #endif
-                    .foregroundStyle(.primary)
-                    .disabled(computer.address == nil || isChecking)
-                    .contextMenu {
-                        Button {
-                            details = computer
-                        } label: { Label("View Details", systemImage: "info.circle") }
+                } header: {
+                    Text("Network")
+                } footer: {
+                    if let nearbyProblem {
+                        SetupProblemView(problem: nearbyProblem)
                     }
                 }
-            } header: {
-                Text("Network")
-            } footer: {
-                if let nearbyProblem {
-                    SetupProblemView(problem: nearbyProblem)
+            }
+            .navigationTitle("New Connection")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #else
+            .formStyle(.grouped)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", role: .cancel) {
+                        task?.cancel()
+                        close()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Next", action: start)
+                        .disabled(typed.isEmpty || isChecking)
                 }
             }
-        }
-        .navigationTitle("New Connection")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #else
-        .formStyle(.grouped)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel", role: .cancel) {
-                    task?.cancel()
-                    close()
-                }
+            .sheet(item: $details) { computer in
+                NearbyDetailsView(computer: computer)
             }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Next", action: start)
-                    .disabled(typed.isEmpty || isChecking)
+            .interactiveDismissDisabled(isChecking)
+            .onAppear {
+                guard opensLink, let link else { return }
+                opensLink = false
+                text = (link.username.map { "\($0)@" } ?? "") + link.address.description(defaultPort: link.remoteProtocol.defaultPort)
+                connect(
+                    to: ConnectionTarget(
+                        host: link.address.host, port: link.address.port, remoteProtocol: link.remoteProtocol, username: link.username,
+                        password: link.password))
             }
-        }
-        .sheet(item: $details) { computer in
-            NearbyDetailsView(computer: computer)
-        }
-        .interactiveDismissDisabled(isChecking)
-        .onAppear {
-            guard opensLink, let link else { return }
-            opensLink = false
-            text = (link.username.map { "\($0)@" } ?? "") + link.address.description(defaultPort: link.remoteProtocol.defaultPort)
-            connect(
-                to: ConnectionTarget(
-                    host: link.address.host, port: link.address.port, remoteProtocol: link.remoteProtocol, username: link.username,
-                    password: link.password))
-        }
-        .onDisappear {
-            task?.cancel()
-            task = nil
+            .onDisappear {
+                task?.cancel()
+                task = nil
+            }
         }
     }
 

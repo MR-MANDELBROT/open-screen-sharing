@@ -1,9 +1,10 @@
 import Atomics
-import Combine
 import Foundation
+import Perception
 import QuartzCore
 
-final class DebugInfoMonitor: ObservableObject {
+@Perceptible
+final class DebugInfoMonitor {
     struct Figures: Equatable {
         var readyPerSecond: Double?
         var shownPerSecond: Double?
@@ -38,20 +39,20 @@ final class DebugInfoMonitor: ObservableObject {
     static let graphLength = 120
     private static let maxWaiting = 64
 
-    @Published private(set) var figures: Figures?
-    @Published private(set) var toScreen: [Double] = []
+    private(set) var figures: Figures?
+    private(set) var toScreen: [Double] = []
 
     nonisolated let isRunning = ManagedAtomic<Bool>(false)
-    private var run = 0
-    private var startedAt: CFTimeInterval = 0
-    private var lastPicture: Int?
-    private var lastPresentation: CFTimeInterval?
-    private var waiting: [Ready] = []
-    private var ready = 0
-    private var shown = 0
-    private var screened: [Screened] = []
-    private var windowStart: CFTimeInterval = 0
-    private var previous: SessionStatistics?
+    @PerceptionIgnored private var run = 0
+    @PerceptionIgnored private var startedAt: CFTimeInterval = 0
+    @PerceptionIgnored private var lastPicture: Int?
+    @PerceptionIgnored private var lastPresentation: CFTimeInterval?
+    @PerceptionIgnored private var waiting: [Ready] = []
+    @PerceptionIgnored private var ready = 0
+    @PerceptionIgnored private var shown = 0
+    @PerceptionIgnored private var screened: [Screened] = []
+    @PerceptionIgnored private var windowStart: CFTimeInterval = 0
+    @PerceptionIgnored private var previous: SessionStatistics?
 
     var presentationRun: Int? { isRunning.load(ordering: .relaxed) ? run : nil }
 
@@ -95,19 +96,19 @@ final class DebugInfoMonitor: ObservableObject {
         lastPresentation = time
         shown += 1
         var kept: [Ready] = []
+        var took: [Double] = []
         for waited in waiting {
             guard waited.picture <= picture else {
                 kept.append(waited)
                 continue
             }
-            let took = max(time - waited.arrival, 0)
-            screened.append(Screened(toScreen: took, hold: waited.hold, decode: waited.decode))
-            if toScreen.count == Self.graphLength {
-                toScreen.removeFirst()
-            }
-            toScreen.append(took)
+            let delay = max(time - waited.arrival, 0)
+            screened.append(Screened(toScreen: delay, hold: waited.hold, decode: waited.decode))
+            took.append(delay)
         }
         waiting = kept
+        guard !took.isEmpty else { return }
+        toScreen = Array((toScreen + took).suffix(Self.graphLength))
     }
 
     func sample(_ statistics: SessionStatistics?) {

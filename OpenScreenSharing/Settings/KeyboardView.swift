@@ -1,106 +1,108 @@
 #if os(iOS)
-import Combine
 import GameController
 #endif
+import Perception
 import SwiftUI
 
 struct KeyboardView: View {
-    @ObservedObject private var shortcuts = KeyShortcuts.shared
+    private let shortcuts = KeyShortcuts.shared
     #if os(iOS)
-    @ObservedObject private var keyboard = ConnectedKeyboard.shared
+    private let keyboard = ConnectedKeyboard.shared
     #endif
     @State private var editing: Editing?
 
     private struct Editing: Identifiable {
         let mapping: KeyMapping
         let target: MappingTarget
+        let isNew: Bool
 
         var id: UUID { mapping.id }
     }
 
     var body: some View {
-        Group {
-            #if os(iOS)
-            if keyboard.isConnected {
-                form
-            } else {
-                ContentUnavailableViewCompat {
-                    Label("No Keyboard", systemImage: "keyboard")
-                } description: {
-                    Text("Connect a keyboard to set up shortcuts.")
-                }
-            }
-            #else
-            form
-            #endif
-        }
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .navigationTitle("Keyboard")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button(role: .destructive) {
-                        shortcuts.restoreDefaults()
-                    } label: {
-                        Label("Restore Defaults", systemImage: "eraser.fill")
+        WithPerceptionTracking {
+            Group {
+                #if os(iOS)
+                if keyboard.isConnected {
+                    form
+                } else {
+                    ContentUnavailableViewCompat {
+                        Label("No Keyboard", systemImage: "keyboard")
+                    } description: {
+                        Text("Connect a keyboard to set up shortcuts.")
                     }
-                    .disabled(!shortcuts.isCustomized)
-                } label: {
-                    Label("Others", systemImage: "ellipsis.circle")
+                }
+                #else
+                form
+                #endif
+            }
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .navigationTitle("Keyboard")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button(role: .destructive) {
+                            shortcuts.restoreDefaults()
+                        } label: {
+                            Label("Restore Defaults", systemImage: "eraser.fill")
+                        }
+                        .disabled(!shortcuts.isCustomized)
+                    } label: {
+                        Label("Others", systemImage: "ellipsis.circle")
+                    }
                 }
             }
-        }
-        .sheet(item: $editing) { editing in
-            KeyMappingEditor(
-                mapping: editing.mapping, target: editing.target,
-                isNew: !shortcuts.mappings(for: editing.target).contains { $0.id == editing.mapping.id }
-            )
+            .sheet(item: $editing) { editing in
+                KeyMappingEditor(mapping: editing.mapping, target: editing.target, isNew: editing.isNew)
+            }
         }
     }
 
     private var form: some View {
         Form {
             ForEach(MappingTarget.allCases) { target in
-                Section(target.title) {
-                    ForEach(shortcuts.mappings(for: target)) { mapping in
-                        HStack {
-                            Button {
-                                editing = Editing(mapping: mapping, target: target)
-                            } label: {
-                                HStack {
-                                    Text(verbatim: mapping.trigger.displayName)
-                                    Image(systemName: "arrow.right")
-                                        .foregroundStyle(.secondary)
-                                    Text(verbatim: mapping.displayName(for: target))
-                                        .lineLimit(1)
-                                    Spacer()
+                WithPerceptionTracking {
+                    Section(target.title) {
+                        ForEach(shortcuts.mappings(for: target)) { mapping in
+                            HStack {
+                                Button {
+                                    editing = Editing(mapping: mapping, target: target, isNew: false)
+                                } label: {
+                                    HStack {
+                                        Text(verbatim: mapping.trigger.displayName)
+                                        Image(systemName: "arrow.right")
+                                            .foregroundStyle(.secondary)
+                                        Text(verbatim: mapping.displayName(for: target))
+                                            .lineLimit(1)
+                                        Spacer()
+                                    }
+                                    .contentShape(Rectangle())
                                 }
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
+                                Button {
+                                    shortcuts.removeMapping(mapping.id, from: target)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel(Text("Delete Mapping"))
                             }
-                            .buttonStyle(.plain)
-                            Button {
+                        }
+                        .onDelete { offsets in
+                            for mapping in offsets.map({ shortcuts.mappings(for: target)[$0] }) {
                                 shortcuts.removeMapping(mapping.id, from: target)
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
                             }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(Text("Delete Mapping"))
                         }
-                    }
-                    .onDelete { offsets in
-                        for mapping in offsets.map({ shortcuts.mappings(for: target)[$0] }) {
-                            shortcuts.removeMapping(mapping.id, from: target)
+                        Button {
+                            editing = Editing(mapping: KeyMapping(id: UUID(), trigger: .unset, steps: []), target: target, isNew: true)
+                        } label: {
+                            Label("Add Mapping", systemImage: "plus")
                         }
+                        .formRowButtonStyleCompat()
                     }
-                    Button {
-                        editing = Editing(mapping: KeyMapping(id: UUID(), trigger: .unset, steps: []), target: target)
-                    } label: {
-                        Label("Add Mapping", systemImage: "plus")
-                    }
-                    .formRowButtonStyleCompat()
                 }
             }
             Section("Shortcuts") {
@@ -123,7 +125,7 @@ struct KeyboardView: View {
 private struct ShortcutGroupView: View {
     let group: ShortcutGroup
 
-    @ObservedObject private var shortcuts = KeyShortcuts.shared
+    private let shortcuts = KeyShortcuts.shared
     @State private var recording: Recording?
     @State private var alert: AlertState?
 
@@ -131,14 +133,16 @@ private struct ShortcutGroupView: View {
         Form {
             Section {
                 ForEach(group.actions) { action in
-                    row(.action(action), title: action.title, shortcut: shortcuts.shortcut(for: action)?.displayName) {
-                        shortcuts.set(nil, for: action)
+                    WithPerceptionTracking {
+                        row(.action(action), title: action.title, shortcut: shortcuts.shortcut(for: action)?.displayName) {
+                            shortcuts.set(nil, for: action)
+                        }
+                        #if os(macOS)
+                        if action == .pointerLock {
+                            row(.pointerRelease, title: String(localized: "Release Pointer"), shortcut: EventModifiers(shortcuts.pointerRelease).symbols, clear: nil)
+                        }
+                        #endif
                     }
-                    #if os(macOS)
-                    if action == .pointerLock {
-                        row(.pointerRelease, title: String(localized: "Release Pointer"), shortcut: EventModifiers(shortcuts.pointerRelease).symbols, clear: nil)
-                    }
-                    #endif
                 }
             }
         }
@@ -285,7 +289,7 @@ private struct KeyMappingEditor: View {
     let target: MappingTarget
     let isNew: Bool
 
-    @ObservedObject private var shortcuts = KeyShortcuts.shared
+    private let shortcuts = KeyShortcuts.shared
     @State private var trigger: KeyShortcut
     @State private var steps: [Step]
     @State private var recording: Field?
@@ -630,10 +634,11 @@ private struct KeyMappingEditor: View {
 }
 
 #if os(iOS)
-private final class ConnectedKeyboard: ObservableObject {
+@Perceptible
+private final class ConnectedKeyboard {
     static let shared = ConnectedKeyboard()
 
-    @Published private(set) var isConnected = GCKeyboard.coalesced != nil
+    private(set) var isConnected = GCKeyboard.coalesced != nil
 
     private init() {
         NotificationCenter.default.addObserver(forName: .GCKeyboardDidConnect, object: nil, queue: .main) { _ in

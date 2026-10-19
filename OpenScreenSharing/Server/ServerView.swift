@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 
@@ -14,47 +15,49 @@ struct ServerView: View {
         case devicePasscode
     }
 
-    @ObservedObject private var controller = ServerController.shared
-    @ObservedObject private var settings = ServerSettings.shared
-    @ObservedObject private var pairing = PairingStore.shared
-    @ObservedObject private var diskImage = DiskImageStore.shared
+    private let controller = ServerController.shared
+    @Perception.Bindable private var settings = ServerSettings.shared
+    private let pairing = PairingStore.shared
+    private let diskImage = DiskImageStore.shared
 
     var body: some View {
-        Form {
-            if pairing.isPaired {
-                sharingSection
-                listenSection
-                authenticationSection
-                autoUnlockSection
-                backgroundSection
+        WithPerceptionTracking {
+            Form {
+                if pairing.isPaired {
+                    sharingSection
+                    listenSection
+                    authenticationSection
+                    autoUnlockSection
+                    backgroundSection
+                }
+                setupSection
             }
-            setupSection
-        }
-        .navigationTitle("Server")
-        .alert(problemAlert)
-        .sheet(isPresented: $isShowingPairing) {
-            PairingSetupView()
-        }
-        .sheet(isPresented: $isShowingDiskImage) {
-            DiskImageImportView()
-        }
-        .onAppear {
-            controller.remotePairing.start()
-            controller.startProbing()
-        }
-        .onDisappear {
-            controller.remotePairing.stop()
-            controller.stopProbing()
-        }
-        .onChangeCompat(of: focusedField) {
-            if focusedField != .port {
-                portText = nil
+            .navigationTitle("Server")
+            .alert(problemAlert)
+            .sheet(isPresented: $isShowingPairing) {
+                PairingSetupView()
             }
-        }
-        .onChangeCompat(of: pairing.revision) {
-            controller.remotePairing.refresh()
-            if case .failed = controller.phase {
-                controller.stop()
+            .sheet(isPresented: $isShowingDiskImage) {
+                DiskImageImportView()
+            }
+            .onAppear {
+                controller.remotePairing.start()
+                controller.startProbing()
+            }
+            .onDisappear {
+                controller.remotePairing.stop()
+                controller.stopProbing()
+            }
+            .onChangeCompat(of: focusedField) {
+                if focusedField != .port {
+                    portText = nil
+                }
+            }
+            .onChangeCompat(of: pairing.revision) {
+                controller.remotePairing.refresh()
+                if case .failed = controller.phase {
+                    controller.stop()
+                }
             }
         }
     }
@@ -86,16 +89,16 @@ struct ServerView: View {
     }
 
     private var sharingBinding: Binding<Bool> {
-        Binding {
-            controller.isActive
-        } set: { on in
-            focusedField = nil
-            if on {
-                controller.start()
-            } else {
-                controller.stop()
-            }
-        }
+        Binding(
+            get: { controller.isActive },
+            set: { on in
+                focusedField = nil
+                if on {
+                    controller.start()
+                } else {
+                    controller.stop()
+                }
+            })
     }
 
     private var sharingSection: some View {
@@ -133,15 +136,15 @@ struct ServerView: View {
     }
 
     private var port: Binding<String> {
-        Binding {
-            portText ?? String(settings.port)
-        } set: { text in
-            let digits = String(text.filter { $0.isASCII && $0.isNumber }.prefix(5))
-            portText = digits
-            if let port = Self.parsedPort(digits) {
-                settings.port = port
-            }
-        }
+        Binding(
+            get: { portText ?? String(settings.port) },
+            set: { text in
+                let digits = String(text.filter { $0.isASCII && $0.isNumber }.prefix(5))
+                portText = digits
+                if let port = Self.parsedPort(digits) {
+                    settings.port = port
+                }
+            })
     }
 
     private var isPortValid: Bool {

@@ -1,10 +1,11 @@
 #if os(macOS)
 import AppKit
-import Combine
+import Observation
 import SwiftUI
 import os
 
-final class UpdateManager: ObservableObject {
+@Observable
+final class UpdateManager {
     static let shared = UpdateManager()
 
     nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "update")
@@ -23,24 +24,24 @@ final class UpdateManager: ObservableObject {
         case installing
     }
 
-    @Published var checksAutomatically: Bool {
+    var checksAutomatically: Bool {
         didSet { store.set(checksAutomatically, for: Key.checksAutomatically) }
     }
 
-    @Published var githubToken: String {
+    var githubToken: String {
         didSet { store.set(githubToken, for: Key.githubToken) }
     }
 
-    @Published var track: UpdateTrack {
+    var track: UpdateTrack {
         didSet { store.set(track, for: Key.track) }
     }
 
-    @Published private(set) var isChecking = false
-    @Published private(set) var phase = Phase.idle
-    @Published private(set) var progress = 0.0
-    @Published var presented: AvailableUpdate?
-    @Published var alert: AlertState?
-    @Published var installFailure: AlertState?
+    private(set) var isChecking = false
+    private(set) var phase = Phase.idle
+    private(set) var progress = 0.0
+    var presented: AvailableUpdate?
+    var alert: AlertState?
+    var installFailure: AlertState?
 
     private let store = PreferenceStore.shared
 

@@ -1,4 +1,4 @@
-import Combine
+import Perception
 import SwiftUI
 #if os(iOS)
 import UIKit
@@ -486,7 +486,8 @@ struct KeyMapping: Codable, Hashable, Identifiable {
     }
 }
 
-final class KeyShortcuts: ObservableObject {
+@Perceptible
+final class KeyShortcuts {
     static let shared = KeyShortcuts()
 
     private static let key = "keyboardShortcuts"
@@ -498,15 +499,15 @@ final class KeyShortcuts: ObservableObject {
         }
     }
 
-    @Published private var assigned: [String: KeyShortcut]
-    @Published private var mappings: [MappingTarget: [KeyMapping]]
-    @Published var isRecording = false
+    private var assigned: [String: KeyShortcut]
+    private var mappings: [MappingTarget: [KeyMapping]]
+    var isRecording = false
 
     #if os(macOS)
     private static let pointerReleaseKey = "pointerReleaseModifiers"
     static let defaultPointerRelease: NSEvent.ModifierFlags = [.control, .option]
 
-    @Published private(set) var pointerRelease: NSEvent.ModifierFlags
+    private(set) var pointerRelease: NSEvent.ModifierFlags
     #endif
 
     private let store = PreferenceStore.shared
@@ -533,7 +534,8 @@ final class KeyShortcuts: ObservableObject {
     }
 
     func action(using shortcut: KeyShortcut) -> ShortcutAction? {
-        ShortcutAction.allCases.first { self.shortcut(for: $0) == shortcut }
+        let assigned = assigned
+        return ShortcutAction.allCases.first { assigned[$0.rawValue] == shortcut }
     }
 
     func set(_ shortcut: KeyShortcut?, for action: ShortcutAction) {
@@ -634,14 +636,16 @@ final class KeyShortcuts: ObservableObject {
 }
 
 struct ActionShortcut: ViewModifier {
-    @ObservedObject private var shortcuts = KeyShortcuts.shared
+    private let shortcuts = KeyShortcuts.shared
     let action: ShortcutAction?
 
     func body(content: Content) -> some View {
-        if let action, !shortcuts.isRecording, let shortcut = shortcuts.shortcut(for: action)?.keyboardShortcut {
-            content.keyboardShortcut(shortcut)
-        } else {
-            content
+        WithPerceptionTracking {
+            if let action, !shortcuts.isRecording, let shortcut = shortcuts.shortcut(for: action)?.keyboardShortcut {
+                content.keyboardShortcut(shortcut)
+            } else {
+                content
+            }
         }
     }
 }

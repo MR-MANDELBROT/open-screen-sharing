@@ -1,7 +1,7 @@
-import Combine
 import Foundation
 import ImageIO
 import Libsharing
+import Perception
 
 final class CursorTheme: Identifiable {
     private static let previewCount = 8
@@ -120,11 +120,12 @@ final class CursorTheme: Identifiable {
     }
 }
 
-final class CursorThemeStore: ObservableObject {
+@Perceptible
+final class CursorThemeStore {
     static let shared = CursorThemeStore()
 
-    @Published private(set) var themes: [CursorTheme] = []
-    @Published private(set) var isImporting = false
+    private(set) var themes: [CursorTheme] = []
+    private(set) var isImporting = false
 
     static let directory = Result<URL, any Error> {
         #if os(iOS)

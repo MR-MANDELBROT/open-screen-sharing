@@ -1,7 +1,8 @@
-import Combine
 import Foundation
+import Perception
 
-final class AppSettings: ObservableObject {
+@Perceptible
+final class AppSettings {
     static let shared = AppSettings()
 
     private enum Key {
@@ -13,27 +14,27 @@ final class AppSettings: ObservableObject {
         static let seenTutorials = "seenTutorials"
     }
 
-    @Published var showsDebugInfo: Bool {
+    var showsDebugInfo: Bool {
         didSet { store.set(showsDebugInfo, for: Key.showsDebugInfo) }
     }
 
-    @Published var cursorStyle: CursorStyle {
+    var cursorStyle: CursorStyle {
         didSet { store.set(cursorStyle, for: Key.cursorStyle) }
     }
 
-    @Published var usesTraditionalPressGesture: Bool {
+    var usesTraditionalPressGesture: Bool {
         didSet { store.set(usesTraditionalPressGesture, for: Key.usesTraditionalPressGesture) }
     }
 
-    @Published var computerLayout: ComputerLayout {
+    var computerLayout: ComputerLayout {
         didSet { store.set(computerLayout, for: Key.computerLayout) }
     }
 
-    @Published var computerOrder: [UUID] {
+    var computerOrder: [UUID] {
         didSet { store.set(computerOrder, for: Key.computerOrder) }
     }
 
-    @Published var seenTutorials: Set<SessionTutorial> {
+    var seenTutorials: Set<SessionTutorial> {
         didSet { store.set(seenTutorials, for: Key.seenTutorials) }
     }
 

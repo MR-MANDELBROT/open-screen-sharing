@@ -1,11 +1,12 @@
-import Combine
 import Foundation
 import Libsharing
+import Perception
 import UIKit
 import dnssd
 import os
 
-final class ServerController: ObservableObject {
+@Perceptible
+final class ServerController {
     static let shared = ServerController()
     nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "server")
 
@@ -29,23 +30,23 @@ final class ServerController: ObservableObject {
         }
     }
 
-    @Published private(set) var phase: Phase = .stopped {
+    private(set) var phase: Phase = .stopped {
         didSet {
             guard phase != oldValue else { return }
             phaseChanged()
         }
     }
 
-    @Published private(set) var advertisedName: String?
-    @Published private(set) var localNetworkDenied = false
-    @Published private(set) var backgroundProblem: String?
-    @Published private(set) var autoUnlockProblem: String?
-    @Published private(set) var tunnelFound: Bool?
-    @Published private(set) var tunnelThroughLocalNetwork = false
+    private(set) var advertisedName: String?
+    private(set) var localNetworkDenied = false
+    private(set) var backgroundProblem: String?
+    private(set) var autoUnlockProblem: String?
+    private(set) var tunnelFound: Bool?
+    private(set) var tunnelThroughLocalNetwork = false
 
     let remotePairing = RemotePairingBrowser()
     let pairingSession = PairingSession()
-    private lazy var location: BackgroundLocation = {
+    @PerceptionIgnored private lazy var location: BackgroundLocation = {
         let location = BackgroundLocation()
         location.onUpdatingChange = { [weak self] in
             self?.updateIdleTimer()
@@ -55,7 +56,7 @@ final class ServerController: ObservableObject {
         }
         return location
     }()
-    private lazy var audio: BackgroundAudio = {
+    @PerceptionIgnored private lazy var audio: BackgroundAudio = {
         let audio = BackgroundAudio()
         audio.onPlayingChange = { [weak self] in
             guard let self else { return }
@@ -70,17 +71,17 @@ final class ServerController: ObservableObject {
         return audio
     }()
 
-    private lazy var volume = LocalVolume()
-    private lazy var brightness = LocalBrightness(queue: Self.queue)
-    private var viewers: Set<Int64> = []
+    @PerceptionIgnored private lazy var volume = LocalVolume()
+    @PerceptionIgnored private lazy var brightness = LocalBrightness(queue: Self.queue)
+    @PerceptionIgnored private var viewers: Set<Int64> = []
 
-    private var server: LibsharingDeviceServer?
-    private var generation = 0
-    private var startTask: Task<Void, Never>?
-    private var closingTask: Task<Void, Never>?
-    private var cleanupBackgroundTask: UIBackgroundTaskIdentifier = .invalid
-    private var probeTask: Task<Void, Never>?
-    private var isBrowsing = false
+    @PerceptionIgnored private var server: LibsharingDeviceServer?
+    @PerceptionIgnored private var generation = 0
+    @PerceptionIgnored private var startTask: Task<Void, Never>?
+    @PerceptionIgnored private var closingTask: Task<Void, Never>?
+    @PerceptionIgnored private var cleanupBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    @PerceptionIgnored private var probeTask: Task<Void, Never>?
+    @PerceptionIgnored private var isBrowsing = false
     private let advertiser = BonjourAdvertiser()
     nonisolated private static let queue = DispatchQueue(label: "io.nekohasekai.screensharing.server", qos: .userInitiated)
 

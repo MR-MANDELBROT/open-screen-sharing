@@ -812,9 +812,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             scene === view.window?.windowScene
         else { return }
         lockedMouseSpeed = 0
-        if controller.isPointerLocked != isPointerLocked {
-            controller.isPointerLocked = isPointerLocked
-        }
+        controller.isPointerLocked = isPointerLocked
         let held = lockedButtons
         lockedButtons = []
         if !pointerTouches.isEmpty {
@@ -836,9 +834,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         systemPointerLocation = gesture.location(in: nil)
         controller.lastSystemPointerLocation = systemPointerLocation
         let overPicture = view.imageRect.contains(gesture.location(in: view))
-        if controller.isSystemPointerOverPicture != overPicture {
-            controller.isSystemPointerOverPicture = overPicture
-        }
+        controller.isSystemPointerOverPicture = overPicture
         var fromPointer = true
         if #available(iOS 16.1, *) { fromPointer = gesture.zOffset == 0 }
         systemPointerOverPicture = overPicture && fromPointer

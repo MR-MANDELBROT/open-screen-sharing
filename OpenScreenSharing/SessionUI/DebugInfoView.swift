@@ -1,13 +1,13 @@
+import Perception
 import SwiftUI
 #if os(iOS)
 import UIKit
 #endif
 
 struct DebugInfoView: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var figures: DebugInfoMonitor.Figures?
 
     static let pictureInterval = 1.0 / 60
     static let hitch = 0.05
@@ -28,69 +28,71 @@ struct DebugInfoView: View {
     }
 
     var body: some View {
-        let video = figures?.video
-        let isVideo = controller.isVideo
-        VStack(spacing: 0) {
-            pair {
-                Text(verbatim: controller.info.dialect == .rdp ? "RDP" : isVideo ? "Apple VNC" : "VNC")
-                    .foregroundStyle(controller.info.dialect != .apple ? Color.white : isVideo ? .green : .orange)
-            } trailing: {
-                Text(verbatim: (isVideo ? controller.info.videoCodec : figures?.encoding) ?? "—")
-            }
-            pair {
-                Text(verbatim: imageSize)
-            } trailing: {
-                Text(verbatim: figures?.shownPerSecond.map { String(format: "%.0f fps", $0) } ?? "—")
-                    .foregroundStyle(dropsFrames(figures) ? Color.orange : .white)
-            }
+        WithPerceptionTracking {
+            let figures = controller.debugInfo.figures
+            let video = figures?.video
+            let isVideo = controller.isVideo
             VStack(spacing: 0) {
-                row("Bitrate", figures?.bitsPerSecond.map(Self.bitrate))
-                if isVideo {
-                    row(
-                        "Loss / Keyframes", video?.loss.map { String(format: "%.1f%%", $0 * 100) },
-                        video.map { "\($0.keyframeRequests)" },
-                        firstColor: (video?.loss ?? 0) > Self.lossWarning ? .red : .white)
-                    row(
-                        "RTT / Queue", figures?.roundTripMilliseconds.map(Self.wholeMilliseconds),
-                        video.map { Self.wholeMilliseconds($0.queuingDelayMilliseconds) + "ms" })
-                } else {
-                    row("RTT", figures?.roundTripMilliseconds.map { Self.wholeMilliseconds($0) + "ms" })
+                pair {
+                    Text(verbatim: controller.info.dialect == .rdp ? "RDP" : isVideo ? "Apple VNC" : "VNC")
+                        .foregroundStyle(controller.info.dialect != .apple ? Color.white : isVideo ? .green : .orange)
+                } trailing: {
+                    Text(verbatim: (isVideo ? controller.info.videoCodec : figures?.encoding) ?? "—")
                 }
-                row(
-                    "To Screen", figures?.toScreenMilliseconds.map(Self.milliseconds),
-                    color: (figures?.toScreenMilliseconds ?? 0) > Self.slow * 1000 ? .orange : .white)
-                if isVideo {
-                    row(
-                        "Buffer / Decode", figures?.holdMilliseconds.map(Self.wholeMilliseconds),
-                        figures?.decodeMilliseconds.map { Self.wholeMilliseconds($0) + "ms" },
-                        secondColor: (figures?.decodeMilliseconds ?? 0) > Self.pictureInterval * 1000 ? .orange : .white)
+                pair {
+                    Text(verbatim: imageSize)
+                } trailing: {
+                    Text(verbatim: figures?.shownPerSecond.map { String(format: "%.0f fps", $0) } ?? "—")
+                        .foregroundStyle(dropsFrames(figures) ? Color.orange : .white)
                 }
+                VStack(spacing: 0) {
+                    row("Bitrate", figures?.bitsPerSecond.map(Self.bitrate))
+                    if isVideo {
+                        row(
+                            "Loss / Keyframes", video?.loss.map { String(format: "%.1f%%", $0 * 100) },
+                            video.map { "\($0.keyframeRequests)" },
+                            firstColor: (video?.loss ?? 0) > Self.lossWarning ? .red : .white)
+                        row(
+                            "RTT / Queue", figures?.roundTripMilliseconds.map(Self.wholeMilliseconds),
+                            video.map { Self.wholeMilliseconds($0.queuingDelayMilliseconds) + "ms" })
+                    } else {
+                        row("RTT", figures?.roundTripMilliseconds.map { Self.wholeMilliseconds($0) + "ms" })
+                    }
+                    row(
+                        "To Screen", figures?.toScreenMilliseconds.map(Self.milliseconds),
+                        color: (figures?.toScreenMilliseconds ?? 0) > Self.slow * 1000 ? .orange : .white)
+                    if isVideo {
+                        row(
+                            "Buffer / Decode", figures?.holdMilliseconds.map(Self.wholeMilliseconds),
+                            figures?.decodeMilliseconds.map { Self.wholeMilliseconds($0) + "ms" },
+                            secondColor: (figures?.decodeMilliseconds ?? 0) > Self.pictureInterval * 1000 ? .orange : .white)
+                    }
+                }
+                .padding(.top, 4)
+                ToScreenGraph(monitor: controller.debugInfo)
+                    .frame(height: fontSize * 3)
+                    .padding(.top, 2)
+                    .accessibilityHidden(true)
             }
-            .padding(.top, 4)
-            ToScreenGraph(monitor: controller.debugInfo)
-                .frame(height: fontSize * 3)
-                .padding(.top, 2)
-                .accessibilityHidden(true)
-        }
-        .font(.system(size: fontSize, weight: .regular, design: .monospaced))
-        .monospacedDigit()
-        .lineLimit(1)
-        .foregroundStyle(.white)
-        .frame(width: width)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
-        .environment(\.colorScheme, .dark)
-        .accessibilityElement(children: .combine)
-        .onReceive(controller.debugInfo.$figures) { figures = $0 }
-        .task {
-            let monitor = controller.debugInfo
-            monitor.start()
-            while !Task.isCancelled {
-                controller.sampleDebugInfo()
-                try? await Task.sleep(seconds: 1)
+            .font(.system(size: fontSize, weight: .regular, design: .monospaced))
+            .monospacedDigit()
+            .lineLimit(1)
+            .foregroundStyle(.white)
+            .frame(width: width)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
+            .environment(\.colorScheme, .dark)
+            .accessibilityElement(children: .combine)
+            .task {
+                let monitor = controller.debugInfo
+                monitor.start()
+                while !Task.isCancelled {
+                    controller.sampleDebugInfo()
+                    try? await Task.sleep(seconds: 1)
+                }
+                monitor.stop()
             }
-            monitor.stop()
         }
     }
 
@@ -153,7 +155,7 @@ struct DebugInfoView: View {
 }
 
 private struct ToScreenGraph: View {
-    @ObservedObject var monitor: DebugInfoMonitor
+    let monitor: DebugInfoMonitor
 
     @Environment(\.displayScale) private var displayScale
 
@@ -161,48 +163,50 @@ private struct ToScreenGraph: View {
     private static let gridColumns = 6
 
     var body: some View {
-        let values = monitor.toScreen
-        Canvas { context, size in
-            let pixel = 1 / displayScale
-            var grid = Path()
-            for column in 1..<Self.gridColumns {
-                let x = size.width * CGFloat(column) / CGFloat(Self.gridColumns)
-                grid.move(to: CGPoint(x: x, y: 0))
-                grid.addLine(to: CGPoint(x: x, y: size.height))
-            }
-            let frameLine = (size.height - 1) * (1 - CGFloat(DebugInfoView.pictureInterval / Self.top))
-            grid.move(to: CGPoint(x: 0, y: frameLine))
-            grid.addLine(to: CGPoint(x: size.width, y: frameLine))
-            context.stroke(grid, with: .color(.white.opacity(0.3)), lineWidth: pixel)
-            var axes = Path()
-            axes.move(to: CGPoint(x: pixel / 2, y: 0))
-            axes.addLine(to: CGPoint(x: pixel / 2, y: size.height - pixel / 2))
-            axes.addLine(to: CGPoint(x: size.width - pixel / 2, y: size.height - pixel / 2))
-            axes.addLine(to: CGPoint(x: size.width - pixel / 2, y: 0))
-            context.stroke(axes, with: .color(.white), lineWidth: pixel)
-
-            guard values.count > 1 else { return }
-            let step = size.width / CGFloat(DebugInfoMonitor.graphLength - 1)
-            let start = CGFloat(DebugInfoMonitor.graphLength - values.count) * step
-            func point(_ index: Int) -> CGPoint {
-                let fraction = min(values[index] / Self.top, 1)
-                return CGPoint(x: start + CGFloat(index) * step, y: (size.height - 1) * (1 - fraction))
-            }
-            var smooth = Path()
-            var hitched = Path()
-            for index in 1..<values.count {
-                let hitches = max(values[index - 1], values[index]) > DebugInfoView.hitch
-                if hitches {
-                    hitched.move(to: point(index - 1))
-                    hitched.addLine(to: point(index))
-                } else {
-                    smooth.move(to: point(index - 1))
-                    smooth.addLine(to: point(index))
+        WithPerceptionTracking {
+            let values = monitor.toScreen
+            Canvas { context, size in
+                let pixel = 1 / displayScale
+                var grid = Path()
+                for column in 1..<Self.gridColumns {
+                    let x = size.width * CGFloat(column) / CGFloat(Self.gridColumns)
+                    grid.move(to: CGPoint(x: x, y: 0))
+                    grid.addLine(to: CGPoint(x: x, y: size.height))
                 }
+                let frameLine = (size.height - 1) * (1 - CGFloat(DebugInfoView.pictureInterval / Self.top))
+                grid.move(to: CGPoint(x: 0, y: frameLine))
+                grid.addLine(to: CGPoint(x: size.width, y: frameLine))
+                context.stroke(grid, with: .color(.white.opacity(0.3)), lineWidth: pixel)
+                var axes = Path()
+                axes.move(to: CGPoint(x: pixel / 2, y: 0))
+                axes.addLine(to: CGPoint(x: pixel / 2, y: size.height - pixel / 2))
+                axes.addLine(to: CGPoint(x: size.width - pixel / 2, y: size.height - pixel / 2))
+                axes.addLine(to: CGPoint(x: size.width - pixel / 2, y: 0))
+                context.stroke(axes, with: .color(.white), lineWidth: pixel)
+
+                guard values.count > 1 else { return }
+                let step = size.width / CGFloat(DebugInfoMonitor.graphLength - 1)
+                let start = CGFloat(DebugInfoMonitor.graphLength - values.count) * step
+                func point(_ index: Int) -> CGPoint {
+                    let fraction = min(values[index] / Self.top, 1)
+                    return CGPoint(x: start + CGFloat(index) * step, y: (size.height - 1) * (1 - fraction))
+                }
+                var smooth = Path()
+                var hitched = Path()
+                for index in 1..<values.count {
+                    let hitches = max(values[index - 1], values[index]) > DebugInfoView.hitch
+                    if hitches {
+                        hitched.move(to: point(index - 1))
+                        hitched.addLine(to: point(index))
+                    } else {
+                        smooth.move(to: point(index - 1))
+                        smooth.addLine(to: point(index))
+                    }
+                }
+                let line = StrokeStyle(lineWidth: 1, lineCap: .round)
+                context.stroke(smooth, with: .color(.blue), style: line)
+                context.stroke(hitched, with: .color(.red), style: line)
             }
-            let line = StrokeStyle(lineWidth: 1, lineCap: .round)
-            context.stroke(smooth, with: .color(.blue), style: line)
-            context.stroke(hitched, with: .color(.red), style: line)
         }
     }
 }

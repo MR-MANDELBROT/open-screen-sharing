@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 enum SessionCommand: String, CaseIterable, Identifiable {
@@ -195,14 +196,16 @@ enum SessionCommandStyle {
 
 struct SessionCommandView: View {
     let command: SessionCommand
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
     var style: SessionCommandStyle = .menuItem
 
-    @ObservedObject private var settings = AppSettings.shared
+    private let settings = AppSettings.shared
 
     var body: some View {
-        content
-            .disabled(!command.isEnabled(in: controller))
+        WithPerceptionTracking {
+            content
+                .disabled(!command.isEnabled(in: controller))
+        }
     }
 
     @ViewBuilder
@@ -220,7 +223,9 @@ struct SessionCommandView: View {
             switch style {
             case .barItem, .windowToolbarItem:
                 Button { controller.isShowingResolution = true } label: { label }
-                    .resolutionPopover(controller: controller, isPresented: $controller.isShowingResolution)
+                    .resolutionPopover(
+                        controller: controller,
+                        isPresented: Binding(get: { controller.isShowingResolution }, set: { controller.isShowingResolution = $0 }))
             case .menuItem:
                 #if os(iOS)
                 Button { controller.isShowingResolution = true } label: { Label("Resolution…", systemImage: command.systemImage) }
@@ -268,7 +273,7 @@ struct SessionCommandView: View {
         case .clipboard:
             items { ClipboardMenuItems(controller: controller) }
         case .debugInfo:
-            toggle(isOn: $settings.showsDebugInfo)
+            toggle(isOn: Binding(get: { settings.showsDebugInfo }, set: { settings.showsDebugInfo = $0 }))
         }
     }
 

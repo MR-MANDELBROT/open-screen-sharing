@@ -1,4 +1,4 @@
-import Combine
+import Perception
 import SwiftUI
 
 final class HomeActions {
@@ -6,14 +6,15 @@ final class HomeActions {
 }
 
 #if os(macOS)
-final class HomeRequest: ObservableObject {
+@Perceptible
+final class HomeRequest {
     enum Pending: Equatable {
         case newConnection
         case settings
     }
 
     static let shared = HomeRequest()
-    @Published var pending: Pending?
+    var pending: Pending?
 }
 #endif
 
@@ -30,8 +31,8 @@ struct HomeView: View {
     }
 
     @Environment(\.openSessionWindow) private var openSessionWindow
-    @EnvironmentObject private var nearby: NearbyBrowser
-    @EnvironmentObject private var availabilityMonitor: AvailabilityMonitor
+    @Environment(NearbyBrowser.self) private var nearby
+    @Environment(AvailabilityMonitor.self) private var availabilityMonitor
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var selection: HomeTab = .connections
@@ -44,10 +45,10 @@ struct HomeView: View {
     @State private var isWatchingConnections = false
     @State private var linkLookup: LinkLookup?
     #if os(iOS) && (DEBUG || SIDELOAD)
-    @ObservedObject private var server = ServerController.shared
+    private let server = ServerController.shared
     #endif
     #if os(macOS)
-    @ObservedObject private var homeRequest = HomeRequest.shared
+    private let homeRequest = HomeRequest.shared
     #endif
 
     var body: some View {
@@ -132,50 +133,52 @@ struct HomeView: View {
     @ViewBuilder
     private var layout: some View {
         #if os(iOS)
-        if #available(iOS 18, *) {
-            TabView(selection: $selection) {
-                Tab("Connections", systemImage: "desktopcomputer", value: HomeTab.connections) {
+        WithPerceptionTracking {
+            if #available(iOS 18, *) {
+                TabView(selection: $selection) {
+                    Tab("Connections", systemImage: "desktopcomputer", value: HomeTab.connections) {
+                        NavigationStackCompat {
+                            computersView
+                        }
+                    }
+                    #if DEBUG || SIDELOAD
+                    Tab("Server", systemImage: ServerFeature.systemImage, value: HomeTab.server) {
+                        NavigationStackCompat {
+                            serverView
+                        }
+                    }
+                    .badge(isServerRunning ? Text(verbatim: "") : nil)
+                    .accessibilityValue(Text("Running"), isEnabled: isServerRunning)
+                    #endif
+                    Tab("Settings", systemImage: "gearshape", value: HomeTab.settings) {
+                        NavigationStackCompat {
+                            SettingsView()
+                        }
+                    }
+                }
+                .tabViewStyle(.sidebarAdaptable)
+            } else {
+                TabView(selection: $selection) {
                     NavigationStackCompat {
                         computersView
                     }
-                }
-                #if DEBUG || SIDELOAD
-                Tab("Server", systemImage: ServerFeature.systemImage, value: HomeTab.server) {
+                    .tabItem { Label("Connections", systemImage: "desktopcomputer") }
+                    .tag(HomeTab.connections)
+                    #if DEBUG || SIDELOAD
                     NavigationStackCompat {
                         serverView
                     }
-                }
-                .badge(isServerRunning ? Text(verbatim: "") : nil)
-                .accessibilityValue(Text("Running"), isEnabled: isServerRunning)
-                #endif
-                Tab("Settings", systemImage: "gearshape", value: HomeTab.settings) {
+                    .tabItem { Label("Server", systemImage: ServerFeature.systemImage) }
+                    .tag(HomeTab.server)
+                    .badge(isServerRunning ? Text(verbatim: "") : nil)
+                    .accessibilityValue(isServerRunning ? Text("Running") : Text(verbatim: ""))
+                    #endif
                     NavigationStackCompat {
                         SettingsView()
                     }
+                    .tabItem { Label("Settings", systemImage: "gearshape") }
+                    .tag(HomeTab.settings)
                 }
-            }
-            .tabViewStyle(.sidebarAdaptable)
-        } else {
-            TabView(selection: $selection) {
-                NavigationStackCompat {
-                    computersView
-                }
-                .tabItem { Label("Connections", systemImage: "desktopcomputer") }
-                .tag(HomeTab.connections)
-                #if DEBUG || SIDELOAD
-                NavigationStackCompat {
-                    serverView
-                }
-                .tabItem { Label("Server", systemImage: ServerFeature.systemImage) }
-                .tag(HomeTab.server)
-                .badge(isServerRunning ? Text(verbatim: "") : nil)
-                .accessibilityValue(isServerRunning ? Text("Running") : Text(verbatim: ""))
-                #endif
-                NavigationStackCompat {
-                    SettingsView()
-                }
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(HomeTab.settings)
             }
         }
         #else

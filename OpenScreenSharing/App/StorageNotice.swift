@@ -1,14 +1,15 @@
-import Combine
+import Perception
 import SwiftUI
 import os
 
-final class StorageNotice: ObservableObject {
+@Perceptible
+final class StorageNotice {
     static let shared = StorageNotice()
 
     nonisolated static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "OpenScreenSharing", category: "storage")
 
-    @Published private(set) var alert: AlertState?
-    private var queued: [AlertState] = []
+    private(set) var alert: AlertState?
+    @PerceptionIgnored private var queued: [AlertState] = []
 
     func report(_ failure: String, error: any Error) {
         Self.logger.error("\(failure, privacy: .public): \(error, privacy: .public)")
@@ -32,9 +33,11 @@ final class StorageNotice: ObservableObject {
 }
 
 struct StorageNoticeAlert: ViewModifier {
-    @ObservedObject private var notice = StorageNotice.shared
+    private let notice = StorageNotice.shared
 
     func body(content: Content) -> some View {
-        content.alert(Binding(get: { notice.alert }, set: { if $0 == nil { notice.dismiss() } }))
+        WithPerceptionTracking {
+            content.alert(Binding(get: { notice.alert }, set: { if $0 == nil { notice.dismiss() } }))
+        }
     }
 }

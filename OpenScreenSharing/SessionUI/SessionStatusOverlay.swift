@@ -1,10 +1,11 @@
+import Perception
 import SwiftUI
 #if os(iOS)
 import UIKit
 #endif
 
 struct SessionStatusOverlay: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
     let onClose: () -> Void
 
     private var isConnecting: Bool {
@@ -57,69 +58,71 @@ struct SessionStatusOverlay: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.clear
-            if let progressTitle {
-                Color.black.opacity(0.55)
-                    .allowsHitTesting(false)
+        WithPerceptionTracking {
+            ZStack {
+                Color.clear
+                if let progressTitle {
+                    Color.black.opacity(0.55)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                    VStack(spacing: 24) {
+                        ProgressView {
+                            Text(progressTitle)
+                                .foregroundStyle(.white)
+                        }
+                        #if os(iOS)
+                        .controlSize(.large)
+                        #endif
+                        if controller.phase == .waitingForPermission {
+                            Button("Cancel", role: .cancel, action: onClose)
+                                .glassButtonStyleCompat()
+                                .controlSize(.large)
+                        }
+                    }
+                    .padding()
                     .transition(.opacity)
-                VStack(spacing: 24) {
-                    ProgressView {
-                        Text(progressTitle)
-                            .foregroundStyle(.white)
-                    }
+                }
+            }
+            .animation(.default, value: progressTitle)
+            .onChangeCompat(of: progressTitle) { title in
+                if let title {
                     #if os(iOS)
-                    .controlSize(.large)
+                    UIAccessibility.post(notification: .announcement, argument: title)
+                    #else
+                    AccessibilityNotification.Announcement(title).post()
                     #endif
-                    if controller.phase == .waitingForPermission {
-                        Button("Cancel", role: .cancel, action: onClose)
-                            .glassButtonStyleCompat()
-                            .controlSize(.large)
+                }
+            }
+            .alert(Binding(get: { failure.map(failureAlert) }, set: { _ in }))
+            .alert(
+                Text("“\(controller.title)” Is in Use"),
+                isPresented: Binding(get: { sessionChoice != nil }, set: { _ in }),
+                presenting: sessionChoice
+            ) { prompt in
+                if prompt.allowsOwnSession {
+                    Button("Log In to Your Own Session") {
+                        controller.answerSessionChoice(.ownSession)
                     }
                 }
-                .padding()
-                .transition(.opacity)
-            }
-        }
-        .animation(.default, value: progressTitle)
-        .onChangeCompat(of: progressTitle) { title in
-            if let title {
-                #if os(iOS)
-                UIAccessibility.post(notification: .announcement, argument: title)
-                #else
-                AccessibilityNotification.Announcement(title).post()
-                #endif
-            }
-        }
-        .alert(Binding(get: { failure.map(failureAlert) }, set: { _ in }))
-        .alert(
-            Text("“\(controller.title)” Is in Use"),
-            isPresented: Binding(get: { sessionChoice != nil }, set: { _ in }),
-            presenting: sessionChoice
-        ) { prompt in
-            if prompt.allowsOwnSession {
-                Button("Log In to Your Own Session") {
-                    controller.answerSessionChoice(.ownSession)
+                if prompt.allowsShareConsole {
+                    Button(sharesOwnDisplay(prompt) ? LocalizedStringKey("Share the Screen") : LocalizedStringKey("Ask to Share Their Screen")) {
+                        controller.answerSessionChoice(.shareConsole)
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    controller.answerSessionChoice(.cancel)
+                    onClose()
+                }
+            } message: { prompt in
+                if sharesOwnDisplay(prompt) {
+                    Text("Your account is logged in at the Mac.")
+                } else if !prompt.consoleUser.isEmpty {
+                    Text("“\(prompt.consoleUser)” is using it right now.")
                 }
             }
-            if prompt.allowsShareConsole {
-                Button(sharesOwnDisplay(prompt) ? LocalizedStringKey("Share the Screen") : LocalizedStringKey("Ask to Share Their Screen")) {
-                    controller.answerSessionChoice(.shareConsole)
-                }
+            .alert("Disconnected", isPresented: Binding(get: { isDisconnected }, set: { _ in })) {
+                Button("Close", role: .cancel, action: onClose)
             }
-            Button("Cancel", role: .cancel) {
-                controller.answerSessionChoice(.cancel)
-                onClose()
-            }
-        } message: { prompt in
-            if sharesOwnDisplay(prompt) {
-                Text("Your account is logged in at the Mac.")
-            } else if !prompt.consoleUser.isEmpty {
-                Text("“\(prompt.consoleUser)” is using it right now.")
-            }
-        }
-        .alert("Disconnected", isPresented: Binding(get: { isDisconnected }, set: { _ in })) {
-            Button("Close", role: .cancel, action: onClose)
         }
     }
 

@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -22,8 +23,8 @@ struct CursorStyleView: View {
     ]
     #endif
 
-    @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var store = CursorThemeStore.shared
+    private let settings = AppSettings.shared
+    private let store = CursorThemeStore.shared
     @Environment(\.displayScale) private var displayScale
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
@@ -31,85 +32,89 @@ struct CursorStyleView: View {
     @State private var alert: AlertState?
 
     var body: some View {
-        Form {
-            if let images = previewImages {
+        WithPerceptionTracking {
+            Form {
+                if let images = previewImages {
+                    Section {
+                        HStack(spacing: 0) {
+                            ForEach(Array(images.enumerated()), id: \.offset) { _, preview in
+                                let size = CGSize(
+                                    width: CGFloat(preview.image.width) / preview.scale, height: CGFloat(preview.image.height) / preview.scale)
+                                let factor = min(1, Self.previewSize / max(size.width, size.height))
+                                Image(decorative: preview.image, scale: 1)
+                                    .resizable()
+                                    .interpolation(.high)
+                                    .frame(width: size.width * factor, height: size.height * factor)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .frame(height: Self.previewHeight)
+                    }
+                }
                 Section {
-                    HStack(spacing: 0) {
-                        ForEach(Array(images.enumerated()), id: \.offset) { _, preview in
-                            let size = CGSize(
-                                width: CGFloat(preview.image.width) / preview.scale, height: CGFloat(preview.image.height) / preview.scale)
-                            let factor = min(1, Self.previewSize / max(size.width, size.height))
-                            Image(decorative: preview.image, scale: 1)
-                                .resizable()
-                                .interpolation(.high)
-                                .frame(width: size.width * factor, height: size.height * factor)
-                                .frame(maxWidth: .infinity)
+                    row(.system) {
+                        Text(Self.systemStyleName)
+                    }
+                    row(.remote) {
+                        Text("Remote Style")
+                    }
+                }
+                Section("Custom") {
+                    Button {
+                        isPickingFile = true
+                    } label: {
+                        HStack {
+                            Label("Import", systemImage: "doc.badge.plus")
+                            if store.isImporting {
+                                Spacer()
+                                ProgressView()
+                            }
                         }
                     }
-                    .frame(height: Self.previewHeight)
-                }
-            }
-            Section {
-                row(.system) {
-                    Text(Self.systemStyleName)
-                }
-                row(.remote) {
-                    Text("Remote Style")
-                }
-            }
-            Section("Custom") {
-                Button {
-                    isPickingFile = true
-                } label: {
-                    HStack {
-                        Label("Import", systemImage: "doc.badge.plus")
-                        if store.isImporting {
-                            Spacer()
-                            ProgressView()
+                    .formRowButtonStyleCompat()
+                    .disabled(store.isImporting)
+                    ForEach(store.themes) { theme in
+                        WithPerceptionTracking {
+                            row(.theme(theme.id)) {
+                                Text(verbatim: theme.name)
+                            }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    delete(theme)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
-                }
-                .formRowButtonStyleCompat()
-                .disabled(store.isImporting)
-                ForEach(store.themes) { theme in
-                    row(.theme(theme.id)) {
-                        Text(verbatim: theme.name)
+                    .onDelete { offsets in
+                        offsets.map { store.themes[$0] }.forEach(delete)
                     }
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            delete(theme)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-                }
-                .onDelete { offsets in
-                    offsets.map { store.themes[$0] }.forEach(delete)
                 }
             }
-        }
-        #if os(macOS)
-        .formStyle(.grouped)
-        .unboundedFormWidth()
-        #endif
-        .navigationTitle("Cursor Style")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .alert($alert)
-        .fileImporter(isPresented: $isPickingFile, allowedContentTypes: [.folder, .data], allowsMultipleSelection: true) { result in
-            guard case .success(let urls) = result else { return }
-            Task {
-                var failure: (name: String, error: any Error)?
-                for url in urls {
-                    do {
-                        try await store.importFile(url)
-                    } catch {
-                        failure = failure ?? (url.lastPathComponent, error)
+            #if os(macOS)
+            .formStyle(.grouped)
+            .unboundedFormWidth()
+            #endif
+            .navigationTitle("Cursor Style")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .alert($alert)
+            .fileImporter(isPresented: $isPickingFile, allowedContentTypes: [.folder, .data], allowsMultipleSelection: true) { result in
+                guard case .success(let urls) = result else { return }
+                Task {
+                    var failure: (name: String, error: any Error)?
+                    for url in urls {
+                        do {
+                            try await store.importFile(url)
+                        } catch {
+                            failure = failure ?? (url.lastPathComponent, error)
+                        }
                     }
-                }
-                if let failure {
-                    alert = AlertState(String(localized: "Couldn’t Import “\(failure.name)”"), error: failure.error)
+                    if let failure {
+                        alert = AlertState(String(localized: "Couldn’t Import “\(failure.name)”"), error: failure.error)
+                    }
                 }
             }
         }

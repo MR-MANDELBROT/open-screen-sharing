@@ -1,4 +1,5 @@
 import Libsharing
+import Perception
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -37,98 +38,100 @@ struct MacDiskImageImportView: View {
 
     private static let defaultPort = 22
 
-    @ObservedObject private var store = DiskImageStore.shared
+    private let store = DiskImageStore.shared
 
     var body: some View {
-        Form {
-            Section {
-                LabeledContentCompat("Host") {
-                    TextField("Host", text: $host, prompt: Text("Required"))
-                        .multilineTextAlignment(.trailing)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .focused($focusedField, equals: .host)
-                        .submitLabel(.next)
-                        .onSubmit { focusedField = .username }
-                }
-                LabeledContentCompat("Port") {
-                    TextField("Port", text: portDigits, prompt: Text(verbatim: String(Self.defaultPort)))
-                        .multilineTextAlignment(.trailing)
-                        .keyboardType(.numberPad)
-                        .foregroundStyle(parsedPort == nil ? Color.red : Color.primary)
-                        .focused($focusedField, equals: .port)
-                }
-                LabeledContentCompat("User Name") {
-                    TextField("User Name", text: $username, prompt: Text("Required"))
-                        .multilineTextAlignment(.trailing)
-                        .textContentType(.oneTimeCode)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .focused($focusedField, equals: .username)
-                        .submitLabel(authentication == .password ? .next : .done)
-                        .onSubmit { focusedField = authentication == .password ? .password : nil }
-                }
-                Picker("Authentication", selection: $authentication) {
-                    Text("Password").tag(Authentication.password)
-                    Text("Public Key").tag(Authentication.publicKey)
-                }
-                .pickerStyle(.menu)
-                switch authentication {
-                case .password:
-                    LabeledContentCompat("Password") {
-                        secretField("Password", text: $password, field: .password)
+        WithPerceptionTracking {
+            Form {
+                Section {
+                    LabeledContentCompat("Host") {
+                        TextField("Host", text: $host, prompt: Text("Required"))
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .host)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .username }
                     }
-                case .publicKey:
-                    Button {
-                        isChoosingKey = true
-                    } label: {
-                        LabeledContentCompat("Private Key") {
-                            HStack {
-                                if let privateKey {
-                                    Text(verbatim: privateKey.name)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
+                    LabeledContentCompat("Port") {
+                        TextField("Port", text: portDigits, prompt: Text(verbatim: String(Self.defaultPort)))
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.numberPad)
+                            .foregroundStyle(parsedPort == nil ? Color.red : Color.primary)
+                            .focused($focusedField, equals: .port)
+                    }
+                    LabeledContentCompat("User Name") {
+                        TextField("User Name", text: $username, prompt: Text("Required"))
+                            .multilineTextAlignment(.trailing)
+                            .textContentType(.oneTimeCode)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .username)
+                            .submitLabel(authentication == .password ? .next : .done)
+                            .onSubmit { focusedField = authentication == .password ? .password : nil }
+                    }
+                    Picker("Authentication", selection: $authentication) {
+                        Text("Password").tag(Authentication.password)
+                        Text("Public Key").tag(Authentication.publicKey)
+                    }
+                    .pickerStyle(.menu)
+                    switch authentication {
+                    case .password:
+                        LabeledContentCompat("Password") {
+                            secretField("Password", text: $password, field: .password)
+                        }
+                    case .publicKey:
+                        Button {
+                            isChoosingKey = true
+                        } label: {
+                            LabeledContentCompat("Private Key") {
+                                HStack {
+                                    if let privateKey {
+                                        Text(verbatim: privateKey.name)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+                                    Text("Choose…")
+                                        .foregroundStyle(.tint)
                                 }
-                                Text("Choose…")
-                                    .foregroundStyle(.tint)
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                        if privateKey?.isEncrypted == true {
+                            LabeledContentCompat("Passphrase") {
+                                secretField("Passphrase", text: $passphrase, field: .passphrase)
                             }
                         }
                     }
-                    .foregroundStyle(.primary)
-                    if privateKey?.isEncrypted == true {
-                        LabeledContentCompat("Passphrase") {
-                            secretField("Passphrase", text: $passphrase, field: .passphrase)
-                        }
+                } footer: {
+                    if store.isImporting {
+                        DiskImageImportProgressView(waiting: "Connecting…")
                     }
                 }
-            } footer: {
-                if store.isImporting {
-                    DiskImageImportProgressView(waiting: "Connecting…")
+                .disabled(store.isImporting)
+            }
+            .navigationTitle("Import from Mac")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(store.isImporting)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if store.isImporting {
+                        Button("Cancel", role: .cancel) { store.cancel() }
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Import", role: .confirmCompat, action: start)
+                        .disabled(!isValid || store.isImporting)
                 }
             }
-            .disabled(store.isImporting)
-        }
-        .navigationTitle("Import from Mac")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(store.isImporting)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                if store.isImporting {
-                    Button("Cancel", role: .cancel) { store.cancel() }
+            .fileImporter(isPresented: $isChoosingKey, allowedContentTypes: [.item]) { result in
+                if case .success(let url) = result {
+                    choosePrivateKey(url)
                 }
             }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Import", role: .confirmCompat, action: start)
-                    .disabled(!isValid || store.isImporting)
-            }
+            .alert($alert)
         }
-        .fileImporter(isPresented: $isChoosingKey, allowedContentTypes: [.item]) { result in
-            if case .success(let url) = result {
-                choosePrivateKey(url)
-            }
-        }
-        .alert($alert)
     }
 
     private func secretField(_ title: LocalizedStringKey, text: Binding<String>, field: Field) -> some View {

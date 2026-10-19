@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -6,44 +7,46 @@ struct DiskImageImportView: View {
     @State private var isPickingFile = false
     @State private var alert: AlertState?
 
-    @ObservedObject private var store = DiskImageStore.shared
+    private let store = DiskImageStore.shared
 
     var body: some View {
-        NavigationStackCompat {
-            Form {
-                Section {
-                    Button("From Files") { isPickingFile = true }
-                    NavigationLink("From a Mac") {
-                        MacDiskImageImportView(run: run)
+        WithPerceptionTracking {
+            NavigationStackCompat {
+                Form {
+                    Section {
+                        Button("From Files") { isPickingFile = true }
+                        NavigationLink("From a Mac") {
+                            MacDiskImageImportView(run: run)
+                        }
+                        NavigationLink("From URL") {
+                            DiskImageDownloadView(run: run)
+                        }
+                    } footer: {
+                        if store.isImporting {
+                            DiskImageImportProgressView()
+                        }
                     }
-                    NavigationLink("From URL") {
-                        DiskImageDownloadView(run: run)
-                    }
-                } footer: {
-                    if store.isImporting {
-                        DiskImageImportProgressView()
+                    .disabled(store.isImporting)
+                }
+                .navigationTitle("Import Disk Image")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", role: .cancel) {
+                            store.cancel()
+                            dismiss()
+                        }
                     }
                 }
-                .disabled(store.isImporting)
-            }
-            .navigationTitle("Import Disk Image")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", role: .cancel) {
-                        store.cancel()
-                        dismiss()
+                .fileImporter(isPresented: $isPickingFile, allowedContentTypes: [.folder, .zip]) { result in
+                    if case .success(let url) = result {
+                        run { try await store.importFile(at: url) }
                     }
                 }
             }
-            .fileImporter(isPresented: $isPickingFile, allowedContentTypes: [.folder, .zip]) { result in
-                if case .success(let url) = result {
-                    run { try await store.importFile(at: url) }
-                }
-            }
+            .interactiveDismissDisabled(store.isImporting)
+            .alert($alert)
         }
-        .interactiveDismissDisabled(store.isImporting)
-        .alert($alert)
     }
 
     private func run(_ operation: @escaping () async throws -> Void) {
@@ -63,13 +66,15 @@ struct DiskImageImportView: View {
 struct DiskImageImportProgressView: View {
     var waiting: LocalizedStringKey = "Importing…"
 
-    @ObservedObject private var store = DiskImageStore.shared
+    private let store = DiskImageStore.shared
 
     var body: some View {
-        if let progress = store.progress, progress.received > 0 {
-            InlineProgress(verbatim: progress.localizedDescription)
-        } else {
-            InlineProgress(waiting)
+        WithPerceptionTracking {
+            if let progress = store.progress, progress.received > 0 {
+                InlineProgress(verbatim: progress.localizedDescription)
+            } else {
+                InlineProgress(waiting)
+            }
         }
     }
 }
@@ -80,48 +85,50 @@ struct DiskImageDownloadView: View {
     @State private var url = DiskImageStore.defaultURL
     @FocusState private var isFocused: Bool
 
-    @ObservedObject private var store = DiskImageStore.shared
+    private let store = DiskImageStore.shared
 
     private var trimmedURL: String {
         url.trimmingCharacters(in: .whitespaces)
     }
 
     var body: some View {
-        Form {
-            Section {
-                Group {
-                    if #available(iOS 16, *) {
-                        TextField("URL", text: singleLine, prompt: Text("Required"), axis: .vertical)
-                    } else {
-                        TextField("URL", text: singleLine, prompt: Text("Required"))
-                            .onSubmit(start)
+        WithPerceptionTracking {
+            Form {
+                Section {
+                    Group {
+                        if #available(iOS 16, *) {
+                            TextField("URL", text: singleLine, prompt: Text("Required"), axis: .vertical)
+                        } else {
+                            TextField("URL", text: singleLine, prompt: Text("Required"))
+                                .onSubmit(start)
+                        }
+                    }
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($isFocused)
+                } header: {
+                    Text("URL")
+                } footer: {
+                    if store.isImporting {
+                        DiskImageImportProgressView(waiting: "Connecting…")
                     }
                 }
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($isFocused)
-            } header: {
-                Text("URL")
-            } footer: {
-                if store.isImporting {
-                    DiskImageImportProgressView(waiting: "Connecting…")
-                }
+                .disabled(store.isImporting)
             }
-            .disabled(store.isImporting)
-        }
-        .navigationTitle("Download Disk Image")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(store.isImporting)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                if store.isImporting {
-                    Button("Cancel", role: .cancel) { store.cancel() }
+            .navigationTitle("Download Disk Image")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(store.isImporting)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if store.isImporting {
+                        Button("Cancel", role: .cancel) { store.cancel() }
+                    }
                 }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Download", role: .confirmCompat, action: start)
-                    .disabled(trimmedURL.isEmpty || store.isImporting)
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Download", role: .confirmCompat, action: start)
+                        .disabled(trimmedURL.isEmpty || store.isImporting)
+                }
             }
         }
     }

@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 struct ComputersView: View {
@@ -6,9 +7,9 @@ struct ComputersView: View {
     let edit: (Computer) -> Void
     let newConnection: () -> Void
 
-    @EnvironmentObject private var availabilityMonitor: AvailabilityMonitor
-    @ObservedObject private var store = ComputerStore.shared
-    @ObservedObject private var settings = AppSettings.shared
+    @Environment(AvailabilityMonitor.self) private var availabilityMonitor
+    private let store = ComputerStore.shared
+    private let settings = AppSettings.shared
     @State private var computerToDelete: Computer?
     @State private var alert: AlertState?
     @State private var visibleSize: CGSize = .zero
@@ -36,43 +37,45 @@ struct ComputersView: View {
     }
 
     var body: some View {
-        content
-            #if os(iOS)
-            .background(NavigationBarMarginReader(margin: $margin))
-            #endif
-            .onGeometryChangeCompat(for: CGSize.self, of: { $0.size }) { visibleSize = $0 }
-            .navigationTitle("Connections")
-            .primaryActionsCompat {
-                Button(action: newConnection) { Label("New Connection", systemImage: "plus") }
-            } trailing: {
-                Menu {
-                    Picker(selection: $settings.computerLayout) {
-                        Label("Icons", systemImage: "square.grid.2x2").tag(ComputerLayout.grid)
-                        Label("List", systemImage: "list.bullet").tag(ComputerLayout.list)
+        WithPerceptionTracking {
+            content
+                #if os(iOS)
+                .background(NavigationBarMarginReader(margin: $margin))
+                #endif
+                .onGeometryChangeCompat(for: CGSize.self, of: { $0.size }) { visibleSize = $0 }
+                .navigationTitle("Connections")
+                .primaryActionsCompat {
+                    Button(action: newConnection) { Label("New Connection", systemImage: "plus") }
+                } trailing: {
+                    Menu {
+                        Picker(selection: Binding(get: { settings.computerLayout }, set: { settings.computerLayout = $0 })) {
+                            Label("Icons", systemImage: "square.grid.2x2").tag(ComputerLayout.grid)
+                            Label("List", systemImage: "list.bullet").tag(ComputerLayout.list)
+                        } label: {
+                            Text("View As")
+                        }
+                        .pickerStyle(.inline)
                     } label: {
-                        Text("View As")
+                        Label("View As", systemImage: settings.computerLayout == .grid ? "square.grid.2x2" : "list.bullet")
                     }
-                    .pickerStyle(.inline)
-                } label: {
-                    Label("View As", systemImage: settings.computerLayout == .grid ? "square.grid.2x2" : "list.bullet")
                 }
-            }
-            .confirmationDialog(
-                "Delete “\(computerToDelete?.displayName ?? "")”?",
-                isPresented: Binding(get: { computerToDelete != nil }, set: { if !$0 { computerToDelete = nil } }),
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    if let computer = computerToDelete { delete(computer) }
-                    computerToDelete = nil
+                .confirmationDialog(
+                    "Delete “\(computerToDelete?.displayName ?? "")”?",
+                    isPresented: Binding(get: { computerToDelete != nil }, set: { if !$0 { computerToDelete = nil } }),
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete", role: .destructive) {
+                        if let computer = computerToDelete { delete(computer) }
+                        computerToDelete = nil
+                    }
                 }
-            }
-            .alert($alert)
-            .onChangeCompat(
-                of: Dictionary(store.computers.map { ($0.address, $0.remoteProtocol) }, uniquingKeysWith: { first, _ in first }), initial: true
-            ) { servers in
-                availabilityMonitor.update(servers: servers)
-            }
+                .alert($alert)
+                .onChangeCompat(
+                    of: Dictionary(store.computers.map { ($0.address, $0.remoteProtocol) }, uniquingKeysWith: { first, _ in first }), initial: true
+                ) { servers in
+                    availabilityMonitor.update(servers: servers)
+                }
+        }
     }
 
     @ViewBuilder
@@ -91,7 +94,7 @@ struct ComputersView: View {
         } else if settings.computerLayout == .list {
             #if os(iOS)
             List {
-                ForEach(shown) { row($0) }
+                ForEach(shown) { computer in WithPerceptionTracking { row(computer) } }
                     .onMove { move(from: $0, to: $1) }
             }
             .listStyle(.insetGrouped)
@@ -114,13 +117,13 @@ struct ComputersView: View {
             #endif
         } else if #available(iOS 27, macOS 27, *) {
             cardGrid {
-                ForEach(shown) { card($0) }
+                ForEach(shown) { computer in WithPerceptionTracking { card(computer) } }
                     .reorderable()
             }
             .reorderContainer(for: Computer.self) { move($0) }
         } else {
             cardGrid {
-                ForEach(shown) { card($0) }
+                ForEach(shown) { computer in WithPerceptionTracking { card(computer) } }
             }
         }
     }

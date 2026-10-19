@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 struct ToolbarDock: Equatable {
@@ -32,7 +33,7 @@ struct ToolbarDock: Equatable {
 }
 
 struct FloatingToolbar: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
     let plan: ToolbarPlan
     let dock: ToolbarDock?
     let closes: Bool
@@ -48,10 +49,12 @@ struct FloatingToolbar: View {
 
     var body: some View {
         #if os(iOS)
-        if let dock {
-            docked(in: dock)
-        } else {
-            floating
+        WithPerceptionTracking {
+            if let dock {
+                docked(in: dock)
+            } else {
+                floating
+            }
         }
         #else
         if let dock {

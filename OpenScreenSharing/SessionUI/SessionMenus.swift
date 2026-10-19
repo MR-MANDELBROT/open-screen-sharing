@@ -1,29 +1,34 @@
+import Perception
 import SwiftUI
 
 struct ScaleButton: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     var body: some View {
-        if controller.scaleMode == .fit {
-            Button { controller.setScale(.actualSize) } label: { Label("Zoom to Actual Size", systemImage: "arrow.up.left.and.arrow.down.right") }
-        } else {
-            Button { controller.setScale(.fit) } label: { Label("Zoom to Fit", systemImage: "arrow.down.right.and.arrow.up.left") }
+        WithPerceptionTracking {
+            if controller.scaleMode == .fit {
+                Button { controller.setScale(.actualSize) } label: { Label("Zoom to Actual Size", systemImage: "arrow.up.left.and.arrow.down.right") }
+            } else {
+                Button { controller.setScale(.fit) } label: { Label("Zoom to Fit", systemImage: "arrow.down.right.and.arrow.up.left") }
+            }
         }
     }
 }
 
 struct DisplayPicker: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
     var inOwnMenu = false
 
     var body: some View {
-        Picker(selection: Binding(get: { controller.displaySelection }, set: { controller.selectDisplay($0) })) {
-            ForEach(controller.displays) { display in
-                Text(display.name).tag(DisplaySelection.display(display.id))
+        WithPerceptionTracking {
+            Picker(selection: Binding(get: { controller.displaySelection }, set: { controller.selectDisplay($0) })) {
+                ForEach(controller.displays) { display in
+                    Text(display.name).tag(DisplaySelection.display(display.id))
+                }
+                Text(inOwnMenu ? "All" : "All Displays").tag(DisplaySelection.all)
+            } label: {
+                Label("Displays", systemImage: SessionCommand.displays.systemImage)
             }
-            Text(inOwnMenu ? "All" : "All Displays").tag(DisplaySelection.all)
-        } label: {
-            Label("Displays", systemImage: SessionCommand.displays.systemImage)
         }
     }
 }
@@ -45,16 +50,18 @@ extension SessionQuality {
 }
 
 struct QualityPicker: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
     var inOwnMenu = false
 
     var body: some View {
-        Picker(selection: Binding(get: { controller.quality }, set: { controller.setQuality($0) })) {
-            ForEach(SessionQuality.allCases) { quality in
-                Text(String(localized: inOwnMenu ? quality.shortTitle : quality.title)).tag(quality)
+        WithPerceptionTracking {
+            Picker(selection: Binding(get: { controller.quality }, set: { controller.setQuality($0) })) {
+                ForEach(SessionQuality.allCases) { quality in
+                    Text(String(localized: inOwnMenu ? quality.shortTitle : quality.title)).tag(quality)
+                }
+            } label: {
+                Label("Quality", systemImage: SessionCommand.quality.systemImage)
             }
-        } label: {
-            Label("Quality", systemImage: SessionCommand.quality.systemImage)
         }
     }
 }
@@ -70,27 +77,31 @@ extension RemoteAudio {
 }
 
 struct AudioPicker: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     var body: some View {
-        Picker(selection: Binding(get: { controller.remoteAudio }, set: { controller.setRemoteAudio($0) })) {
-            ForEach(controller.audioOptions) { audio in
-                Text(String(localized: audio.title)).tag(audio)
+        WithPerceptionTracking {
+            Picker(selection: Binding(get: { controller.remoteAudio }, set: { controller.setRemoteAudio($0) })) {
+                ForEach(controller.audioOptions) { audio in
+                    Text(String(localized: audio.title)).tag(audio)
+                }
+            } label: {
+                Label("Sound", systemImage: SessionCommand.audio.systemImage)
             }
-        } label: {
-            Label("Sound", systemImage: SessionCommand.audio.systemImage)
         }
     }
 }
 
 struct ResolutionOptions: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     var body: some View {
         ForEach(VirtualDisplayMode.resolutionScales, id: \.self) { scale in
-            Toggle(
-                resolutionScaleTitle(scale),
-                isOn: Binding(get: { controller.resolutionScale == scale }, set: { _ in controller.setResolutionScale(scale) }))
+            WithPerceptionTracking {
+                Toggle(
+                    resolutionScaleTitle(scale),
+                    isOn: Binding(get: { controller.resolutionScale == scale }, set: { _ in controller.setResolutionScale(scale) }))
+            }
         }
     }
 }
@@ -100,51 +111,53 @@ func resolutionScaleTitle(_ scale: Double) -> String {
 }
 
 struct ResolutionPanel: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     @State private var draggedScale: Double?
 
     private var scale: Double { draggedScale ?? controller.resolutionScale }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Resolution")
-                Spacer()
-                Text(resolutionScaleTitle(scale))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-            Slider(
-                value: Binding(
-                    get: { scale },
-                    set: { value in
-                        if draggedScale != nil {
-                            draggedScale = value
-                        } else {
-                            controller.setResolutionScale(value)
-                        }
-                    }),
-                in: VirtualDisplayMode.resolutionScaleRange,
-                step: VirtualDisplayMode.resolutionScaleStep
-            ) {
-                Text("Resolution")
-            } onEditingChanged: { editing in
-                if editing {
-                    draggedScale = controller.resolutionScale
-                } else if let draggedScale {
-                    self.draggedScale = nil
-                    controller.setResolutionScale(draggedScale)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Resolution")
+                    Spacer()
+                    Text(resolutionScaleTitle(scale))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
+                Slider(
+                    value: Binding(
+                        get: { scale },
+                        set: { value in
+                            if draggedScale != nil {
+                                draggedScale = value
+                            } else {
+                                controller.setResolutionScale(value)
+                            }
+                        }),
+                    in: VirtualDisplayMode.resolutionScaleRange,
+                    step: VirtualDisplayMode.resolutionScaleStep
+                ) {
+                    Text("Resolution")
+                } onEditingChanged: { editing in
+                    if editing {
+                        draggedScale = controller.resolutionScale
+                    } else if let draggedScale {
+                        self.draggedScale = nil
+                        controller.setResolutionScale(draggedScale)
+                    }
+                }
+                Text("Raising the resolution by scaling reduces sharpness and increases bandwidth use and picture latency.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Raising the resolution by scaling reduces sharpness and increases bandwidth use and picture latency.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .font(.body)
+            .padding()
+            .frame(width: 340)
         }
-        .font(.body)
-        .padding()
-        .frame(width: 340)
     }
 }
 
@@ -159,39 +172,45 @@ extension View {
 }
 
 struct ClipboardMenuItems: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     var body: some View {
-        Toggle(isOn: Binding(get: { controller.clipboardSharing }, set: { controller.setClipboardSharing($0) })) { Label("Sync Clipboard", systemImage: "arrow.up.arrow.down") }
-        Section {
-            Button { controller.getClipboardFromMac() } label: { Label("Receive Clipboard", systemImage: "doc.on.clipboard") }
-                .disabled(!controller.capabilities.contains(.clipboardRequest))
-            Button { controller.sendClipboardToMac() } label: { Label("Send Clipboard", systemImage: "arrow.up.doc.on.clipboard") }
+        WithPerceptionTracking {
+            Toggle(isOn: Binding(get: { controller.clipboardSharing }, set: { controller.setClipboardSharing($0) })) { Label("Sync Clipboard", systemImage: "arrow.up.arrow.down") }
+            Section {
+                Button { controller.getClipboardFromMac() } label: { Label("Receive Clipboard", systemImage: "doc.on.clipboard") }
+                    .disabled(!controller.capabilities.contains(.clipboardRequest))
+                Button { controller.sendClipboardToMac() } label: { Label("Send Clipboard", systemImage: "arrow.up.doc.on.clipboard") }
+            }
+            .disabled(controller.clipboardSharing)
         }
-        .disabled(controller.clipboardSharing)
     }
 }
 
 #if os(iOS)
 struct FunctionKeyItems: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     var body: some View {
-        KeyItems(controller: controller, keys: KeyShortcut.KeyGroup.functionKeys.keys(for: controller.mappingTarget))
+        WithPerceptionTracking {
+            KeyItems(controller: controller, keys: KeyShortcut.KeyGroup.functionKeys.keys(for: controller.mappingTarget))
+        }
     }
 }
 
 private struct KeyItems: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
     let keys: [KeyShortcut.NamedKey]
 
     var body: some View {
         ForEach(keys) { key in
-            if let output = key.output {
-                Button {
-                    controller.typeKey(output)
-                } label: {
-                    Text(verbatim: key.label(for: controller.mappingTarget))
+            WithPerceptionTracking {
+                if let output = key.output {
+                    Button {
+                        controller.typeKey(output)
+                    } label: {
+                        Text(verbatim: key.label(for: controller.mappingTarget))
+                    }
                 }
             }
         }
@@ -221,26 +240,28 @@ extension SystemCommand {
 
 #if os(iOS)
 struct SessionMoreMenuContent: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     var body: some View {
         ForEach(SessionCommandCategory.allCases) { category in
-            let commands = category.commands.filter { $0.isOffered(by: controller) }
-            if !commands.isEmpty {
-                Menu {
-                    if category == .control {
-                        let local: [SessionCommand] = [.observe, .pointerLock, .nativeTouch, .keyboard]
-                        Section {
-                            items(commands.filter { local.contains($0) })
+            WithPerceptionTracking {
+                let commands = category.commands.filter { $0.isOffered(by: controller) }
+                if !commands.isEmpty {
+                    Menu {
+                        if category == .control {
+                            let local: [SessionCommand] = [.observe, .pointerLock, .nativeTouch, .keyboard]
+                            Section {
+                                items(commands.filter { local.contains($0) })
+                            }
+                            Section {
+                                items(commands.filter { !local.contains($0) })
+                            }
+                        } else {
+                            items(commands)
                         }
-                        Section {
-                            items(commands.filter { !local.contains($0) })
-                        }
-                    } else {
-                        items(commands)
+                    } label: {
+                        Label(String(localized: category.title), systemImage: category.systemImage)
                     }
-                } label: {
-                    Label(String(localized: category.title), systemImage: category.systemImage)
                 }
             }
         }

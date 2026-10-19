@@ -1,7 +1,8 @@
-import Combine
 import Foundation
+import Perception
 
-final class ServerSettings: ObservableObject {
+@Perceptible
+final class ServerSettings {
     static let shared = ServerSettings()
 
     static let defaultPort = 5900
@@ -20,43 +21,43 @@ final class ServerSettings: ObservableObject {
         static let autoUnlockPasscode = "serverAutoUnlockPasscode"
     }
 
-    @Published var isEnabled: Bool {
+    var isEnabled: Bool {
         didSet { store.set(isEnabled, for: Key.enabled) }
     }
 
-    @Published var port: Int {
+    var port: Int {
         didSet { store.set(port, for: Key.port) }
     }
 
-    @Published var authenticates: Bool {
+    var authenticates: Bool {
         didSet { store.set(authenticates, for: Key.authenticates) }
     }
 
-    @Published var username: String {
+    var username: String {
         didSet { store.set(username, for: Key.username) }
     }
 
-    @Published var runsInBackground: Bool {
+    var runsInBackground: Bool {
         didSet { store.set(runsInBackground, for: Key.runsInBackground) }
     }
 
-    @Published var backgroundMode: ServerBackgroundMode {
+    var backgroundMode: ServerBackgroundMode {
         didSet { store.set(backgroundMode, for: Key.backgroundMode) }
     }
 
-    @Published var password: String {
+    var password: String {
         didSet { store.set(password, for: Key.password) }
     }
 
-    @Published var autoUnlocks: Bool {
+    var autoUnlocks: Bool {
         didSet { store.set(autoUnlocks, for: Key.autoUnlocks) }
     }
 
-    @Published var autoUnlockPasscodeType: ServerPasscodeType {
+    var autoUnlockPasscodeType: ServerPasscodeType {
         didSet { store.set(autoUnlockPasscodeType, for: Key.autoUnlockPasscodeType) }
     }
 
-    @Published var autoUnlockPasscode: String {
+    var autoUnlockPasscode: String {
         didSet { store.set(autoUnlockPasscode, for: Key.autoUnlockPasscode) }
     }
 

@@ -8,13 +8,13 @@ lib:
 	go run ./cmd/internal/build_libsharing
 
 build_ios:
-	xcodebuild build -scheme OpenScreenSharing -configuration Debug -destination 'generic/platform=iOS' | xcbeautify | grep -A 10 -e "Build Succeeded" -e "BUILD FAILED" -e "❌"
+	xcodebuild build -skipMacroValidation -scheme OpenScreenSharing -configuration Debug -destination 'generic/platform=iOS' | xcbeautify | grep -A 10 -e "Build Succeeded" -e "BUILD FAILED" -e "❌"
 
 release_ios: lib archive_ios upload_ios
 
 archive_ios:
 	rm -rf build/OpenScreenSharing-iOS.xcarchive
-	xcodebuild archive $(XCODEBUILD_FLAGS) -scheme OpenScreenSharing -configuration Release -destination 'generic/platform=iOS' -archivePath build/OpenScreenSharing-iOS.xcarchive | xcbeautify
+	xcodebuild archive -skipMacroValidation $(XCODEBUILD_FLAGS) -scheme OpenScreenSharing -configuration Release -destination 'generic/platform=iOS' -archivePath build/OpenScreenSharing-iOS.xcarchive | xcbeautify
 
 upload_ios:
 	xcodebuild -exportArchive -archivePath build/OpenScreenSharing-iOS.xcarchive -exportOptionsPlist OpenScreenSharing/Upload.plist
@@ -27,7 +27,7 @@ build_ios_ipa: lib archive_ios_ipa
 
 archive_ios_ipa:
 	rm -rf build/OpenScreenSharing-Sideload.xcarchive build/Payload build/OpenScreenSharing.ipa
-	xcodebuild archive $(XCODEBUILD_FLAGS) -scheme OpenScreenSharing -configuration Release -destination 'generic/platform=iOS' -archivePath build/OpenScreenSharing-Sideload.xcarchive \
+	xcodebuild archive -skipMacroValidation $(XCODEBUILD_FLAGS) -scheme OpenScreenSharing -configuration Release -destination 'generic/platform=iOS' -archivePath build/OpenScreenSharing-Sideload.xcarchive \
 		CODE_SIGNING_ALLOWED=NO SWIFT_ACTIVE_COMPILATION_CONDITIONS=SIDELOAD APP_INFOPLIST_FILE=OpenScreenSharing/Info-Server.plist EXCLUDED_SOURCE_FILE_NAMES='$$(SRCROOT)/OpenScreenSharing/Demo/*.jpg' | xcbeautify
 	mkdir build/Payload
 	cp -R build/OpenScreenSharing-Sideload.xcarchive/Products/Applications/Screen\ Sharing.app build/Payload/
@@ -50,13 +50,13 @@ screenshots:
 	go run ./cmd/internal/screenshots
 
 build_macos:
-	xcodebuild build -scheme OpenScreenSharing -configuration Debug -destination 'generic/platform=macOS' | xcbeautify | grep -A 10 -e "Build Succeeded" -e "BUILD FAILED" -e "❌"
+	xcodebuild build -skipMacroValidation -scheme OpenScreenSharing -configuration Debug -destination 'generic/platform=macOS' | xcbeautify | grep -A 10 -e "Build Succeeded" -e "BUILD FAILED" -e "❌"
 
 release_macos: lib archive_macos export_macos build_macos_pkg notarize_macos_pkg
 
 archive_macos:
 	rm -rf build/OpenScreenSharing-macOS.xcarchive
-	xcodebuild archive $(XCODEBUILD_FLAGS) -scheme OpenScreenSharing -configuration Release -destination 'generic/platform=macOS' -archivePath build/OpenScreenSharing-macOS.xcarchive | xcbeautify
+	xcodebuild archive -skipMacroValidation $(XCODEBUILD_FLAGS) -scheme OpenScreenSharing -configuration Release -destination 'generic/platform=macOS' -archivePath build/OpenScreenSharing-macOS.xcarchive | xcbeautify
 
 export_macos:
 	rm -rf build/OpenScreenSharing-macOS

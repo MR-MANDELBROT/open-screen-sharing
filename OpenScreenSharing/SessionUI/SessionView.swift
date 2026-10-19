@@ -1,18 +1,19 @@
+import Perception
 import SwiftUI
 
 struct SessionView: View {
-    @StateObject private var controller: SessionController
-    @ObservedObject private var settings = AppSettings.shared
+    #if os(macOS)
+    @SwiftUI.Bindable private var controller: SessionController
+    #else
+    @Perception.Bindable private var controller: SessionController
+    #endif
+    private let settings = AppSettings.shared
     private let hasOwnWindow: Bool
     private let onClose: () -> Void
-    @ObservedObject private var macToolbar = ToolbarLayout.mac
-    @ObservedObject private var iOSToolbar = ToolbarLayout.iOS
-    @ObservedObject private var pcToolbar = ToolbarLayout.pc
     @ScaledMetric(relativeTo: .body) private var toolbarItemWidth = ToolbarLayout.itemSize
-    @State private var letterbox: Letterbox?
 
     private var dock: ToolbarDock? {
-        controller.pictureMatchesWindow ? nil : ToolbarDock(letterbox: letterbox, itemWidth: toolbarItemWidth)
+        controller.pictureMatchesWindow ? nil : ToolbarDock(letterbox: controller.letterbox, itemWidth: toolbarItemWidth)
     }
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
@@ -73,8 +74,8 @@ struct SessionView: View {
         controller.picture == .none ? .dark : nil
     }
 
-    init(controller: @autoclosure @escaping () -> SessionController, hasOwnWindow: Bool = true, onClose: @escaping () -> Void) {
-        _controller = StateObject(wrappedValue: controller())
+    init(controller: SessionController, hasOwnWindow: Bool = true, onClose: @escaping () -> Void) {
+        self.controller = controller
         self.hasOwnWindow = hasOwnWindow
         self.onClose = onClose
     }
@@ -89,106 +90,111 @@ struct SessionView: View {
     }
 
     var body: some View {
-        let dock = dock
-        let plan = ToolbarLayout.layout(for: controller).plan(for: controller, slots: toolbarSlots)
-        screen
-            .ignoresSafeArea()
-            .background {
-                Color.black.ignoresSafeArea()
-                FullScreenReader(isFullScreen: $controller.isFullScreen)
-                    .ignoresSafeArea()
-                if #available(iOS 26, *), controller.platform == .iOS, hasOwnWindow {
-                    DeviceWindowShaper(screen: deviceScreen, isFullScreen: controller.isFullScreen)
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                if settings.showsDebugInfo, controller.phase.isActive {
-                    DebugInfoView(controller: controller)
-                        .padding(8)
-                        .allowsHitTesting(false)
-                }
-            }
-            .overlay(alignment: .top) {
-                FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: controller.isFullScreen || !hasOwnWindow, onClose: controller.close)
-            }
-            .overlay {
-                if !tutorials.isEmpty {
-                    SessionTutorialView(pages: tutorials) {
-                        tutorials = availableTutorials
+        WithPerceptionTracking {
+            let dock = dock
+            let plan = ToolbarLayout.layout(for: controller).plan(for: controller, slots: toolbarSlots)
+            screen
+                .ignoresSafeArea()
+                .background {
+                    Color.black.ignoresSafeArea()
+                    FullScreenReader(isFullScreen: $controller.isFullScreen)
+                        .ignoresSafeArea()
+                    if #available(iOS 26, *), controller.platform == .iOS, hasOwnWindow {
+                        DeviceWindowShaper(screen: deviceScreen, isFullScreen: controller.isFullScreen)
                     }
-                    .id(tutorials)
                 }
-            }
-            .onChangeCompat(of: availableTutorials, initial: true) { available in
-                if tutorials.isEmpty { tutorials = available }
-            }
-            .onChangeCompat(of: controller.touchesNatively) { native in
-                if native { tutorials.removeAll { $0 == .pressToDrag } }
-            }
-            .onGeometryChangeCompat(for: CGFloat.self) { proxy in
-                proxy.size.width - proxy.safeAreaInsets.leading - proxy.safeAreaInsets.trailing
-            } action: { width in
-                toolbarWidth = width
-            }
-            .preferredColorScheme(colorScheme)
-            .statusBarHidden(controller.isFullScreen)
-            .persistentSystemOverlaysCompat(controller.isFullScreen ? .hidden : .automatic)
-            .defersSystemGesturesCompat(on: controller.isControlling ? .all : [])
-            .background { PointerLockRequest(locked: locksPointer) }
-            .onChangeCompat(of: pointerLockAvailable) { available in
-                controller.pointerLockAvailabilityDidChange(available)
-            }
-            .onChangeCompat(of: pointerLockPaused) { paused in
-                if !paused, !controller.pointerLockCanResume { controller.setPointerLock(false) }
-            }
-            .focusedSceneValue(\.sessionController, controller)
-            .sheet(isPresented: $controller.isCustomizingToolbar) {
-                CustomizeToolbarView(controller: controller, slots: toolbarSlots)
-            }
-            .alert($controller.alert)
-            .sheet(
-                item: Binding(
-                    get: { controller.credentialPrompt },
-                    set: { prompt in
-                        if prompt == nil, controller.credentialPrompt != nil {
+                .overlay(alignment: .topTrailing) {
+                    if settings.showsDebugInfo, controller.phase.isActive {
+                        DebugInfoView(controller: controller)
+                            .padding(8)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .overlay(alignment: .top) {
+                    FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: controller.isFullScreen || !hasOwnWindow, onClose: controller.close)
+                }
+                .overlay {
+                    if !tutorials.isEmpty {
+                        SessionTutorialView(pages: tutorials) {
+                            tutorials = availableTutorials
+                        }
+                        .id(tutorials)
+                    }
+                }
+                .onChangeCompat(of: availableTutorials, initial: true) { available in
+                    if tutorials.isEmpty { tutorials = available }
+                }
+                .onChangeCompat(of: controller.touchesNatively) { native in
+                    if native { tutorials.removeAll { $0 == .pressToDrag } }
+                }
+                .onGeometryChangeCompat(for: CGFloat.self) { proxy in
+                    proxy.size.width - proxy.safeAreaInsets.leading - proxy.safeAreaInsets.trailing
+                } action: { width in
+                    toolbarWidth = width
+                }
+                .preferredColorScheme(colorScheme)
+                .statusBarHidden(controller.isFullScreen)
+                .persistentSystemOverlaysCompat(controller.isFullScreen ? .hidden : .automatic)
+                .defersSystemGesturesCompat(on: controller.isControlling ? .all : [])
+                .background { PointerLockRequest(locked: locksPointer) }
+                .onChangeCompat(of: pointerLockAvailable) { available in
+                    controller.pointerLockAvailabilityDidChange(available)
+                }
+                .onChangeCompat(of: pointerLockPaused) { paused in
+                    if !paused, !controller.pointerLockCanResume { controller.setPointerLock(false) }
+                }
+                .focusedSceneValue(\.sessionController, controller)
+                .sheet(isPresented: $controller.isCustomizingToolbar) {
+                    WithPerceptionTracking {
+                        CustomizeToolbarView(controller: controller, slots: toolbarSlots)
+                    }
+                }
+                .alert($controller.alert)
+                .sheet(
+                    item: Binding(
+                        get: { controller.credentialPrompt },
+                        set: { prompt in
+                            if prompt == nil, controller.credentialPrompt != nil {
+                                controller.cancelCredentials()
+                            }
+                        })
+                ) { prompt in
+                    WithPerceptionTracking {
+                        CredentialsView(prompt: prompt, computerName: controller.title) { credentials, remember in
+                            controller.submitCredentials(credentials, remember: remember)
+                        } onCancel: {
                             controller.cancelCredentials()
                         }
-                    })
-            ) { prompt in
-                CredentialsView(prompt: prompt, computerName: controller.title) { credentials, remember in
-                    controller.submitCredentials(credentials, remember: remember)
-                } onCancel: {
-                    controller.cancelCredentials()
+                    }
                 }
-            }
-            .onAppear {
-                controller.onClose = onClose
-                controller.start()
-            }
-            .onDisappear {
-                controller.abort()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in
-                controller.abort()
-            }
-            .onReceive(controller.letterbox) { letterbox = $0 }
-            .onChangeCompat(of: controller.isFullScreen) {
-                controller.isToolbarVisible = false
-            }
-            .onChangeCompat(of: dock != nil, initial: true) { docked in
-                controller.isToolbarDocked = docked
-                if docked {
+                .onAppear {
+                    controller.onClose = onClose
+                    controller.start()
+                }
+                .onDisappear {
+                    controller.abort()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in
+                    controller.abort()
+                }
+                .onChangeCompat(of: controller.isFullScreen) {
                     controller.isToolbarVisible = false
                 }
-            }
-            .onChangeCompat(of: scenePhase) { phase in
-                switch phase {
-                case .background: controller.sceneDidEnterBackground()
-                case .inactive: ClipboardAccess.shared.sceneDidBecomeInactive()
-                case .active: controller.sceneDidBecomeActive()
-                @unknown default: break
+                .onChangeCompat(of: dock != nil, initial: true) { docked in
+                    controller.isToolbarDocked = docked
+                    if docked {
+                        controller.isToolbarVisible = false
+                    }
                 }
-            }
+                .onChangeCompat(of: scenePhase) { phase in
+                    switch phase {
+                    case .background: controller.sceneDidEnterBackground()
+                    case .inactive: ClipboardAccess.shared.sceneDidBecomeInactive()
+                    case .active: controller.sceneDidBecomeActive()
+                    @unknown default: break
+                    }
+                }
+        }
     }
     #else
     var body: some View {
@@ -223,7 +229,7 @@ struct SessionView: View {
             .navigationSubtitle(controller.mode == .observe ? String(localized: "Observing") : "")
             .toolbar {
                 if dock == nil {
-                    SessionWindowToolbar(controller: controller, layout: .layout(for: controller))
+                    SessionWindowToolbar(controller: controller, commands: plan.inBar)
                 }
             }
             .windowToolbarFullScreenVisibilityCompat()
@@ -272,7 +278,6 @@ struct SessionView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                 controller.abort()
             }
-            .onReceive(controller.letterbox) { letterbox = $0 }
     }
     #endif
 
@@ -467,11 +472,11 @@ private struct FullScreenReader: UIViewRepresentable {
 }
 #else
 private struct SessionWindowToolbar: ToolbarContent {
-    @ObservedObject var controller: SessionController
-    @ObservedObject var layout: ToolbarLayout
+    let controller: SessionController
+    let commands: [SessionCommand]
 
     var body: some ToolbarContent {
-        ForEach(layout.plan(for: controller, slots: nil).inBar) { command in
+        ForEach(commands) { command in
             ToolbarItem {
                 SessionCommandView(command: command, controller: controller, style: .windowToolbarItem)
                     .help(String(localized: command.title))

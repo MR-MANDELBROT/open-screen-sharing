@@ -366,6 +366,12 @@ private struct FormRowButtonStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
+
+struct WithPerceptionTracking<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: Content { content() }
+}
 #endif
 
 struct GlassEffectContainerCompat<Content: View>: View {

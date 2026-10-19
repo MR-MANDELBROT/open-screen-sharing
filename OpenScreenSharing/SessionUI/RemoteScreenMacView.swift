@@ -1,19 +1,28 @@
 #if os(macOS)
 import AppKit
 import Carbon
-import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct RemoteScreenView: NSViewRepresentable {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
+    let mode: SessionMode
+    let isControlling: Bool
+    let isZoomModeOn: Bool
+
+    init(controller: SessionController) {
+        self.controller = controller
+        mode = controller.mode
+        isControlling = controller.isControlling
+        isZoomModeOn = controller.isZoomModeOn
+    }
 
     func makeNSView(context: Context) -> RemoteScreenNSView {
         RemoteScreenNSView(controller: controller)
     }
 
     func updateNSView(_ view: RemoteScreenNSView, context: Context) {
-        view.setAccessibilityValue(controller.mode == .control ? String(localized: "Controlling") : String(localized: "Observing"))
+        view.setAccessibilityValue(mode == .control ? String(localized: "Controlling") : String(localized: "Observing"))
         view.refreshCursor()
     }
 }
@@ -360,9 +369,7 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
 
     @objc private func windowFullScreenDidChange() {
         let fullScreen = window?.styleMask.contains(.fullScreen) ?? false
-        if controller.isFullScreen != fullScreen {
-            controller.isFullScreen = fullScreen
-        }
+        controller.isFullScreen = fullScreen
         updateLetterbox()
     }
 
@@ -373,9 +380,7 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
 
     private func updateLetterbox() {
         let letterbox = measureLetterbox()
-        if controller.letterbox.value != letterbox {
-            controller.letterbox.send(letterbox)
-        }
+        controller.letterbox = letterbox
     }
 
     private func measureLetterbox() -> Letterbox? {
@@ -518,9 +523,7 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
         case .custom:
             break
         }
-        if controller.scaleMode != scale {
-            controller.scaleMode = scale
-        }
+        controller.scaleMode = scale
         setNeedsRender()
     }
 
@@ -541,9 +544,7 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
         )
         clampCenter()
         let mode: ScaleMode = abs(zoom - 1) < 0.01 ? .fit : (abs(zoom - actualSizeZoom) < 0.01 ? .actualSize : .custom)
-        if controller.scaleMode != mode {
-            controller.scaleMode = mode
-        }
+        controller.scaleMode = mode
         setNeedsRender()
     }
 
@@ -925,9 +926,7 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
     private func setPointerLocked(_ locked: Bool) {
         guard locked != isPointerLocked, let window else { return }
         isPointerLocked = locked
-        if controller.isPointerLocked != locked {
-            controller.isPointerLocked = locked
-        }
+        controller.isPointerLocked = locked
         if locked {
             let location = convert(window.mouseLocationOutsideOfEventStream, from: nil)
             if imageRect.contains(location) {

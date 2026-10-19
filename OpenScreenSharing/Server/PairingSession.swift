@@ -1,10 +1,11 @@
-import Combine
 import Foundation
 import Libsharing
+import Perception
 import UIKit
 import dnssd
 
-final class PairingSession: ObservableObject {
+@Perceptible
+final class PairingSession {
     enum State: Equatable {
         case idle
         case waiting
@@ -12,7 +13,7 @@ final class PairingSession: ObservableObject {
         case failed(ServerProblem)
     }
 
-    @Published private(set) var state: State = .idle
+    private(set) var state: State = .idle
 
     let hostName: String = {
         let info = Bundle.main.localizedInfoDictionary ?? Bundle.main.infoDictionary
@@ -23,11 +24,11 @@ final class PairingSession: ObservableObject {
         String(localized: "Privacy & Security › Developer Mode")
     }
 
-    private var responder: LibsharingPairingResponder?
+    @PerceptionIgnored private var responder: LibsharingPairingResponder?
     private let advertiser = BonjourAdvertiser()
-    private var continuedTask: ContinuedTask?
-    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
-    private var observers: [NSObjectProtocol] = []
+    @PerceptionIgnored private var continuedTask: ContinuedTask?
+    @PerceptionIgnored private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    @PerceptionIgnored private var observers: [NSObjectProtocol] = []
 
     var isInProgress: Bool {
         switch state {

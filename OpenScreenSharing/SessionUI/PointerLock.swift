@@ -1,7 +1,7 @@
 #if os(iOS)
-import Combine
 import GameController
 import ObjectiveC
+import Perception
 import SwiftUI
 import UIKit
 
@@ -100,8 +100,9 @@ enum PointerLock {
     }
 }
 
-final class ConnectedMice: ObservableObject {
-    @Published fileprivate(set) var isConnected = !GCMouse.mice().isEmpty
+@Perceptible
+final class ConnectedMice {
+    fileprivate(set) var isConnected = !GCMouse.mice().isEmpty
 }
 
 struct PointerLockRequest: UIViewRepresentable {

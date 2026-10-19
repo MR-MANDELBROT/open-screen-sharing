@@ -1,6 +1,6 @@
-import Combine
 import Foundation
 import GRDB
+import Perception
 
 struct StoredComputer {
     var username: String
@@ -37,12 +37,13 @@ struct ConnectionRecord {
     var device: DeviceInfo?
 }
 
-final class ComputerStore: ObservableObject {
+@Perceptible
+final class ComputerStore {
     static let shared = ComputerStore()
 
-    @Published private(set) var computers: [Computer] = []
+    private(set) var computers: [Computer] = []
     private let database = AppDatabase.shared
-    private var observation: AnyDatabaseCancellable?
+    @PerceptionIgnored private var observation: AnyDatabaseCancellable?
 
     private init() {
         observation = ValueObservation

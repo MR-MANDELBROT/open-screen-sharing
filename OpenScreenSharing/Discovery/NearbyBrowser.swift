@@ -1,6 +1,6 @@
-import Combine
 import Foundation
 import Network
+import Perception
 import dnssd
 import os
 
@@ -19,29 +19,30 @@ struct NearbyComputer: Identifiable, Hashable {
     }
 }
 
-final class NearbyBrowser: ObservableObject {
+@Perceptible
+final class NearbyBrowser {
     enum State: Equatable {
         case idle
         case browsing
         case failed(String)
     }
 
-    @Published private(set) var computers: [NearbyComputer] = []
-    @Published private(set) var state: State = .idle
-    @Published private(set) var hasSearched = false
+    private(set) var computers: [NearbyComputer] = []
+    private(set) var state: State = .idle
+    private(set) var hasSearched = false
 
-    private var browser: NWBrowser?
-    private var windowsBrowser: NWBrowser?
-    private var resolvers: [String: ServiceResolver] = [:]
-    private var windowsResolvers: [String: ServiceResolver] = [:]
-    private var windowsProbes: [String: Task<Void, Never>] = [:]
-    private var models: [String: String] = [:]
-    private var serviceModels: [String: String] = [:]
-    private var activeClients = 0
-    private var restart: Task<Void, Never>?
-    private var search: Task<Void, Never>?
-    private var isReady = false
-    private var isFixed = false
+    @PerceptionIgnored private var browser: NWBrowser?
+    @PerceptionIgnored private var windowsBrowser: NWBrowser?
+    @PerceptionIgnored private var resolvers: [String: ServiceResolver] = [:]
+    @PerceptionIgnored private var windowsResolvers: [String: ServiceResolver] = [:]
+    @PerceptionIgnored private var windowsProbes: [String: Task<Void, Never>] = [:]
+    @PerceptionIgnored private var models: [String: String] = [:]
+    @PerceptionIgnored private var serviceModels: [String: String] = [:]
+    @PerceptionIgnored private var activeClients = 0
+    @PerceptionIgnored private var restart: Task<Void, Never>?
+    @PerceptionIgnored private var search: Task<Void, Never>?
+    @PerceptionIgnored private var isReady = false
+    @PerceptionIgnored private var isFixed = false
     private var currentResults: Set<RemoteProtocol> = []
 
     /// NWBrowser can reach .ready before any results callback (observed on macOS 27.0.1 26A434).

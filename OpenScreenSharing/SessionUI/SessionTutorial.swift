@@ -12,7 +12,7 @@ enum SessionTutorial: String, CaseIterable, Codable, Identifiable {
 struct SessionTutorialView: View {
     let pages: [SessionTutorial]
     let onDone: () -> Void
-    @ObservedObject private var settings = AppSettings.shared
+    private let settings = AppSettings.shared
     @State private var index = 0
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass

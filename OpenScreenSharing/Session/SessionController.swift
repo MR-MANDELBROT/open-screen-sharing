@@ -1,9 +1,9 @@
 import AVFoundation
 import Atomics
-import Combine
 import CoreGraphics
 import Foundation
 import ImageIO
+import Perception
 import SwiftUI
 #if os(iOS)
 import UIKit
@@ -101,154 +101,154 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var usesNativeTouch = true
 }
 
-final class SessionController: ObservableObject, Identifiable {
+@Perceptible
+final class SessionController: Identifiable {
     let route: SessionRoute
-    @Published private(set) var title: String
-    @Published private(set) var phase: SessionPhase = .idle {
+    let title: String
+    private(set) var phase: SessionPhase = .idle {
         didSet { SessionActivity.shared.set(self, active: phase.isActive) }
     }
-    @Published private(set) var mode: SessionMode = .control
-    @Published private(set) var displays: [RemoteDisplay] = []
-    @Published private(set) var displaySelection: DisplaySelection = .display(1)
-    @Published private(set) var capabilities: SessionCapabilities = []
-    @Published private(set) var usesHighPerformance: Bool
-    @Published private(set) var quality: SessionQuality = .adaptive
-    @Published private var networkConfiguration = NetworkConfiguration()
-    @Published private(set) var clipboardSharing = true
-    @Published private(set) var info: SessionInfo
-    @Published private(set) var keyboardSources: [MacInputSource] = []
-    @Published private(set) var imageSize: CGSize = .zero
-    @Published private(set) var picture = ScreenPicture.none
-    @Published private(set) var isVideo = false
-    @Published private(set) var resolutionScale = VirtualDisplayMode.defaultResolutionScale
-    @Published private(set) var hdrEnabled = false
-    @Published var displaySupportsHDR = false
-    @Published private(set) var remoteAudio: RemoteAudio = .fromMac
-    @Published var scaleMode: ScaleMode = .fit
-    @Published var isFullScreen = false
-    @Published var isToolbarVisible = false
-    @Published var isToolbarDocked = false
-    @Published private(set) var isPointerLockOn = false
-    @Published private(set) var isNativeTouchOn = true
-    @Published private(set) var isZoomModeOn = false
-    @Published var isPointerLocked = false {
+    private(set) var mode: SessionMode = .control
+    private(set) var displays: [RemoteDisplay] = []
+    private(set) var displaySelection: DisplaySelection = .display(1)
+    private(set) var capabilities: SessionCapabilities = []
+    private(set) var usesHighPerformance: Bool
+    private(set) var quality: SessionQuality = .adaptive
+    private var networkConfiguration = NetworkConfiguration()
+    private(set) var clipboardSharing = true
+    fileprivate(set) var info: SessionInfo
+    @PerceptionIgnored private var keyboardSources: [MacInputSource] = []
+    @PerceptionIgnored private var keyboardSourceID: String?
+    @PerceptionIgnored private var secureInput = false
+    private(set) var imageSize: CGSize = .zero
+    private(set) var picture = ScreenPicture.none
+    private(set) var isVideo = false
+    private(set) var resolutionScale = VirtualDisplayMode.defaultResolutionScale
+    private(set) var hdrEnabled = false
+    var displaySupportsHDR = false
+    private(set) var remoteAudio: RemoteAudio = .fromMac
+    var scaleMode: ScaleMode = .fit
+    var isFullScreen = false
+    var isToolbarVisible = false
+    var isToolbarDocked = false
+    var letterbox: Letterbox?
+    private(set) var isPointerLockOn = false
+    private(set) var isNativeTouchOn = true
+    private(set) var isZoomModeOn = false
+    var isPointerLocked = false {
         didSet {
             if isPointerLocked { pointerLockHasLocked = true }
         }
     }
-    @Published var isSystemPointerOverPicture = false
-    @Published private(set) var isKeyboardVisible = false
-    @Published private(set) var usesHardwareKeyboard = false
-    @Published var stickyModifiers: Set<ModifierKey> = []
-    @Published private(set) var lockedModifiers: Set<ModifierKey> = []
-    @Published private(set) var pressedModifiers: Set<ModifierKey> = []
-    @Published var credentialPrompt: CredentialPrompt?
-    @Published private(set) var computerID: UUID?
-    @Published var alert: AlertState?
-    @Published private(set) var isClosing = false
-    @Published private(set) var dropTarget: DropTarget?
-    @Published var isShowingResolution = false
-    @Published var isCustomizingToolbar = false
+    var isSystemPointerOverPicture = false
+    private(set) var isKeyboardVisible = false
+    private(set) var usesHardwareKeyboard = false
+    var stickyModifiers: Set<ModifierKey> = []
+    private(set) var lockedModifiers: Set<ModifierKey> = []
+    private(set) var pressedModifiers: Set<ModifierKey> = []
+    var credentialPrompt: CredentialPrompt?
+    @PerceptionIgnored private(set) var computerID: UUID?
+    var alert: AlertState?
+    private(set) var isClosing = false
+    private(set) var dropTarget: DropTarget?
+    var isShowingResolution = false
+    var isCustomizingToolbar = false
     let debugInfo = DebugInfoMonitor()
-    let letterbox = CurrentValueSubject<Letterbox?, Never>(nil)
-    private var transfers: [FileTransfer] = [] {
+    @PerceptionIgnored private var transfers: [FileTransfer] = [] {
         didSet { updateTransferTask() }
     }
-    private var remotePointerVisible = true
-    private var lastRemoteClipboard: ClipboardContent?
-    private var syncedClipboardChangeCount = ClipboardAccess.changeCount
-    private var reportedClipboardNotRestored = false
-    private var readingClipboard = false
-    private var decidedClipboardSharing = false
+    @PerceptionIgnored private var remotePointerVisible = true
+    @PerceptionIgnored private var lastRemoteClipboard: ClipboardContent?
+    @PerceptionIgnored private var syncedClipboardChangeCount = ClipboardAccess.changeCount
+    @PerceptionIgnored private var reportedClipboardNotRestored = false
+    @PerceptionIgnored private var readingClipboard = false
+    @PerceptionIgnored private var decidedClipboardSharing = false
 
     let pipeline = DisplayPipeline()
     #if os(iOS)
-    weak var screen: RemoteScreenUIView?
+    @PerceptionIgnored weak var screen: RemoteScreenUIView?
     #else
-    weak var screen: RemoteScreenNSView?
+    @PerceptionIgnored weak var screen: RemoteScreenNSView?
     #endif
     var toolbarHandleFrame: CGRect?
     var toolbarBarFrame: CGRect?
     var lastSystemPointerLocation: CGPoint?
     private var pointerLockHasLocked = false
     private let store = ComputerStore.shared
-    #if os(iOS)
-    private var miceChanges: AnyCancellable?
-    #endif
-    var onClose: () -> Void = {}
+    @PerceptionIgnored var onClose: () -> Void = {}
 
-    private var session: LibsharingRemoteSession?
-    private var sink: SessionEventSink?
-    private var dragID: Int64?
-    private var drops: [Int64: DropDelivery] = [:]
-    private(set) var remoteDragOffer: RemoteDragOffer?
-    private var promisedFiles: [Int64: PromisedFile] = [:]
-    private var holdsPointer = false
-    private var remoteDragActive = false
+    @PerceptionIgnored private var session: LibsharingRemoteSession?
+    @PerceptionIgnored private var sink: SessionEventSink?
+    @PerceptionIgnored private var dragID: Int64?
+    @PerceptionIgnored private var drops: [Int64: DropDelivery] = [:]
+    @PerceptionIgnored private(set) var remoteDragOffer: RemoteDragOffer?
+    @PerceptionIgnored private var promisedFiles: [Int64: PromisedFile] = [:]
+    @PerceptionIgnored private var holdsPointer = false
+    @PerceptionIgnored private var remoteDragActive = false
     private var credentials: SessionCredentials?
-    private var pressedKeys: [Int: MacKey] = [:]
-    private var sentModifiers: [ModifierKey: MacKey] = [:]
-    private var commandTapPending = false
-    private var repeatTask: Task<Void, Never>?
-    private var capsLockEngaged = false
-    private var capsLockPressedAt: TimeInterval?
-    private var capsLockActsOnPress = false
+    @PerceptionIgnored private var pressedKeys: [Int: MacKey] = [:]
+    @PerceptionIgnored private var sentModifiers: [ModifierKey: MacKey] = [:]
+    @PerceptionIgnored private var commandTapPending = false
+    @PerceptionIgnored private var repeatTask: Task<Void, Never>?
+    @PerceptionIgnored private var capsLockEngaged = false
+    @PerceptionIgnored private var capsLockPressedAt: TimeInterval?
+    @PerceptionIgnored private var capsLockActsOnPress = false
     #if os(macOS)
-    private var inferredModifierKeys = Set<Int>()
+    @PerceptionIgnored private var inferredModifierKeys = Set<Int>()
     #endif
-    private var keyboardType = MacKeyboardType.ansi
-    private(set) var pointerPosition = CGPoint.zero
-    private var pictureSize = CGSize.zero
-    private var pictureTurns = PictureTurns.none
-    private(set) var pointerButtons: PointerButtons = []
-    private var pointerModifiers: Set<ModifierKey> = []
-    private var nativeTouchIDs: Set<Int64> = []
-    private var lastPointerMoveTime: TimeInterval = 0
-    private var pointerMovedSinceTouch = false
-    private var displayArea = CGSize.zero
-    private(set) var windowSize: CGSize?
-    private var displayScale: CGFloat = 2
-    private var screenSize = CGSize.zero
-    private var screenRefreshRate = 60
+    @PerceptionIgnored private var keyboardType = MacKeyboardType.ansi
+    @PerceptionIgnored private(set) var pointerPosition = CGPoint.zero
+    @PerceptionIgnored private var pictureSize = CGSize.zero
+    @PerceptionIgnored private var pictureTurns = PictureTurns.none
+    @PerceptionIgnored private(set) var pointerButtons: PointerButtons = []
+    @PerceptionIgnored private var pointerModifiers: Set<ModifierKey> = []
+    @PerceptionIgnored private var nativeTouchIDs: Set<Int64> = []
+    @PerceptionIgnored private var lastPointerMoveTime: TimeInterval = 0
+    @PerceptionIgnored private var pointerMovedSinceTouch = false
+    @PerceptionIgnored private var displayArea = CGSize.zero
+    @PerceptionIgnored private(set) var windowSize: CGSize?
+    @PerceptionIgnored private var displayScale: CGFloat = 2
+    @PerceptionIgnored private var screenSize = CGSize.zero
+    @PerceptionIgnored private var screenRefreshRate = 60
     private let virtualDisplayRequests = VirtualDisplayRequests()
-    private(set) var sceneInBackground = false
-    private var activeWhenBackgrounded = false
+    @PerceptionIgnored private(set) var sceneInBackground = false
+    @PerceptionIgnored private var activeWhenBackgrounded = false
     #if os(iOS)
-    private var backgroundTask = UIBackgroundTaskIdentifier.invalid
-    private var transferTask: ContinuedTask?
-    private var transferTaskIDs: Set<Int64> = []
+    @PerceptionIgnored private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+    @PerceptionIgnored private var transferTask: ContinuedTask?
+    @PerceptionIgnored private var transferTaskIDs: Set<Int64> = []
     #endif
-    private var reconnectsOnReturn = false
-    private var restartsHighPerformanceOnReturn = false
-    private var hasConnected = false
-    private var cursorAssets: MacCursorAssets?
-    private var cursorAssetsAttempted = false
-    private var microphone: MicrophoneSender?
-    private var reconnectAttempts = 0
-    private var reconnectTask: Task<Void, Never>?
-    private var chosenDisplay: DisplaySelection?
-    private var restoresDisplay = false
-    private var assistCursorShown = false
-    private var highPerformanceStartPending = false
-    private var awaitsVirtualDisplay = false {
+    @PerceptionIgnored private var reconnectsOnReturn = false
+    @PerceptionIgnored private var restartsHighPerformanceOnReturn = false
+    @PerceptionIgnored private var hasConnected = false
+    @PerceptionIgnored private var cursorAssets: MacCursorAssets?
+    @PerceptionIgnored private var cursorAssetsAttempted = false
+    @PerceptionIgnored private var microphone: MicrophoneSender?
+    @PerceptionIgnored private var reconnectAttempts = 0
+    @PerceptionIgnored private var reconnectTask: Task<Void, Never>?
+    @PerceptionIgnored private var chosenDisplay: DisplaySelection?
+    @PerceptionIgnored private var restoresDisplay = false
+    @PerceptionIgnored private var assistCursorShown = false
+    @PerceptionIgnored private var highPerformanceStartPending = false
+    @PerceptionIgnored private var awaitsVirtualDisplay = false {
         didSet { pipeline.setHoldsVideo(awaitsVirtualDisplay) }
     }
-    private var awaitsResolutionChange = false {
+    @PerceptionIgnored private var awaitsResolutionChange = false {
         didSet {
             if awaitsResolutionChange != oldValue { pipeline.setWaitsForDisplay(awaitsResolutionChange) }
         }
     }
-    private var highPerformanceAwaitsDisplay = false
-    @Published private(set) var hasPicture = false
-    private var isScrollGliding = false
+    @PerceptionIgnored private var highPerformanceAwaitsDisplay = false
+    private(set) var hasPicture = false
+    @PerceptionIgnored private var isScrollGliding = false
 
-    private var server: ServerAuthentication?
-    private var probeTask: Task<Void, Never>?
-    private var trustedFingerprint = ""
-    private var passwordUpdate = PasswordUpdate.keep
-    private var usedSavedPassword = false
-    private var device: DeviceInfo?
-    @Published private var deviceType: DeviceType? {
+    @PerceptionIgnored private var server: ServerAuthentication?
+    @PerceptionIgnored private var probeTask: Task<Void, Never>?
+    @PerceptionIgnored private var trustedFingerprint = ""
+    @PerceptionIgnored private var passwordUpdate = PasswordUpdate.keep
+    @PerceptionIgnored private var usedSavedPassword = false
+    @PerceptionIgnored private var device: DeviceInfo?
+    private var deviceType: DeviceType? {
         didSet {
             if isIOS {
                 virtualDisplayRequests.stopWaiting()
@@ -274,9 +274,6 @@ final class SessionController: ObservableObject, Identifiable {
         deviceType = route.deviceType ?? route.model.flatMap(DeviceType.init(model:))
         windowSize = route.computerID.flatMap { store.stored($0) }?.memory.windowSize
         virtualDisplayRequests.onIdle = { [weak self] in self?.virtualDisplayDidSettle() }
-        #if os(iOS)
-        miceChanges = PointerLock.mice.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
-        #endif
         pipeline.setShownHandler { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -839,10 +836,8 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     private func handle(picture: ScreenPicture, width: Int, height: Int, turns: PictureTurns) {
-        if self.picture != picture {
-            self.picture = picture
-        }
-        if picture == .current, !hasPicture {
+        self.picture = picture
+        if picture == .current {
             hasPicture = true
         }
         let newPictureSize = CGSize(width: width, height: height)
@@ -907,15 +902,6 @@ final class SessionController: ObservableObject, Identifiable {
         }
     }
 
-    fileprivate func handle(info: SessionInfo) {
-        var updated = info
-        updated.keyboardSource = self.info.keyboardSource
-        updated.secureInput = self.info.secureInput
-        if self.info != updated {
-            self.info = updated
-        }
-    }
-
     fileprivate func handleVideoFailure(_ failure: MediaFailure) {
         if usesHighPerformance, failure.kind == .silent || failure.kind == .network, sceneInBackground {
             restartsHighPerformanceOnReturn = true
@@ -953,8 +939,8 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     fileprivate func handle(keyboardSource source: String?, secureInput: Bool) {
-        info.keyboardSource = source
-        info.secureInput = secureInput
+        keyboardSourceID = source
+        self.secureInput = secureInput
         rememberKeyboardSource(source)
     }
 
@@ -1626,7 +1612,7 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     func setUsesHardwareKeyboard(_ uses: Bool) {
-        if uses != usesHardwareKeyboard { usesHardwareKeyboard = uses }
+        usesHardwareKeyboard = uses
     }
 
     func toggleToolbar() {
@@ -1784,7 +1770,7 @@ final class SessionController: ObservableObject, Identifiable {
             setSentModifiers(modifiers)
         }
         pointerModifiers = stickyModifiers.subtracting(lockedModifiers).subtracting(pressedModifiers)
-        stickyModifiers.removeAll()
+        stickyModifiers = []
         for modifier in ModifierKey.allCases where pointerModifiers.contains(modifier) { send(modifier.macKey, down: true) }
     }
 
@@ -1868,8 +1854,9 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     private func clampToImage(_ point: CGPoint) -> CGPoint {
-        guard imageSize.width > 0, imageSize.height > 0 else { return point }
-        return CGPoint(x: min(max(point.x, 0), imageSize.width - 1), y: min(max(point.y, 0), imageSize.height - 1))
+        let size = imageSize
+        guard size.width > 0, size.height > 0 else { return point }
+        return CGPoint(x: min(max(point.x, 0), size.width - 1), y: min(max(point.y, 0), size.height - 1))
     }
 
 
@@ -1993,7 +1980,7 @@ final class SessionController: ObservableObject, Identifiable {
             return true
         }
         if !mapped.isModifier { textCursorMayHaveMoved() }
-        if info.secureInput, !Keysym.typesInSecureInput(mapped.keysym) {
+        if secureInput, !Keysym.typesInSecureInput(mapped.keysym) {
             showSecureInputNotice()
             return true
         }
@@ -2016,7 +2003,7 @@ final class SessionController: ObservableObject, Identifiable {
         }
         let sticky = stickyModifiers.subtracting(held)
         if !sticky.isEmpty {
-            stickyModifiers.removeAll()
+            stickyModifiers = []
             tap(key, modifiers: sticky)
             return true
         }
@@ -2117,7 +2104,7 @@ final class SessionController: ObservableObject, Identifiable {
 
     private func typeText(_ text: String) -> Bool {
         guard !text.isEmpty else { return true }
-        if info.secureInput {
+        if secureInput {
             let typed = text.filter(\.isASCII)
             if !typed.isEmpty { try? session?.sendText(typed) }
             guard typed.count == text.count else {
@@ -2165,7 +2152,8 @@ final class SessionController: ObservableObject, Identifiable {
 
     private func typeCharacter(_ character: Character) -> Bool {
         let held = lockedModifiers.union(pressedModifiers)
-        let modifiers = held.union(stickyModifiers)
+        let sticky = stickyModifiers
+        let modifiers = held.union(sticky)
         var key: MacKey
         var shift = false
         switch character {
@@ -2185,14 +2173,13 @@ final class SessionController: ObservableObject, Identifiable {
                 key = MacKey(keysym: Keysym.character(scalar))
             }
         }
-        if info.secureInput, !Keysym.typesInSecureInput(key.keysym) {
-            if !stickyModifiers.isEmpty { stickyModifiers.removeAll() }
+        stickyModifiers = []
+        if secureInput, !Keysym.typesInSecureInput(key.keysym) {
             showSecureInputNotice()
             return false
         }
-        var pressing = stickyModifiers
+        var pressing = sticky
         if shift { pressing.insert(.shift) }
-        if !stickyModifiers.isEmpty { stickyModifiers.removeAll() }
         tap(key, modifiers: pressing.subtracting(held))
         return true
     }
@@ -2205,7 +2192,7 @@ final class SessionController: ObservableObject, Identifiable {
 
     private func tapKey(_ key: MacKey) {
         let sticky = stickyModifiers
-        if !sticky.isEmpty { stickyModifiers.removeAll() }
+        stickyModifiers = []
         tap(key, modifiers: sticky)
     }
 
@@ -2292,7 +2279,7 @@ final class SessionController: ObservableObject, Identifiable {
     private func capsLockTapped() {
         if capsLockEngaged {
             setCapsLock(false)
-        } else if !info.secureInput, macHasOtherKeyboardSource {
+        } else if !secureInput, macHasOtherKeyboardSource {
             switchKeyboardSource()
         } else {
             setCapsLock(true)
@@ -2300,7 +2287,7 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     var keyboardSource: MacInputSource? {
-        info.keyboardSource.map(MacInputSource.init(id:))
+        keyboardSourceID.map(MacInputSource.init(id:))
     }
 
     private var macHasOtherKeyboardSource: Bool {
@@ -2315,14 +2302,14 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     func selectKeyboardSource(_ source: MacInputSource) {
-        guard isControlling, !info.secureInput, source.id != info.keyboardSource else { return }
+        guard isControlling, !secureInput, source.id != keyboardSourceID else { return }
         session?.selectKeyboardSource(source.id)
     }
 
     #if os(macOS)
     func followKeyboardSource(_ id: String) {
         let local = MacInputSource(id: id)
-        guard !info.secureInput, let current = keyboardSource, local != current else { return }
+        guard !secureInput, let current = keyboardSource, local != current else { return }
         if keyboardSources.contains(local) {
             selectKeyboardSource(local)
         } else if local.isInputMethod != current.isInputMethod {
@@ -2405,8 +2392,8 @@ final class SessionController: ObservableObject, Identifiable {
         for modifier in lockedModifiers.union(pressedModifiers) {
             send(modifier.macKey, down: false)
         }
-        lockedModifiers.removeAll()
-        pressedModifiers.removeAll()
+        lockedModifiers = []
+        pressedModifiers = []
     }
 
     #if os(iOS)
@@ -2757,6 +2744,6 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
     }
 
     func sessionInfoChanged(_ info: SessionInfo) {
-        onMain { $0.handle(info: info) }
+        onMain { $0.info = info }
     }
 }

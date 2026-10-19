@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -7,54 +8,56 @@ struct PairingSetupView: View {
     @State private var isPickingFile = false
     @State private var alert: AlertState?
 
-    @ObservedObject private var pairing = PairingStore.shared
-    @ObservedObject private var session = ServerController.shared.pairingSession
+    private let pairing = PairingStore.shared
+    private let session = ServerController.shared.pairingSession
 
     var body: some View {
-        NavigationStackCompat {
-            Form {
-                Section {
-                    if case .code(let pin) = session.state {
-                        PairingCodeView(pin: pin)
-                    } else {
-                        Button(action: pairInSettings) {
-                            HStack {
-                                Text("Pair in Settings")
-                                Spacer()
-                                if session.isInProgress {
-                                    ProgressView()
+        WithPerceptionTracking {
+            NavigationStackCompat {
+                Form {
+                    Section {
+                        if case .code(let pin) = session.state {
+                            PairingCodeView(pin: pin)
+                        } else {
+                            Button(action: pairInSettings) {
+                                HStack {
+                                    Text("Pair in Settings")
+                                    Spacer()
+                                    if session.isInProgress {
+                                        ProgressView()
+                                    }
                                 }
                             }
+                            .disabled(session.isInProgress)
                         }
-                        .disabled(session.isInProgress)
+                    } footer: {
+                        Text("1. Go to Settings › Privacy & Security › Developer Mode.\n2. Tap “Pair with \(session.hostName)”.\n3. Enter the pairing code shown by Screen Sharing.")
                     }
-                } footer: {
-                    Text("1. Go to Settings › Privacy & Security › Developer Mode.\n2. Tap “Pair with \(session.hostName)”.\n3. Enter the pairing code shown by Screen Sharing.")
+                    Section {
+                        Button("Import Pairing File") { isPickingFile = true }
+                    }
+                    .disabled(session.isInProgress)
                 }
-                Section {
-                    Button("Import Pairing File") { isPickingFile = true }
-                }
-                .disabled(session.isInProgress)
-            }
-            .navigationTitle("Pair with This Device")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", role: .cancel) {
-                        session.cancel()
-                        dismiss()
+                .navigationTitle("Pair with This Device")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", role: .cancel) {
+                            session.cancel()
+                            dismiss()
+                        }
                     }
                 }
-            }
-            .fileImporter(isPresented: $isPickingFile, allowedContentTypes: [.item]) { result in
-                if case .success(let url) = result {
-                    importFile(url)
+                .fileImporter(isPresented: $isPickingFile, allowedContentTypes: [.item]) { result in
+                    if case .success(let url) = result {
+                        importFile(url)
+                    }
                 }
+                .alert(problemAlert)
             }
-            .alert(problemAlert)
+            .interactiveDismissDisabled(session.isInProgress)
+            .onChangeCompat(of: pairing.revision) { dismiss() }
         }
-        .interactiveDismissDisabled(session.isInProgress)
-        .onChangeCompat(of: pairing.revision) { dismiss() }
     }
 
     private var problemAlert: Binding<AlertState?> {

@@ -1,6 +1,6 @@
-import Combine
 import Foundation
 import Libsharing
+import Perception
 import os
 
 struct PairedDevice {
@@ -8,15 +8,16 @@ struct PairedDevice {
     var canMatchService: Bool
 }
 
-final class PairingStore: ObservableObject {
+@Perceptible
+final class PairingStore {
     static let shared = PairingStore()
 
     private static let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("PairingRecord.plist")
 
-    @Published private(set) var record: Data?
-    @Published private(set) var device: PairedDevice?
-    @Published private(set) var revision = 0
+    private(set) var record: Data?
+    private(set) var device: PairedDevice?
+    private(set) var revision = 0
 
     var isPaired: Bool { record != nil }
 

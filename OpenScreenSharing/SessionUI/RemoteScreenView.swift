@@ -1,20 +1,31 @@
 #if os(iOS)
-import Combine
 import SwiftUI
 import UIKit
 
 struct RemoteScreenView: UIViewRepresentable {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
+    let matchesWindow: Bool
+    let turnsLandscape: Bool
+    let preferredOrientation: UIInterfaceOrientationMask?
+    let mode: SessionMode
+
+    init(controller: SessionController) {
+        self.controller = controller
+        matchesWindow = controller.wantsVirtualDisplay
+        turnsLandscape = controller.platform != .iOS
+        preferredOrientation = controller.preferredOrientation
+        mode = controller.mode
+    }
 
     func makeUIView(context: Context) -> RemoteScreenUIView {
         RemoteScreenUIView(controller: controller)
     }
 
     func updateUIView(_ view: RemoteScreenUIView, context: Context) {
-        view.windowTracker.setMatchesWindow(controller.wantsVirtualDisplay)
-        view.windowTracker.setTurnsLandscape(controller.platform != .iOS)
-        view.windowTracker.setPreferredOrientation(controller.preferredOrientation)
-        view.accessibilityValue = String(localized: controller.mode == .control ? "Controlling" : "Observing")
+        view.windowTracker.setMatchesWindow(matchesWindow)
+        view.windowTracker.setTurnsLandscape(turnsLandscape)
+        view.windowTracker.setPreferredOrientation(preferredOrientation)
+        view.accessibilityValue = String(localized: mode == .control ? "Controlling" : "Observing")
     }
 }
 
@@ -151,9 +162,7 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
 
     private func updateLetterbox() {
         let letterbox = measureLetterbox()
-        if controller.letterbox.value != letterbox {
-            controller.letterbox.send(letterbox)
-        }
+        controller.letterbox = letterbox
     }
 
     private func measureLetterbox() -> Letterbox? {
@@ -349,9 +358,7 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
 
     private func updateScaleMode() {
         let mode: ScaleMode = abs(zoom - 1) < 0.01 ? .fit : (abs(zoom - actualSizeZoom) < 0.01 ? .actualSize : .custom)
-        if controller.scaleMode != mode {
-            controller.scaleMode = mode
-        }
+        controller.scaleMode = mode
     }
 
     func keepPointerVisible() {

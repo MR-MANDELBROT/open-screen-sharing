@@ -1,6 +1,6 @@
-import Combine
 import Foundation
 import Libsharing
+import Perception
 
 nonisolated struct MacImportRequest: Sendable {
     var host: String
@@ -33,16 +33,16 @@ nonisolated struct DiskImageImportProgress: Sendable {
     }
 }
 
-final class DiskImageStore: ObservableObject {
+@Perceptible
+final class DiskImageStore {
     static let shared = DiskImageStore()
 
-    @Published private(set) var progress: DiskImageImportProgress?
-    @Published private(set) var isImported: Bool
+    private(set) var isImporting = false
+    private(set) var progress: DiskImageImportProgress?
+    private(set) var isImported: Bool
 
-    private var current: LibsharingDiskImageImport?
-    private var isCancelled = false
-
-    var isImporting: Bool { progress != nil }
+    @PerceptionIgnored private var current: LibsharingDiskImageImport?
+    @PerceptionIgnored private var isCancelled = false
 
     init() {
         var imported: ObjCBool = false
@@ -110,10 +110,11 @@ final class DiskImageStore: ObservableObject {
         let importer = LibsharingNewDiskImageImport(directory.path, events)!
         current = importer
         isCancelled = false
-        progress = DiskImageImportProgress(received: 0)
+        isImporting = true
         defer {
             current = nil
             progress = nil
+            isImporting = false
         }
         let box = UncheckedSendable(value: importer)
         do {

@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 @main
@@ -56,8 +57,8 @@ struct HomeScene: Scene {
         WindowGroup {
             HomeView()
                 .providesSessionWindows()
-                .environmentObject(launch.nearby)
-                .environmentObject(launch.availabilityMonitor)
+                .environment(launch.nearby)
+                .environment(launch.availabilityMonitor)
         }
         .commands {
             AppCommands()
@@ -84,7 +85,6 @@ struct MultiWindowApp: App {
 
         WindowGroup(for: SessionRoute.self) { $route in
             SessionWindow(route: route)
-                .environmentObject(launch.nearby)
         }
     }
 }
@@ -96,8 +96,8 @@ struct MacApp: App {
         Window(String(localized: "Connections"), id: "home") {
             HomeView()
                 .providesSessionWindows()
-                .environmentObject(launch.nearby)
-                .environmentObject(launch.availabilityMonitor)
+                .environment(launch.nearby)
+                .environment(launch.availabilityMonitor)
         }
         .defaultSize(width: 900, height: 560)
         .commands {
@@ -107,7 +107,6 @@ struct MacApp: App {
 
         WindowGroup(for: SessionRoute.self) { $route in
             SessionWindow(route: route)
-                .environmentObject(launch.nearby)
         }
         .defaultSize(width: 1280, height: 800)
     }
@@ -118,12 +117,15 @@ struct MacApp: App {
 struct SessionWindow: View {
     let route: SessionRoute?
     @Environment(\.dismissWindow) private var dismissWindow
+    @State private var controller: SessionController?
 
     var body: some View {
-        if let route {
-            SessionView(controller: SessionController(route: WindowCredentials.receive(route))) {
+        if let controller {
+            SessionView(controller: controller) {
                 DispatchQueue.main.async { dismissWindow() }
             }
+        } else if let route {
+            Color.clear.onAppear { controller = SessionController(route: WindowCredentials.receive(route)) }
         } else {
             ContentUnavailableView("No Connection Open", systemImage: "desktopcomputer")
         }

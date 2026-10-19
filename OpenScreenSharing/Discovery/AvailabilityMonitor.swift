@@ -1,6 +1,6 @@
-import Combine
 import Foundation
 import Network
+import Perception
 import dnssd
 
 nonisolated enum ComputerAvailability: Hashable, Sendable {
@@ -11,22 +11,21 @@ nonisolated enum ComputerAvailability: Hashable, Sendable {
 /// With its blacklist enabled, TigerVNC counts banner-only connections until authentication succeeds
 /// (tigervnc 086c692, common/rfb/Blacklist.cxx:52-89, common/rfb/VNCServerST.cxx:141-161,
 /// common/rfb/VNCServerST.cxx:741-745).
-final class AvailabilityMonitor: ObservableObject {
-    @Published private(set) var availability: [ComputerAddress: ComputerAvailability] = [:]
+@Perceptible
+final class AvailabilityMonitor {
+    private(set) var availability: [ComputerAddress: ComputerAvailability] = [:]
 
     private let nearby: NearbyBrowser
     private var servers: [ComputerAddress: RemoteProtocol] = [:]
-    private var probes: [ComputerAddress: Task<Void, Never>] = [:]
-    private var activeClients = 0
-    private var pingedServers: Set<String>
-    private var nearbyChanges: AnyCancellable?
+    @PerceptionIgnored private var probes: [ComputerAddress: Task<Void, Never>] = [:]
+    @PerceptionIgnored private var activeClients = 0
+    @PerceptionIgnored private var pingedServers: Set<String>
     private static let pingedServersKey = "availabilityPingedServers"
     private static let refreshInterval: TimeInterval = 1
 
     init(nearby: NearbyBrowser) {
         self.nearby = nearby
         pingedServers = Set(PreferenceStore.shared.value([String].self, for: Self.pingedServersKey) ?? [])
-        nearbyChanges = nearby.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
 
     func availability(of address: ComputerAddress) -> ComputerAvailability? {

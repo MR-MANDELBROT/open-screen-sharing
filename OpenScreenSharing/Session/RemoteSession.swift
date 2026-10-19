@@ -248,8 +248,6 @@ nonisolated struct SessionInfo: Equatable, Sendable {
     var dialect: ServerDialect
     var platform: RemotePlatform
     var fingerprint: String = ""
-    var keyboardSource: String?
-    var secureInput: Bool = false
 
     init(remoteProtocol: RemoteProtocol, platform: RemotePlatform?) {
         dialect = remoteProtocol == .rdp ? .rdp : .apple

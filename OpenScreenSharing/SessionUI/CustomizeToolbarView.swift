@@ -1,8 +1,9 @@
+import Perception
 import SwiftUI
 
 struct CustomizeToolbarView: View {
-    @ObservedObject var controller: SessionController
-    @ObservedObject private var layout: ToolbarLayout
+    let controller: SessionController
+    private let layout: ToolbarLayout
     let slots: Int?
 
     @Environment(\.dismiss) private var dismiss
@@ -15,81 +16,89 @@ struct CustomizeToolbarView: View {
     }
 
     var body: some View {
-        let plan = layout.plan(for: controller, slots: slots)
-        let categories = SessionCommandCategory.allCases.filter { !layout.otherCommands(in: $0).isEmpty }
-        NavigationStackCompat {
-            List {
-                Section {
-                    ForEach(layout.bar, id: \.shownRowID) { command in
-                        shownRow(command, inMore: plan.overflow.contains(command))
-                            .modifier(ReorderActions(layout: layout, command: command))
-                    }
-                    .onMove { source, destination in layout.move(fromOffsets: source, toOffset: destination) }
-                    .onDelete { offsets in layout.remove(atOffsets: offsets) }
-                }
-                ForEach(categories) { category in
+        WithPerceptionTracking {
+            let plan = layout.plan(for: controller, slots: slots)
+            let categories = SessionCommandCategory.allCases.filter { !layout.otherCommands(in: $0).isEmpty }
+            NavigationStackCompat {
+                List {
                     Section {
-                        ForEach(layout.otherCommands(in: category), id: \.otherRowID) { command in
-                            Button {
-                                layout.add(command)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, .green)
-                                        .font(.title2)
-                                        .accessibilityHidden(true)
-                                    row(command, inMore: false)
-                                }
-                                .contentShape(Rectangle())
+                        ForEach(layout.bar, id: \.shownRowID) { command in
+                            WithPerceptionTracking {
+                                shownRow(command, inMore: plan.overflow.contains(command))
+                                    .modifier(ReorderActions(layout: layout, command: command))
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(Text("Add \(String(localized: command.title)) to Toolbar"))
-                            .accessibilityValue(notAvailableValue(command))
-                            .deleteDisabled(true)
-                            .moveDisabled(true)
                         }
-                    } header: {
-                        Text(String(localized: category.title))
+                        .onMove { source, destination in layout.move(fromOffsets: source, toOffset: destination) }
+                        .onDelete { offsets in layout.remove(atOffsets: offsets) }
                     }
-                }
-                Section {
-                    Button("Reset to Default") {
-                        if layout.isDefault {
-                            layout.reset()
-                        } else {
-                            isConfirmingReset = true
+                    ForEach(categories) { category in
+                        WithPerceptionTracking {
+                            Section {
+                                ForEach(layout.otherCommands(in: category), id: \.otherRowID) { command in
+                                    WithPerceptionTracking {
+                                        Button {
+                                            layout.add(command)
+                                        } label: {
+                                            HStack(spacing: 12) {
+                                                Image(systemName: "plus.circle.fill")
+                                                    .symbolRenderingMode(.palette)
+                                                    .foregroundStyle(.white, .green)
+                                                    .font(.title2)
+                                                    .accessibilityHidden(true)
+                                                row(command, inMore: false)
+                                            }
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel(Text("Add \(String(localized: command.title)) to Toolbar"))
+                                        .accessibilityValue(notAvailableValue(command))
+                                        .deleteDisabled(true)
+                                        .moveDisabled(true)
+                                    }
+                                }
+                            } header: {
+                                Text(String(localized: category.title))
+                            }
                         }
                     }
-                    .disabled(!layout.isCustomized)
-                    .confirmationDialog("Reset Toolbar?", isPresented: $isConfirmingReset, titleVisibility: .visible) {
-                        Button("Reset Toolbar", role: .destructive) { layout.reset() }
-                        Button("Cancel", role: .cancel) {}
+                    Section {
+                        Button("Reset to Default") {
+                            if layout.isDefault {
+                                layout.reset()
+                            } else {
+                                isConfirmingReset = true
+                            }
+                        }
+                        .disabled(!layout.isCustomized)
+                        .confirmationDialog("Reset Toolbar?", isPresented: $isConfirmingReset, titleVisibility: .visible) {
+                            Button("Reset Toolbar", role: .destructive) { layout.reset() }
+                            Button("Cancel", role: .cancel) {}
+                        }
                     }
                 }
-            }
-            #if os(iOS)
-            .environment(\.editMode, .constant(.active))
-            #endif
-            .animation(.default, value: layout.bar)
-            .navigationTitle("Customize Toolbar")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    CloseButton { dismiss() }
+                #if os(iOS)
+                .environment(\.editMode, .constant(.active))
+                #endif
+                .animation(.default, value: layout.bar)
+                .navigationTitle("Customize Toolbar")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        CloseButton { dismiss() }
+                    }
                 }
-            }
-            #else
-            .frame(width: 420, height: 560)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    CloseButton { dismiss() }
+                #else
+                .frame(width: 420, height: 560)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        CloseButton { dismiss() }
+                    }
                 }
+                #endif
             }
-            #endif
+            .phonePresentationDetents([.medium, .large])
         }
-        .phonePresentationDetents([.medium, .large])
     }
 
     @ViewBuilder
@@ -146,21 +155,23 @@ private struct ReorderActions: ViewModifier {
     let command: SessionCommand
 
     func body(content: Content) -> some View {
-        if #available(iOS 16, *) {
-            content.accessibilityActions {
-                if command != layout.bar.first {
-                    Button("Move Up") { layout.move(command, by: -1) }
+        WithPerceptionTracking {
+            if #available(iOS 16, *) {
+                content.accessibilityActions {
+                    if command != layout.bar.first {
+                        Button("Move Up") { layout.move(command, by: -1) }
+                    }
+                    if command != layout.bar.last {
+                        Button("Move Down") { layout.move(command, by: 1) }
+                    }
+                    Button("Remove from Toolbar") { layout.remove(command) }
                 }
-                if command != layout.bar.last {
-                    Button("Move Down") { layout.move(command, by: 1) }
-                }
-                Button("Remove from Toolbar") { layout.remove(command) }
+            } else {
+                content
+                    .accessibilityAction(named: Text("Move Up")) { layout.move(command, by: -1) }
+                    .accessibilityAction(named: Text("Move Down")) { layout.move(command, by: 1) }
+                    .accessibilityAction(named: Text("Remove from Toolbar")) { layout.remove(command) }
             }
-        } else {
-            content
-                .accessibilityAction(named: Text("Move Up")) { layout.move(command, by: -1) }
-                .accessibilityAction(named: Text("Move Down")) { layout.move(command, by: 1) }
-                .accessibilityAction(named: Text("Remove from Toolbar")) { layout.remove(command) }
         }
     }
 }

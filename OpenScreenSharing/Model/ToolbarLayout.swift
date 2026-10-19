@@ -1,8 +1,9 @@
-import Combine
 import Foundation
+import Perception
 import SwiftUI
 
-final class ToolbarLayout: ObservableObject {
+@Perceptible
+final class ToolbarLayout {
     static let mac = ToolbarLayout(
         platform: .mac, key: "SessionToolbar", defaultBar: [.displays, .audio, .pointerLock, .keyboard, .clipboard])
     static let iOS = ToolbarLayout(
@@ -24,8 +25,8 @@ final class ToolbarLayout: ObservableObject {
     private let platform: RemotePlatform
     private let key: String
 
-    @Published private(set) var bar: [SessionCommand]
-    @Published private(set) var isCustomized: Bool
+    private(set) var bar: [SessionCommand]
+    private(set) var isCustomized: Bool
     private let store = PreferenceStore.shared
 
     private init(platform: RemotePlatform, key: String, defaultBar: [SessionCommand]) {

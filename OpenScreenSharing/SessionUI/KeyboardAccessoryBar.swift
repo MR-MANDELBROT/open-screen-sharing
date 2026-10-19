@@ -1,50 +1,53 @@
 #if os(iOS)
+import Perception
 import SwiftUI
 
 struct KeyboardAccessoryBar: View {
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            GlassEffectContainerCompat(spacing: 10) {
-                HStack(spacing: 10) {
-                    group {
-                        key("Escape", text: "esc", key: .escape)
+        WithPerceptionTracking {
+            ScrollView(.horizontal, showsIndicators: false) {
+                GlassEffectContainerCompat(spacing: 10) {
+                    HStack(spacing: 10) {
+                        group {
+                            key("Escape", text: "esc", key: .escape)
+                            if !controller.usesHardwareKeyboard {
+                                key("Tab", systemImage: "arrow.right.to.line") { controller.typeKey(.tab) }
+                            }
+                            ForEach(controller.platform == .pc ? ModifierKey.pcOrder : ModifierKey.allCases, id: \.self) { modifier in
+                                ModifierKeyButton(controller: controller, modifier: modifier)
+                            }
+                        }
                         if !controller.usesHardwareKeyboard {
-                            key("Tab", systemImage: "arrow.right.to.line") { controller.typeKey(.tab) }
+                            group {
+                                key("Left Arrow", systemImage: "arrowtriangle.left.fill") { controller.typeKey(.left) }
+                                key("Up Arrow", systemImage: "arrowtriangle.up.fill") { controller.typeKey(.up) }
+                                key("Down Arrow", systemImage: "arrowtriangle.down.fill") { controller.typeKey(.down) }
+                                key("Right Arrow", systemImage: "arrowtriangle.right.fill") { controller.typeKey(.right) }
+                            }
                         }
-                        ForEach(controller.platform == .pc ? ModifierKey.pcOrder : ModifierKey.allCases, id: \.self) { modifier in
-                            ModifierKeyButton(controller: controller, modifier: modifier)
-                        }
-                    }
-                    if !controller.usesHardwareKeyboard {
                         group {
-                            key("Left Arrow", systemImage: "arrowtriangle.left.fill") { controller.typeKey(.left) }
-                            key("Up Arrow", systemImage: "arrowtriangle.up.fill") { controller.typeKey(.up) }
-                            key("Down Arrow", systemImage: "arrowtriangle.down.fill") { controller.typeKey(.down) }
-                            key("Right Arrow", systemImage: "arrowtriangle.right.fill") { controller.typeKey(.right) }
+                            functionKeysMenu
                         }
-                    }
-                    group {
-                        functionKeysMenu
-                    }
-                    if UIDevice.current.userInterfaceIdiom == .phone {
-                        group {
-                            key("Hide Keyboard", systemImage: "keyboard.chevron.compact.down") {
-                                controller.setKeyboardVisible(false)
+                        if UIDevice.current.userInterfaceIdiom == .phone {
+                            group {
+                                key("Hide Keyboard", systemImage: "keyboard.chevron.compact.down") {
+                                    controller.setKeyboardVisible(false)
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
             }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.plain)
+            .font(.body.weight(.medium))
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .frame(height: 64)
         }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.plain)
-        .font(.body.weight(.medium))
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-        .frame(height: 64)
     }
 
     private func group(@ViewBuilder content: () -> some View) -> some View {
@@ -96,7 +99,7 @@ struct ModifierKeyButton: View {
     private static let holdDelay: TimeInterval = 0.3
     private static let doubleTapInterval: TimeInterval = 0.35
 
-    @ObservedObject var controller: SessionController
+    let controller: SessionController
     let modifier: ModifierKey
 
     @GestureState private var isTouching = false
@@ -141,38 +144,40 @@ struct ModifierKeyButton: View {
     }
 
     var body: some View {
-        face
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($isTouching) { _, state, _ in state = true }
-                    .onChanged { value in
-                        if hypot(value.translation.width, value.translation.height) > 10 {
-                            moved = true
+        WithPerceptionTracking {
+            face
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .updating($isTouching) { _, state, _ in state = true }
+                        .onChanged { value in
+                            if hypot(value.translation.width, value.translation.height) > 10 {
+                                moved = true
+                            }
                         }
-                    }
-                    .onEnded { _ in
-                        guard !isHolding, !moved else { return }
-                        tapped()
-                    }
-            )
-            .onChangeCompat(of: isTouching) { touching in
-                touching ? touchBegan() : touchEnded()
-            }
-            .allowsHitTesting(controller.isControlling)
-            .selectionFeedbackCompat(trigger: isActive)
-            .hoverEffect()
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(String(localized: pcLabel?.title ?? modifier.title)))
-            .accessibilityValue(Text(String(localized: accessibilityValue)))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAddTraits(isActive ? AccessibilityTraits.isSelected : [])
-            .accessibilityHint(Text("Applies to the next key or click."))
-            .accessibilityAction { controller.toggleSticky(modifier) }
-            .accessibilityAction(named: Text(isLocked ? "Unlock" : "Lock")) { controller.setModifier(modifier, locked: !isLocked) }
-            .accessibilityShowsLargeContentViewer {
-                Label(String(localized: modifier.title), systemImage: modifier.systemImage)
-            }
-            .disabled(!controller.isControlling)
+                        .onEnded { _ in
+                            guard !isHolding, !moved else { return }
+                            tapped()
+                        }
+                )
+                .onChangeCompat(of: isTouching) { touching in
+                    touching ? touchBegan() : touchEnded()
+                }
+                .allowsHitTesting(controller.isControlling)
+                .selectionFeedbackCompat(trigger: isActive)
+                .hoverEffect()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(String(localized: pcLabel?.title ?? modifier.title)))
+                .accessibilityValue(Text(String(localized: accessibilityValue)))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAddTraits(isActive ? AccessibilityTraits.isSelected : [])
+                .accessibilityHint(Text("Applies to the next key or click."))
+                .accessibilityAction { controller.toggleSticky(modifier) }
+                .accessibilityAction(named: Text(isLocked ? "Unlock" : "Lock")) { controller.setModifier(modifier, locked: !isLocked) }
+                .accessibilityShowsLargeContentViewer {
+                    Label(String(localized: modifier.title), systemImage: modifier.systemImage)
+                }
+                .disabled(!controller.isControlling)
+        }
     }
 
     private var accessibilityValue: String.LocalizationValue {

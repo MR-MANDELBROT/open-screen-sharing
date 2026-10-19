@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 struct NewComputer: Hashable {
@@ -36,7 +37,7 @@ struct ConnectionSetupView: View {
     let connect: (SessionRoute) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var nearby: NearbyBrowser
+    @Environment(NearbyBrowser.self) private var nearby
     @State private var signingIn: NewComputer?
     @State private var isSigningIn = false
     @State private var signedIn: SignedInComputer?

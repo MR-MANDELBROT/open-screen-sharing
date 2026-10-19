@@ -19,7 +19,7 @@ struct ShortcutRecorder<Target: Hashable>: ViewModifier {
     var modifierChord: Target? = nil
     let onPress: (Target, ShortcutPress) -> Bool
 
-    @ObservedObject private var shortcuts = KeyShortcuts.shared
+    private let shortcuts = KeyShortcuts.shared
     #if os(macOS)
     @State private var monitor: Any?
     #endif
