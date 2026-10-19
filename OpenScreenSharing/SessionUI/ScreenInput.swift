@@ -6,10 +6,8 @@ import UIKit.UIGestureRecognizerSubclass
 final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInteractionDelegate {
     private static let tapSlop: CGFloat = 10
     private static let tapDuration: TimeInterval = 0.35
-    private static let dragStartDistance: CGFloat = 8
     private static let multiClickInterval: TimeInterval = 0.5
-    private static let tapDragWindow: TimeInterval = 0.25
-    private static let secondTapHold: TimeInterval = 0.3
+    private static let pressHold: TimeInterval = 0.5
     private static let mouseCountsPerPoint: CGFloat = 2
     private static let touchMargin: CGFloat = 24
     private static let doubleTapDistance: CGFloat = 40
@@ -29,9 +27,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private var fingers: Set<UITouch> = []
     private var finger: Finger?
     private var holdTask: Task<Void, Never>?
-    private var pendingClick: Task<Void, Never>?
-    private var pendingClickDeadline: TimeInterval?
-    private var lastClickTime: TimeInterval = 0
     private var fingersTouchDirectly = false
     private var touchFinger: UITouch?
     private var touchPressed = false
@@ -64,6 +59,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private var macPinchStarted = false
     private var previousPinchScale: CGFloat = 1
     private var pinchStartZoom: CGFloat = 1
+    private var pinchLocation = CGPoint.zero
     private var pinchAnchor = CGPoint.zero
     private var macRotationStarted = false
     private var previousRotation: CGFloat = 0
@@ -128,7 +124,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         if gestureRecognizer === systemPointerHover || other === systemPointerHover { return true }
-        let transforms: Set<UIGestureRecognizer> = [pinchGesture, rotationGesture, twoFingerPanGesture]
+        let transforms: Set<UIGestureRecognizer> = [pinchGesture, rotationGesture]
         return transforms.contains(gestureRecognizer) && transforms.contains(other)
     }
 
@@ -147,9 +143,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         }
         if gestureRecognizer === rotationGesture {
             return gestureRecognizer.numberOfTouches == 0 && controller.sendsGesturesToMac
-        }
-        if gestureRecognizer === pinchGesture {
-            return gestureRecognizer.numberOfTouches == 0
         }
         if gestureRecognizer === secondaryTapGesture {
             return controller.isControlling
@@ -313,24 +306,24 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         enum Phase {
             case pending
             case pointing
-            case secondTap
             case dragging
         }
 
         let touch: UITouch
         let start: CGPoint
         let startTime: TimeInterval
+        let startPointer: CGPoint
         var last: CGPoint
-        var phase: Phase
+        var phase = Phase.pending
         var travel: CGFloat = 0
         private var samples: [(point: CGPoint, time: TimeInterval)]
 
-        init(touch: UITouch, location: CGPoint, phase: Phase) {
+        init(touch: UITouch, location: CGPoint, pointer: CGPoint) {
             self.touch = touch
             start = location
             startTime = touch.timestamp
+            startPointer = pointer
             last = location
-            self.phase = phase
             samples = [(location, touch.timestamp)]
         }
 
@@ -363,17 +356,12 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             if let finger { end(finger, liftedAt: nil) }
             return
         }
-        let afterTap = pendingClickDeadline.map { touch.timestamp <= $0 } ?? false
-        if pendingClick != nil, !afterTap { click() }
-        pendingClick?.cancel()
-        pendingClick = nil
-        pendingClickDeadline = nil
-        let next = Finger(touch: touch, location: touch.location(in: view), phase: afterTap ? .secondTap : .pending)
+        let next = Finger(touch: touch, location: touch.location(in: view), pointer: controller.pointerPosition)
         finger = next
-        guard afterTap else { return }
+        guard controller.isControlling else { return }
         holdTask = Task { [weak self] in
-            try? await Task.sleep(seconds: Self.secondTapHold)
-            guard !Task.isCancelled, let self, self.finger === next else { return }
+            try? await Task.sleep(seconds: Self.pressHold)
+            guard !Task.isCancelled, let self, self.finger === next, next.phase == .pending else { return }
             self.beginDrag(next)
         }
     }
@@ -387,13 +375,8 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         let location = touch.location(in: view)
         let delta = CGPoint(x: location.x - finger.last.x, y: location.y - finger.last.y)
         finger.record(location, at: touch.timestamp)
-        switch finger.phase {
-        case .pending where finger.travel > Self.tapSlop:
+        if finger.phase == .pending, finger.travel > Self.tapSlop {
             finger.phase = .pointing
-        case .secondTap where finger.travel > Self.dragStartDistance:
-            beginDrag(finger)
-        default:
-            break
         }
         let velocity = finger.velocity(at: touch.timestamp)
         movePointer(by: delta, speed: hypot(velocity.x, velocity.y))
@@ -416,36 +399,15 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         holdTask = nil
         switch finger.phase {
         case .pending:
-            if let time, finger.isTap(endedAt: time) { tapped(at: time) }
+            if let time, finger.isTap(endedAt: time), controller.isControlling {
+                controller.movePointer(to: finger.startPointer)
+                controller.click(.primary)
+            }
         case .pointing:
             break
-        case .secondTap:
-            click(count: time == nil ? 1 : 2)
         case .dragging:
             controller.release(.primary)
         }
-    }
-
-    private func tapped(at time: TimeInterval) {
-        guard controller.isControlling else { return }
-        guard CACurrentMediaTime() - lastClickTime > Self.multiClickInterval else {
-            click()
-            return
-        }
-        let deadline = time + Self.tapDragWindow
-        pendingClickDeadline = deadline
-        pendingClick = Task { [weak self] in
-            try? await Task.sleep(seconds: max(0, deadline - ProcessInfo.processInfo.systemUptime))
-            guard !Task.isCancelled, let self else { return }
-            self.pendingClick = nil
-            self.pendingClickDeadline = nil
-            self.click()
-        }
-    }
-
-    private func click(count: Int = 1) {
-        controller.click(.primary, count: count)
-        lastClickTime = CACurrentMediaTime()
     }
 
     private func beginDrag(_ finger: Finger) {
@@ -586,20 +548,27 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
 
     @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
         if gesture.state == .began {
-            pinchGoesToMac = controller.sendsGesturesToMac && !controller.isZoomModeOn
+            pinchGoesToMac =
+                controller.sendsGesturesToMac && !controller.isZoomModeOn && (gesture.numberOfTouches == 0 || fingersTouchDirectly)
             touchGestureBegan(gesture)
         }
         if pinchGoesToMac {
             handleMacPinch(gesture)
             return
         }
-        let location = gesture.location(in: view)
         switch gesture.state {
         case .began:
             pinchStartZoom = view.zoom / gesture.scale
-            pinchAnchor = view.imagePoint(for: location)
+            pinchLocation = gesture.location(in: view)
+            pinchAnchor = view.imagePoint(for: pinchLocation)
         case .changed:
-            view.setZoom(pinchStartZoom * gesture.scale, keeping: pinchAnchor, at: location)
+            let zoom = pinchStartZoom * gesture.scale
+            if zoom > 1 {
+                view.setZoom(zoom, keeping: pinchAnchor, at: pinchLocation)
+            } else if view.zoom != 1 {
+                view.applyScale(.fit)
+                pinchAnchor = view.imagePoint(for: pinchLocation)
+            }
         default:
             break
         }
