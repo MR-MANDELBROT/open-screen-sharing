@@ -2008,7 +2008,7 @@ final class SessionController: ObservableObject, Identifiable {
         if platform == .pc {
             commandTapPending = false
             var modifiers = held
-            if let shortcut, let output = KeyTranslations.output(for: shortcut), let chord = output.chord {
+            if let shortcut, let output = KeyTranslations.output(for: shortcut), let chord = output.chord(for: .pc) {
                 modifiers = Set(chord.modifiers)
                 if output.key != shortcut.key { key = chord.key }
             }
@@ -2028,7 +2028,7 @@ final class SessionController: ObservableObject, Identifiable {
         return true
     }
 
-    private var mappingTarget: MappingTarget {
+    var mappingTarget: MappingTarget {
         platform == .pc ? .pc : .apple
     }
 
@@ -2210,9 +2210,7 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     private func textCursorMayHaveMoved() {
-        #if os(iOS)
         screen?.forgetTypedText()
-        #endif
     }
 
     private func performMapping(_ steps: [KeyMapping.Step], held: Set<ModifierKey>) {
@@ -2231,7 +2229,7 @@ final class SessionController: ObservableObject, Identifiable {
         for step in steps {
             let chord: KeyChord? =
                 switch step {
-                case .key(let shortcut): platform == .pc ? shortcut.pcChord : shortcut.chord
+                case .key(let shortcut): shortcut.chord(for: mappingTarget)
                 case .text: nil
                 }
             let wanted = Set(chord?.modifiers ?? [])
@@ -2246,6 +2244,8 @@ final class SessionController: ObservableObject, Identifiable {
                 tap(chord.key, modifiers: wanted.subtracting(latched))
             } else if case .text(let text) = step {
                 _ = typeUnmodified(Substring(text))
+            } else if case .key(let shortcut) = step, let command = shortcut.command {
+                perform(command)
             }
         }
         for key in released { send(key, down: true) }
@@ -2446,7 +2446,9 @@ final class SessionController: ObservableObject, Identifiable {
     #if os(iOS)
     private func macKey(for key: UIKey) -> MacKey? {
         let typed = keysym(for: key)
-        guard let keyCode = MacKey.keyCode(for: key.keyCode, type: keyboardType) else {
+        guard let keyCode = MacKey.keyCode(for: key.keyCode, type: keyboardType),
+            platform != .pc || ![.keyboardPrintScreen, .keyboardScrollLock, .keyboardPause].contains(key.keyCode)
+        else {
             return typed.map { MacKey(keyCode: nil, keysym: $0) }
         }
         return MacKey(keyCode: keyCode, keysym: typed ?? 0)

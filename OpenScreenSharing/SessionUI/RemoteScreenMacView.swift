@@ -38,6 +38,9 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
     private var reportedArea: CGSize?
     private var reportedScale: CGFloat?
     private var keyMonitor: Any?
+    private var composedText = ""
+    private var composedMarkedRange: NSRange?
+    private var typedText = ""
 
     private var trackingArea: NSTrackingArea?
     private var systemPointerLocation: CGPoint?
@@ -972,6 +975,9 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
         if resigned {
+            composedText = ""
+            composedMarkedRange = nil
+            typedText = ""
             controller.releaseAllKeys()
         }
         return resigned
@@ -979,6 +985,93 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
 
     @objc func paste(_ sender: Any?) {
         controller.pasteFromDevice()
+    }
+}
+
+extension RemoteScreenNSView: NSTextInputClient {
+    func insertText(_ string: Any, replacementRange: NSRange) {
+        replaceComposedText(in: replacementRange, with: string, marked: false)
+    }
+
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        replaceComposedText(in: replacementRange, with: string, marked: true)
+    }
+
+    func unmarkText() {
+        guard composedMarkedRange != nil else { return }
+        composedMarkedRange = nil
+        composedTextDidChange()
+    }
+
+    func selectedRange() -> NSRange {
+        NSRange(location: composedMarkedRange.map(NSMaxRange) ?? (composedText as NSString).length, length: 0)
+    }
+
+    func markedRange() -> NSRange {
+        composedMarkedRange ?? NSRange(location: NSNotFound, length: 0)
+    }
+
+    func hasMarkedText() -> Bool {
+        composedMarkedRange != nil
+    }
+
+    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? {
+        let range = clampedComposedRange(range)
+        actualRange?.pointee = range
+        return NSAttributedString(string: (composedText as NSString).substring(with: range))
+    }
+
+    func validAttributesForMarkedText() -> [NSAttributedString.Key] {
+        []
+    }
+
+    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
+        let point = viewPoint(for: controller.pointerPosition)
+        let font = NSFont.preferredFont(forTextStyle: .body)
+        let height = font.ascender - font.descender
+        return window?.convertToScreen(convert(NSRect(x: point.x, y: point.y - height / 2, width: 0, height: height), to: nil)) ?? .zero
+    }
+
+    func characterIndex(for point: NSPoint) -> Int {
+        NSNotFound
+    }
+
+    override func doCommand(by selector: Selector) {}
+
+    func forgetTypedText() {
+        typedText = ""
+        guard let marked = composedMarkedRange else {
+            composedText = ""
+            return
+        }
+        composedText = (composedText as NSString).substring(with: marked)
+        composedMarkedRange = NSRange(location: 0, length: marked.length)
+    }
+
+    private func replaceComposedText(in replacementRange: NSRange, with string: Any, marked: Bool) {
+        let text = (string as? NSAttributedString)?.string ?? string as? String ?? ""
+        let range = clampedComposedRange(replacementRange.location == NSNotFound ? composedMarkedRange ?? selectedRange() : replacementRange)
+        let length = (text as NSString).length
+        composedText = (composedText as NSString).replacingCharacters(in: range, with: text)
+        composedMarkedRange = marked && length > 0 ? NSRange(location: range.location, length: length) : nil
+        composedTextDidChange()
+    }
+
+    private func composedTextDidChange() {
+        let text = composedMarkedRange.map { (composedText as NSString).replacingCharacters(in: $0, with: "") } ?? composedText
+        guard text != typedText else { return }
+        let kept = zip(typedText, text).prefix { $0 == $1 }.count
+        let deleting = typedText.count - kept
+        typedText = text
+        if !controller.replaceText(deleting: deleting, with: String(text.dropFirst(kept))) {
+            forgetTypedText()
+        }
+    }
+
+    private func clampedComposedRange(_ range: NSRange) -> NSRange {
+        let length = (composedText as NSString).length
+        let location = min(max(range.location, 0), length)
+        return NSRange(location: location, length: min(max(range.length, 0), length - location))
     }
 }
 

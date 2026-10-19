@@ -27,7 +27,6 @@ struct KeyboardAccessoryBar: View {
                     }
                     group {
                         functionKeysMenu
-                        moreKeysMenu
                     }
                     if UIDevice.current.userInterfaceIdiom == .phone {
                         group {
@@ -84,21 +83,7 @@ struct KeyboardAccessoryBar: View {
         Menu {
             FunctionKeyItems(controller: controller)
         } label: {
-            Text(verbatim: "F1–F12")
-                .font(.subheadline.weight(.semibold))
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel(Text("Function Keys"))
-        .hoverEffect()
-        .accessibilityShowsLargeContentViewer()
-    }
-
-    private var moreKeysMenu: some View {
-        Menu {
-            MoreKeyItems(controller: controller)
-        } label: {
-            Label("More Keys", systemImage: SessionCommand.moreKeys.systemImage)
+            Label("Function Keys", systemImage: "fn")
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }

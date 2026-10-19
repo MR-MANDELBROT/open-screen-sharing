@@ -6,8 +6,28 @@ import UIKit
 final class KeyInputProxy: UIView, UITextInput {
     private static let onScreenKeysHeight: CGFloat = 100
 
+    // UIKit reports the Voice Command key (consumer usage 0xCF) as this press type, without a key; the key starts dictation
+    // and a Globe tap shows the input switcher only while a key input delegate exists, and the Globe key's key code is its raw
+    // usage (UIKitCore 9127.1.13, iPadOS 27.2 24B5110a, UUID 56EB6C8F-D489-378F-AABA-81975A6D213E,
+    // _UIEventHIDPressTypeForKeyboardHIDEvent 0x184d59e50, -[UIDictationController handleHardwareKeyboardGesture] 0x185751be8,
+    // -[_UIKeyboardStateManager handleKeyCommand:repeatOkay:beforePublicKeyCommands:] 0x1851fc5d0,
+    // -[UIPhysicalKeyboardEvent _keyCode] 0x185678f60, -[UIApplication startDictation:] 0x185a0ba28). The emoji keyboard's
+    // input mode reports "emoji" as its primary language.
+    static let dictationPressType = 504
+    static let globeKeyCodes: Set<Int> = [0x03, 0x29D]
+    private static let startDictationAction = NSSelectorFromString("startDictation:")
+
+    private enum SystemInput {
+        case dictation, dictationEnding, globe
+    }
+
     weak var controller: SessionController?
     weak var screen: RemoteScreenUIView?
+    private let isSystemInput: Bool
+    private var systemInput: SystemInput?
+    private var systemInputEnd: DispatchWorkItem?
+    private var acceptsFocus = false
+    private var pendingTypedText: DispatchWorkItem?
     private var accessoryHost: UIHostingController<KeyboardAccessoryBar>?
     private var isOnScreenKeyboardUp = false
 
@@ -32,13 +52,66 @@ final class KeyInputProxy: UIView, UITextInput {
     }
 
 
-    init() {
+    init(systemInput: Bool = false) {
+        isSystemInput = systemInput
         super.init(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        if systemInput {
+            inputAssistantItem.leadingBarButtonGroups = []
+            inputAssistantItem.trailingBarButtonGroups = []
+            NotificationCenter.default.addObserver(self, selector: #selector(inputModeDidChange), name: UITextInputMode.currentInputModeDidChangeNotification, object: nil)
+            return
+        }
         isAccessibilityElement = true
         accessibilityLabel = String(localized: "Keyboard Input for Mac")
         accessibilityTraits = .allowsDirectInteraction
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(hardwareKeyboardDidDisconnect), name: .GCKeyboardDidDisconnect, object: nil)
+    }
+
+    func beginSystemInput() -> Bool {
+        acceptsFocus = true
+        if !becomeFirstResponder() { acceptsFocus = false }
+        return isFirstResponder
+    }
+
+    func startDictation() {
+        guard isSystemInput, isFirstResponder else { return }
+        systemInput = .dictation
+        UIApplication.shared.perform(Self.startDictationAction, with: nil)
+    }
+
+    func awaitGlobe() {
+        guard isSystemInput, isFirstResponder else { return }
+        systemInput = .globe
+    }
+
+    @objc private func inputModeDidChange() {
+        guard isFirstResponder, case .globe = systemInput, textInputMode?.primaryLanguage != "emoji" else { return }
+        screen?.endSystemInput()
+    }
+
+    private func endSystemInputSoon() {
+        systemInputEnd?.cancel()
+        let end = DispatchWorkItem { [weak self] in self?.screen?.endSystemInput() }
+        systemInputEnd = end
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: end)
+    }
+
+    func dictationRecordingDidEnd() {
+        systemInput = .dictationEnding
+        endSystemInputSoon()
+    }
+
+    func dictationRecognitionFailed() {
+        systemInput = .dictationEnding
+        endSystemInputSoon()
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if !isSystemInput, gestureRecognizer.allowedPressTypes.contains(NSNumber(value: Self.dictationPressType)) {
+            return false
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
     }
 
     @objc private func keyboardWillChangeFrame(_ notification: Notification) {
@@ -60,7 +133,7 @@ final class KeyInputProxy: UIView, UITextInput {
     }
 
     private func updateKeyboardType() {
-        let type: UIKeyboardType = controller?.usesHardwareKeyboard == true ? .asciiCapable : .default
+        let type: UIKeyboardType = !isSystemInput && controller?.usesHardwareKeyboard == true ? .asciiCapable : .default
         guard type != keyboardType else { return }
         keyboardType = type
         if isFirstResponder { reloadInputViews() }
@@ -70,12 +143,12 @@ final class KeyInputProxy: UIView, UITextInput {
         fatalError()
     }
 
-    override var canBecomeFirstResponder: Bool { true }
+    override var canBecomeFirstResponder: Bool { !isSystemInput || acceptsFocus }
 
     override var editingInteractionConfiguration: UIEditingInteractionConfiguration { .none }
 
     override var inputAccessoryView: UIView? {
-        guard let controller else { return nil }
+        guard !isSystemInput, let controller else { return nil }
         if let accessoryHost { return accessoryHost.view }
         let host = UIHostingController(rootView: KeyboardAccessoryBar(controller: controller))
         if #available(iOS 16, *) {
@@ -172,6 +245,21 @@ final class KeyInputProxy: UIView, UITextInput {
     }
 
     private func documentDidChange() {
+        if case .dictationEnding = systemInput {
+            endSystemInputSoon()
+        }
+        guard isSystemInput else {
+            sendTypedText()
+            return
+        }
+        pendingTypedText?.cancel()
+        let send = DispatchWorkItem { [weak self] in self?.sendTypedText() }
+        pendingTypedText = send
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: send)
+    }
+
+    private func sendTypedText() {
+        pendingTypedText = nil
         let text = markedRange.map { (document as NSString).replacingCharacters(in: $0, with: "") } ?? document
         if text != typedText {
             let kept = zip(typedText, text).prefix { $0 == $1 }.count
@@ -320,7 +408,7 @@ final class KeyInputProxy: UIView, UITextInput {
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        let unhandled = screen?.handlePresses(presses, down: true) ?? presses
+        let unhandled = screen?.handlePresses(presses, phase: .began) ?? presses
         updateKeyboardType()
         if !unhandled.isEmpty {
             super.pressesBegan(unhandled, with: event)
@@ -328,14 +416,14 @@ final class KeyInputProxy: UIView, UITextInput {
     }
 
     override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        let unhandled = screen?.handlePresses(presses, down: false) ?? presses
+        let unhandled = screen?.handlePresses(presses, phase: .ended) ?? presses
         if !unhandled.isEmpty {
             super.pressesEnded(unhandled, with: event)
         }
     }
 
     override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        let unhandled = screen?.handlePresses(presses, down: false) ?? presses
+        let unhandled = screen?.handlePresses(presses, phase: .cancelled) ?? presses
         if !unhandled.isEmpty {
             super.pressesCancelled(unhandled, with: event)
         }
@@ -345,16 +433,29 @@ final class KeyInputProxy: UIView, UITextInput {
     override func becomeFirstResponder() -> Bool {
         updateKeyboardType()
         let became = super.becomeFirstResponder()
-        if became { controller?.keyboardVisibilityDidChange(true) }
+        if became, !isSystemInput {
+            controller?.keyboardVisibilityDidChange(true)
+        }
         return became
     }
 
     override func resignFirstResponder() -> Bool {
+        if let pendingTypedText {
+            pendingTypedText.cancel()
+            sendTypedText()
+        }
         let resigned = super.resignFirstResponder()
         if resigned {
             isOnScreenKeyboardUp = false
+            acceptsFocus = false
             dropTypedText()
-            controller?.keyboardVisibilityDidChange(false)
+            if isSystemInput {
+                systemInput = nil
+                systemInputEnd?.cancel()
+                systemInputEnd = nil
+            } else {
+                controller?.keyboardVisibilityDidChange(false)
+            }
         }
         return resigned
     }

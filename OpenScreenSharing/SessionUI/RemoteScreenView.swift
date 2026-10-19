@@ -26,6 +26,9 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
     private unowned let controller: SessionController
     private var presenter: ScreenPresenter!
     private let keyInput = KeyInputProxy()
+    private let systemInput = KeyInputProxy(systemInput: true)
+    private var systemInputReturnsToKeyboard = false
+    private var dictationPress: UIPress?
     private var input: ScreenInput!
     private(set) var windowTracker: ScreenWindowTracker!
 
@@ -43,9 +46,11 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
         isMultipleTouchEnabled = true
         presenter = ScreenPresenter(screen: self, controller: controller, layer: metalLayer)
         controller.screen = self
-        keyInput.controller = controller
-        keyInput.screen = self
-        addSubview(keyInput)
+        for proxy in [keyInput, systemInput] {
+            proxy.controller = controller
+            proxy.screen = self
+            addSubview(proxy)
+        }
         if #available(iOS 17, *) {
             keyboardLayoutGuide.usesBottomSafeArea = false
         }
@@ -408,7 +413,11 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
 
     func takeKeyFocus() {
         guard window != nil, !isFirstResponder, !keyInput.isFirstResponder else { return }
-        becomeFirstResponder()
+        if systemInput.isFirstResponder {
+            endSystemInput()
+        } else {
+            becomeFirstResponder()
+        }
     }
 
     func setKeyboardVisible(_ visible: Bool) {
@@ -426,11 +435,27 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
 
     func forgetTypedText() {
         keyInput.forgetTypedText()
+        systemInput.forgetTypedText()
+    }
+
+    private func beginSystemInput() -> Bool {
+        guard window != nil, !systemInput.isFirstResponder else { return false }
+        systemInputReturnsToKeyboard = keyInput.isFirstResponder
+        systemInput.frame = CGRect(origin: viewPoint(for: controller.pointerPosition), size: CGSize(width: 1, height: 1))
+        return systemInput.beginSystemInput()
+    }
+
+    func endSystemInput() {
+        guard systemInput.isFirstResponder else { return }
+        let returned = systemInputReturnsToKeyboard ? keyInput.becomeFirstResponder() : becomeFirstResponder()
+        if !returned {
+            systemInput.resignFirstResponder()
+        }
     }
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned, !keyInput.isFirstResponder {
+        if resigned, !keyInput.isFirstResponder, !systemInput.isFirstResponder {
             controller.releaseAllKeys()
         }
         return resigned
@@ -447,29 +472,54 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
     override var keyCommands: [UIKeyCommand]? { KeyShortcuts.shared.passthroughKeyCommands(includingAssigned: false) }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        let unhandled = handlePresses(presses, down: true)
+        let unhandled = handlePresses(presses, phase: .began)
         if !unhandled.isEmpty {
             super.pressesBegan(unhandled, with: event)
         }
     }
 
     override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        let unhandled = handlePresses(presses, down: false)
+        let unhandled = handlePresses(presses, phase: .ended)
         if !unhandled.isEmpty {
             super.pressesEnded(unhandled, with: event)
         }
     }
 
     override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        let unhandled = handlePresses(presses, down: false)
+        let unhandled = handlePresses(presses, phase: .cancelled)
         if !unhandled.isEmpty {
             super.pressesCancelled(unhandled, with: event)
         }
     }
 
-    func handlePresses(_ presses: Set<UIPress>, down: Bool) -> Set<UIPress> {
-        presses.filter { press in
+    func handlePresses(_ presses: Set<UIPress>, phase: UIPress.Phase) -> Set<UIPress> {
+        let down = phase == .began
+        return presses.filter { press in
+            if let dictationPress, press == dictationPress {
+                guard !down else { return false }
+                self.dictationPress = nil
+                if phase == .ended {
+                    DispatchQueue.main.async { self.systemInput.startDictation() }
+                }
+                return false
+            }
+            let isGlobe = press.key.map { KeyInputProxy.globeKeyCodes.contains($0.keyCode.rawValue) } ?? false
+            if down, controller.isControlling, !systemInput.isFirstResponder {
+                if press.type.rawValue == KeyInputProxy.dictationPressType {
+                    if beginSystemInput() { dictationPress = press }
+                    return false
+                }
+                if isGlobe {
+                    if beginSystemInput() { systemInput.awaitGlobe() }
+                    return false
+                }
+            }
             guard let key = press.key else { return true }
+            if down, systemInput.isFirstResponder, !isGlobe, ModifierKey(keysym: Keysym.special(for: key.keyCode) ?? 0) == nil,
+                key.keyCode != .keyboardCapsLock
+            {
+                endSystemInput()
+            }
             return !controller.handlePress(key, down: down)
         }
     }

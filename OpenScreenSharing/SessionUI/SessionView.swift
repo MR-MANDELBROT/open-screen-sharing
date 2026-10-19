@@ -37,6 +37,7 @@ struct SessionView: View {
             switch tutorial {
             case .pressToDrag: return !controller.touchesDirectly && !controller.touchesNatively
             case .pointerLock: return pointerLockAvailable
+            case .dictation: return UIDevice.current.userInterfaceIdiom == .pad
             }
         }
     }

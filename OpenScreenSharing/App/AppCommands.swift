@@ -61,15 +61,6 @@ struct AppCommands: Commands {
         .disabled(session.map { !command.isOffered(by: $0) || !command.isEnabled(in: $0) } ?? true)
     }
 
-    private func keyMenu(_ command: SessionCommand, @ViewBuilder items: @escaping (SessionController) -> some View) -> some View {
-        Menu(String(localized: command.title)) {
-            if let session {
-                items(session)
-            }
-        }
-        .disabled(session.map { !command.isOffered(by: $0) || !command.isEnabled(in: $0) } ?? true)
-    }
-
     #if os(macOS)
     private func openHome(_ request: HomeRequest.Pending) {
         HomeRequest.shared.pending = request
@@ -236,10 +227,6 @@ struct AppCommands: Commands {
                         deviceButton(.appSwitcher, shortcut: .appSwitcher) { $0.perform(.missionControl) }
                         deviceButton(.lock, shortcut: .lock) { $0.sendChord(.sideButton) }
                     }
-                    Section {
-                        deviceButton(.volumeUp, shortcut: .volumeUp) { $0.sendChord(.volumeUp) }
-                        deviceButton(.volumeDown, shortcut: .volumeDown) { $0.sendChord(.volumeDown) }
-                    }
                 } else if session?.platform != .pc {
                     Section {
                         ForEach(SystemCommand.allCases) { command in
@@ -249,14 +236,6 @@ struct AppCommands: Commands {
                         }
                     }
                 }
-                #if os(macOS)
-                if session?.platform != .iOS {
-                    Section {
-                        keyMenu(.functionKeys) { FunctionKeyItems(controller: $0) }
-                        keyMenu(.moreKeys) { MoreKeyItems(controller: $0) }
-                    }
-                }
-                #endif
             }
         }
 

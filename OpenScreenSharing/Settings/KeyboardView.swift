@@ -191,7 +191,7 @@ private struct ShortcutGroupView: View {
             recording = nil
             shortcuts.set(nil, for: action)
         case .shortcut(let shortcut):
-            guard case .action(let action) = target, shortcut.hasCommandModifier else { return false }
+            guard case .action(let action) = target, shortcut.isValidTrigger, shortcut.keyboardShortcut != nil else { return false }
             recording = nil
             assign(shortcut, to: action)
         #if os(macOS)
@@ -406,19 +406,21 @@ private struct KeyMappingEditor: View {
                                     TextField("Text", text: binding.text)
                                 }
                             } else {
-                                ForEach(modifiers, id: \.label) { modifier in
-                                    Toggle(isOn: Binding(
-                                        get: { step.shortcut.eventModifiers.contains(modifier.flag) },
-                                        set: { on in
-                                            var flags = step.shortcut.eventModifiers
-                                            if on { flags.insert(modifier.flag) } else { flags.remove(modifier.flag) }
-                                            binding.wrappedValue.shortcut = KeyShortcut(key: step.shortcut.key, modifiers: flags)
+                                if step.shortcut.command == nil {
+                                    ForEach(modifiers, id: \.label) { modifier in
+                                        Toggle(isOn: Binding(
+                                            get: { step.shortcut.eventModifiers.contains(modifier.flag) },
+                                            set: { on in
+                                                var flags = step.shortcut.eventModifiers
+                                                if on { flags.insert(modifier.flag) } else { flags.remove(modifier.flag) }
+                                                binding.wrappedValue.shortcut = KeyShortcut(key: step.shortcut.key, modifiers: flags)
+                                            }
+                                        )) {
+                                            Text(verbatim: modifier.label)
                                         }
-                                    )) {
-                                        Text(verbatim: modifier.label)
+                                        .toggleStyle(.button)
+                                        .accessibilityLabel(Text(verbatim: modifier.title))
                                     }
-                                    .toggleStyle(.button)
-                                    .accessibilityLabel(Text(verbatim: modifier.title))
                                 }
                                 keyControl(binding)
                                 Spacer(minLength: 0)
@@ -513,38 +515,43 @@ private struct KeyMappingEditor: View {
         let shortcut = step.wrappedValue.shortcut
         let key = shortcut.isUnset ? nil : KeyShortcut(key: shortcut.key, modifiers: []).displayName(for: target)
         let isRecording = recording == .key(step.id)
-        if target == .pc {
-            Menu {
-                Button {
-                    recording = .key(step.id)
-                } label: {
-                    Label("Type Key", systemImage: "keyboard")
-                }
-                ForEach(KeyShortcut.pcKeyGroups) { group in
+        Menu {
+            Button {
+                recording = .key(step.id)
+            } label: {
+                Label("Type Key", systemImage: "keyboard")
+            }
+            ForEach(KeyShortcut.KeyGroup.allCases) { group in
+                let sections = group.sections(for: target)
+                if !sections.isEmpty {
                     Menu(group.title) {
-                        ForEach(group.keys, id: \.self) { name in
-                            Button {
-                                recording = nil
-                                step.wrappedValue.shortcut = KeyShortcut(key: name, modifiers: shortcut.eventModifiers)
-                            } label: {
-                                Text(verbatim: KeyShortcut.pcKeyLabel(name))
+                        ForEach(sections) { section in
+                            Section {
+                                ForEach(section.keys) { key in
+                                    Button {
+                                        recording = nil
+                                        step.wrappedValue.shortcut = KeyShortcut(key: key.name, modifiers: key.command == nil ? shortcut.eventModifiers : [])
+                                    } label: {
+                                        Text(verbatim: key.label(for: target))
+                                    }
+                                }
+                            } header: {
+                                if let title = section.title {
+                                    Text(verbatim: title)
+                                }
                             }
                         }
                     }
                 }
-            } label: {
-                ShortcutButtonLabel(isRecording: isRecording, shortcut: key, prompt: "Type Key")
             }
-            .buttonStyle(.bordered)
-            .tint(isRecording ? .accentColor : nil)
-            .id(isRecording)
-            .accessibilityLabel(Text("Key"))
-            .accessibilityValue(isRecording ? Text("Type Key") : key.map { Text(verbatim: $0) } ?? Text("None"))
-        } else {
-            ShortcutButton(isRecording: isRecording, title: String(localized: "Key"), shortcut: key, prompt: "Type Key") {
-                recording = isRecording ? nil : .key(step.id)
-            }
+        } label: {
+            ShortcutButtonLabel(isRecording: isRecording, shortcut: key, prompt: "Type Key")
         }
+        .buttonStyle(.bordered)
+        .tint(isRecording ? .accentColor : nil)
+        .id(isRecording)
+        .accessibilityLabel(Text("Key"))
+        .accessibilityValue(isRecording ? Text("Type Key") : key.map { Text(verbatim: $0) } ?? Text("None"))
     }
 
     private func record(_ field: Field, _ press: ShortcutPress) -> Bool {
@@ -563,10 +570,11 @@ private struct KeyMappingEditor: View {
         case .shortcut(let shortcut):
             switch field {
             case .trigger:
-                guard shortcut.hasCommandModifier else { return false }
+                guard shortcut.isValidTrigger else { return false }
                 recording = nil
                 trigger = shortcut
             case .key(let stepID):
+                guard shortcut.chord(for: target) != nil else { return false }
                 recording = nil
                 guard let index = steps.firstIndex(where: { $0.id == stepID }) else { break }
                 let modifiers = shortcut.eventModifiers.isEmpty ? steps[index].shortcut.eventModifiers : shortcut.eventModifiers

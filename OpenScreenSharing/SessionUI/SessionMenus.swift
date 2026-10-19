@@ -172,56 +172,32 @@ struct ClipboardMenuItems: View {
     }
 }
 
+#if os(iOS)
 struct FunctionKeyItems: View {
     @ObservedObject var controller: SessionController
 
     var body: some View {
-        ForEach(1...12, id: \.self) { number in
-            Button("F\(number)") {
-                controller.typeKey(.function(number))
-            }
-        }
+        KeyItems(controller: controller, keys: KeyShortcut.KeyGroup.functionKeys.keys(for: controller.mappingTarget))
     }
 }
 
-struct MoreKeyItems: View {
+private struct KeyItems: View {
     @ObservedObject var controller: SessionController
+    let keys: [KeyShortcut.NamedKey]
 
     var body: some View {
-        if controller.platform == .pc {
-            Section {
-                pcKey("Insert", systemImage: "text.insert", key: .insert)
-                pcKey("Delete", systemImage: "delete.right", key: .forwardDelete)
+        ForEach(keys) { key in
+            if let output = key.output {
+                Button {
+                    controller.typeKey(output)
+                } label: {
+                    Text(verbatim: key.label(for: controller.mappingTarget))
+                }
             }
-            Section {
-                pcKey("Home", systemImage: "arrow.up.to.line", key: .home)
-                pcKey("End", systemImage: "arrow.down.to.line", key: .end)
-                pcKey("Page Up", systemImage: "arrow.up.to.line.compact", key: .pageUp)
-                pcKey("Page Down", systemImage: "arrow.down.to.line.compact", key: .pageDown)
-            }
-            Section {
-                pcKey("Print Screen", systemImage: "camera.viewfinder", key: .printScreen)
-                pcKey("Menu", systemImage: "contextualmenu.and.cursorarrow", key: .menu)
-            }
-        } else {
-            Section {
-                Button { controller.typeKey(.home) } label: { Label("Home", systemImage: "arrow.up.to.line") }
-                Button { controller.typeKey(.end) } label: { Label("End", systemImage: "arrow.down.to.line") }
-                Button { controller.typeKey(.pageUp) } label: { Label("Page Up", systemImage: "arrow.up.to.line.compact") }
-                Button { controller.typeKey(.pageDown) } label: { Label("Page Down", systemImage: "arrow.down.to.line.compact") }
-            }
-            Section {
-                Button { controller.typeKey(.forwardDelete) } label: { Label("Forward Delete", systemImage: "delete.right") }
-            }
-        }
-    }
-
-    private func pcKey(_ legend: String, systemImage: String, key: MacKey) -> some View {
-        Button { controller.typeKey(key) } label: {
-            Label { Text(verbatim: legend) } icon: { Image(systemName: systemImage) }
         }
     }
 }
+#endif
 
 extension SystemCommand {
     var title: String.LocalizationValue {

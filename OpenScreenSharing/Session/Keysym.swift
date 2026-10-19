@@ -30,6 +30,7 @@ nonisolated enum Keysym {
     static let keypadMinus: UInt32 = 0xffad
     static let keypadDecimal: UInt32 = 0xffae
     static let keypadDivide: UInt32 = 0xffaf
+    static let keypadEqual: UInt32 = 0xffbd
     static let space: UInt32 = 0x20
 
     static let shiftLeft: UInt32 = 0xffe1
@@ -42,8 +43,6 @@ nonisolated enum Keysym {
     static let commandLeft: UInt32 = 0xffeb
     static let commandRight: UInt32 = 0xffec
 
-    static let lowerVolume: UInt32 = 0x1008_ff11
-    static let raiseVolume: UInt32 = 0x1008_ff13
     static let powerOff: UInt32 = 0x1008_ff2a
 
     static func function(_ number: Int) -> UInt32 {
@@ -95,6 +94,9 @@ nonisolated enum Keysym {
         case .keyboardUpArrow: up
         case .keyboardDownArrow: down
         case .keyboardInsert: insert
+        case .keyboardPrintScreen: printScreen
+        case .keyboardScrollLock: scrollLock
+        case .keyboardPause: pause
         case .keyboardHelp: help
         case .keyboardMenu, .keyboardApplication: menu
         case .keypadNumLock: numLock
@@ -104,7 +106,7 @@ nonisolated enum Keysym {
         case .keypadHyphen: keypadMinus
         case .keypadPeriod: keypadDecimal
         case .keypadSlash: keypadDivide
-        case .keypadEqualSign: 0xffbd
+        case .keypadEqualSign: keypadEqual
         case .keypad0: 0xffb0
         case .keypad1: 0xffb1
         case .keypad2: 0xffb2
@@ -146,7 +148,7 @@ nonisolated enum Keysym {
         var table: [UInt16: UInt32] = [
             36: returnKey, 53: escape, 51: backSpace, 48: tab, 49: space, 117: forwardDelete, 115: home, 119: end,
             116: pageUp, 121: pageDown, 123: left, 124: right, 126: up, 125: down, 114: help, 110: menu, 71: numLock,
-            76: keypadEnter, 67: keypadMultiply, 69: keypadPlus, 78: keypadMinus, 65: keypadDecimal, 75: keypadDivide, 81: 0xffbd,
+            76: keypadEnter, 67: keypadMultiply, 69: keypadPlus, 78: keypadMinus, 65: keypadDecimal, 75: keypadDivide, 81: keypadEqual,
             82: 0xffb0, 83: 0xffb1, 84: 0xffb2, 85: 0xffb3, 86: 0xffb4, 87: 0xffb5, 88: 0xffb6, 89: 0xffb7, 91: 0xffb8, 92: 0xffb9,
             56: shiftLeft, 60: shiftRight, 59: controlLeft, 62: controlRight, 58: optionLeft, 61: optionRight,
             55: commandLeft, 54: commandRight,
@@ -243,8 +245,6 @@ extension KeyChord {
     static let previousInputSource = KeyChord(modifiers: [.control], key: .space)
 
     static let sideButton = KeyChord(modifiers: [], key: MacKey(keyCode: nil, keysym: Keysym.powerOff))
-    static let volumeUp = KeyChord(modifiers: [], key: MacKey(keyCode: nil, keysym: Keysym.raiseVolume))
-    static let volumeDown = KeyChord(modifiers: [], key: MacKey(keyCode: nil, keysym: Keysym.lowerVolume))
 }
 
 extension SystemCommand {

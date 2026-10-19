@@ -3,6 +3,7 @@ import SwiftUI
 enum SessionTutorial: String, CaseIterable, Codable, Identifiable {
     case pressToDrag
     case pointerLock
+    case dictation
 
     var id: Self { self }
 }
@@ -56,6 +57,7 @@ struct SessionTutorialView: View {
                 switch page {
                 case .pressToDrag: PressToDragIllustration()
                 case .pointerLock: PointerLockIllustration()
+                case .dictation: DictationIllustration()
                 }
             }
             .frame(width: 310, height: 210)
@@ -89,6 +91,14 @@ struct SessionTutorialView: View {
                     .font(.title2.bold())
                 Text(
                     "When using a mouse or trackpad, turn on \(String(localized: SessionCommandCategory.control.title)) › \(String(localized: SessionCommand.pointerLock.title)) so moving to the edge of the screen won’t open the Dock or Control Center."
+                )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            case .dictation:
+                Text("Dictation")
+                    .font(.title2.bold())
+                Text(
+                    "When Magic Keyboard is connected, you can also use \(Image(systemName: "mic")) Dictation and the \(Image(systemName: "globe")) emoji keyboard on this iPad."
                 )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -247,6 +257,26 @@ private struct PressToDragIllustration: View {
                 cornerRadius: 11),
             with: .color(.black.opacity(0.45)))
         captionContext.draw(text, at: center)
+    }
+}
+
+private struct DictationIllustration: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            key("mic")
+            key("globe")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(white: 0.17))
+    }
+
+    private func key(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 30, weight: .medium))
+            .foregroundStyle(.white)
+            .frame(width: 84, height: 76)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(white: 0.26)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.accentColor, lineWidth: 2))
     }
 }
 
