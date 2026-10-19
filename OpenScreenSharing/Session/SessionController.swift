@@ -1459,6 +1459,17 @@ final class SessionController: ObservableObject, Identifiable {
         wantsVirtualDisplay && capabilities.contains(.virtualDisplay)
     }
 
+    #if os(iOS)
+    var preferredOrientation: UIInterfaceOrientationMask? {
+        guard credentials != nil, credentialPrompt == nil else { return nil }
+        let followsWindow = wantsVirtualDisplay && (capabilities.isEmpty || capabilities.contains(.virtualDisplay))
+        if !followsWindow, imageSize.width > 0, imageSize.height > 0 {
+            return imageSize.width < imageSize.height ? .portrait : .landscape
+        }
+        return platform == .iOS ? nil : .landscape
+    }
+    #endif
+
     func displayAreaDidChange(_ area: CGSize, scale: CGFloat, screen: CGSize) {
         guard area.width > 0, area.height > 0 else { return }
         displayArea = area
