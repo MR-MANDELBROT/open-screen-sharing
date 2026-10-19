@@ -473,7 +473,9 @@ final class ScreenPresenter {
         else { return false }
         let imageRect = screen.imageRect
         let scale = screen.displayScale
-        let cursorScale = max(scale * controller.info.framebufferPixelsPerCursorPixel, 1 / controller.cursorPixelsPerPoint)
+        let resolutionScale = controller.pictureMatchesWindow ? controller.resolutionScale : 1
+        let cursorScale = max(
+            scale * controller.info.framebufferPixelsPerCursorPixel, 1 / (controller.cursorPixelsPerPoint * resolutionScale))
         let drawsCursor = screen.drawsCursor(snapshot.cursor, visible: snapshot.cursorVisible, scale: cursorScale)
         var cursorRect: CGRect?
         if let cursor = snapshot.cursor, snapshot.cursorVisible, controller.phase == .connected, drawsCursor {
