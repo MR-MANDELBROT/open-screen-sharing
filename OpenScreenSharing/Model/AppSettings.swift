@@ -9,6 +9,7 @@ final class AppSettings: ObservableObject {
         static let usesRemotePointerStyle = "usesRemotePointerStyle"
         static let computerLayout = "computerLayout"
         static let computerOrder = "computerOrder"
+        static let seenTutorials = "seenTutorials"
     }
 
     @Published var showsDebugInfo: Bool {
@@ -27,6 +28,10 @@ final class AppSettings: ObservableObject {
         didSet { store.set(computerOrder, for: Key.computerOrder) }
     }
 
+    @Published var seenTutorials: Set<SessionTutorial> {
+        didSet { store.set(seenTutorials, for: Key.seenTutorials) }
+    }
+
     private let store = PreferenceStore.shared
 
     init() {
@@ -34,6 +39,7 @@ final class AppSettings: ObservableObject {
         usesRemotePointerStyle = store.value(Bool.self, for: Key.usesRemotePointerStyle) ?? false
         computerLayout = store.value(ComputerLayout.self, for: Key.computerLayout) ?? .grid
         computerOrder = store.value([UUID].self, for: Key.computerOrder) ?? []
+        seenTutorials = store.value(Set<SessionTutorial>.self, for: Key.seenTutorials) ?? []
     }
 }
 

@@ -62,6 +62,10 @@ private struct AppSettingsView: View {
     @State private var language = AppLanguage.selected
     @State private var cacheSize: Int64?
     @State private var alert: AlertState?
+    #if os(iOS)
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var replayedTutorials: [SessionTutorial] = []
+    #endif
 
     var body: some View {
         Form {
@@ -113,6 +117,16 @@ private struct AppSettingsView: View {
                     .formRowButtonStyleCompat()
                 }
             }
+            #if os(iOS)
+            Section("Tips") {
+                Button {
+                    setReplayedTutorials(SessionTutorial.allCases.filter(settings.seenTutorials.contains))
+                } label: {
+                    Label("Show Tips", systemImage: "lightbulb")
+                }
+                .disabled(settings.seenTutorials.isEmpty)
+            }
+            #endif
             #if os(macOS)
             UpdatesSection()
             #endif
@@ -125,10 +139,28 @@ private struct AppSettingsView: View {
         #endif
         .navigationTitle("App")
         .alert($alert)
+        #if os(iOS)
+        .fullScreenCover(isPresented: Binding(get: { !replayedTutorials.isEmpty }, set: { if !$0 { replayedTutorials = [] } })) {
+            SessionTutorialView(pages: replayedTutorials) {
+                setReplayedTutorials([])
+            }
+            .presentationBackgroundCompat(.clear)
+        }
+        #endif
         .task {
             cacheSize = await Task.detached(priority: .utility) { AppDirectory.cacheSize() }.value
         }
     }
+
+    #if os(iOS)
+    private func setReplayedTutorials(_ tutorials: [SessionTutorial]) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            replayedTutorials = tutorials
+        }
+    }
+    #endif
 
     private func clearCache() async {
         cacheSize = nil

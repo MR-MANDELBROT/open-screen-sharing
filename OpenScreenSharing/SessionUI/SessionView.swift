@@ -17,6 +17,7 @@ struct SessionView: View {
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
     @State private var toolbarWidth: CGFloat = 0
+    @State private var tutorials: [SessionTutorial] = []
 
     private var toolbarSlots: Int {
         ToolbarLayout.capsuleSlots(width: dock?.length ?? toolbarWidth, itemWidth: toolbarItemWidth)
@@ -24,7 +25,20 @@ struct SessionView: View {
 
     private var locksPointer: Bool {
         controller.isPointerLockOn && pointerLockAvailable && !pointerLockPaused && controller.pointerLockCanResume
-            && (dock == nil || controller.isSystemPointerOverPicture)
+            && (dock == nil || controller.isSystemPointerOverPicture) && tutorials.isEmpty
+    }
+
+    private var availableTutorials: [SessionTutorial] {
+        guard controller.isControlling, controller.picture != .none, !controller.isKeyboardVisible,
+            controller.credentialPrompt == nil, controller.alert == nil
+        else { return [] }
+        return SessionTutorial.allCases.filter { tutorial in
+            guard !settings.seenTutorials.contains(tutorial) else { return false }
+            switch tutorial {
+            case .pressToDrag: return !controller.touchesDirectly
+            case .pointerLock: return pointerLockAvailable
+            }
+        }
     }
     #else
     @State private var showsPointerLockHint = false
@@ -95,6 +109,17 @@ struct SessionView: View {
             }
             .overlay(alignment: .top) {
                 FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: controller.isFullScreen || !hasOwnWindow, onClose: controller.close)
+            }
+            .overlay {
+                if !tutorials.isEmpty {
+                    SessionTutorialView(pages: tutorials) {
+                        tutorials = availableTutorials
+                    }
+                    .id(tutorials)
+                }
+            }
+            .onChangeCompat(of: availableTutorials, initial: true) { available in
+                if tutorials.isEmpty { tutorials = available }
             }
             .onGeometryChangeCompat(for: CGFloat.self) { proxy in
                 proxy.size.width - proxy.safeAreaInsets.leading - proxy.safeAreaInsets.trailing

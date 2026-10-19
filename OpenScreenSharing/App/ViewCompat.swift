@@ -252,6 +252,15 @@ extension View {
             self
         }
     }
+
+    @ViewBuilder
+    func presentationBackgroundCompat(_ style: some ShapeStyle) -> some View {
+        if #available(iOS 16.4, *) {
+            presentationBackground(style)
+        } else {
+            self
+        }
+    }
     #else
     @ViewBuilder
     func windowToolbarFullScreenVisibilityCompat() -> some View {
