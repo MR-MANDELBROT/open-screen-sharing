@@ -31,6 +31,7 @@ struct SettingsView: View {
                 Link(destination: Self.sourceCode) {
                     Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
                 }
+                .formRowButtonStyleCompat()
             }
         }
         #if os(macOS)
