@@ -126,8 +126,9 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
         controller.sceneInBackground
     }
 
-    func drawsCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> Bool {
-        !input.showsCursorAsPointer(shape, visible: visible, scale: scale) && !controller.hidesPointerForTouch
+    func drawnCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> CursorShape? {
+        guard !input.showsCursorAsPointer(shape, visible: visible, scale: scale), !controller.hidesPointerForTouch else { return nil }
+        return input.localPointer(for: shape, scale: scale) ?? shape
     }
 
     func backgroundStateDidChange() {

@@ -218,6 +218,8 @@ final class SessionController: ObservableObject, Identifiable {
     private var reconnectsOnReturn = false
     private var restartsHighPerformanceOnReturn = false
     private var hasConnected = false
+    private var cursorAssets: MacCursorAssets?
+    private var cursorAssetsAttempted = false
     private var microphone: MicrophoneSender?
     private var reconnectAttempts = 0
     private var reconnectTask: Task<Void, Never>?
@@ -729,6 +731,7 @@ final class SessionController: ObservableObject, Identifiable {
                 newPhase = .failed(SessionFailure(.connectionLost, message: failure.message))
             }
         }
+        if newPhase == .connected, prepareCursorAssets() { return }
         phase = newPhase
         switch newPhase {
         case .connected:
@@ -777,6 +780,31 @@ final class SessionController: ObservableObject, Identifiable {
             releaseAllKeys()
         default:
             break
+        }
+    }
+
+    private func prepareCursorAssets() -> Bool {
+        guard AppSettings.shared.cursorStyle == .remote, info.dialect == .apple, let session else { return false }
+        if let cursorAssets {
+            session.setCursorAssets(cursorAssets)
+            return false
+        }
+        guard !cursorAssetsAttempted, capabilities.contains(.fileTransfer), mode.controls else { return false }
+        cursorAssetsAttempted = true
+        phase = .preparingCursors
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let assets = try? MacCursorAssets(session: session)
+            await self?.cursorAssetsPrepared(assets)
+        }
+        return true
+    }
+
+    private func cursorAssetsPrepared(_ assets: MacCursorAssets?) {
+        cursorAssets = assets
+        if phase == .preparingCursors {
+            handle(phase: .connected)
+        } else if phase == .connected {
+            _ = prepareCursorAssets()
         }
     }
 

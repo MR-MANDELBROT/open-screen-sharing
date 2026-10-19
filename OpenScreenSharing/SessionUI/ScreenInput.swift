@@ -8,11 +8,13 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private static let tapDuration: TimeInterval = 0.35
     private static let multiClickInterval: TimeInterval = 0.5
     private static let pressHold: TimeInterval = 0.5
+    private static let tapDragWindow: TimeInterval = 0.3
     private static let mouseCountsPerPoint: CGFloat = 2
     private static let touchMargin: CGFloat = 24
     private static let doubleTapDistance: CGFloat = 40
     private static let wheelPointsPerZoomDoubling: CGFloat = 100
-    private static let iBeamPixels: CGFloat = 18
+    // Height of the I-beam of macOS 27.0.1 26A434, SkyLight CursorAsset IBeam and IBeamS.
+    private static let iBeamPoints: CGFloat = 18
 
     private unowned let view: RemoteScreenUIView
     private unowned let controller: SessionController
@@ -28,6 +30,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private var fingers: Set<UITouch> = []
     private var finger: Finger?
     private var holdTask: Task<Void, Never>?
+    private var tapRelease: (task: Task<Void, Never>, location: CGPoint)?
     private var fingersTouchDirectly = false
     private var touchFinger: UITouch?
     private var touchPressed = false
@@ -44,8 +47,9 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             if systemPointerOverPicture != oldValue { view.setNeedsRender() }
         }
     }
-    private var pointerCursor: MacCursor?
+    private var pointerCursor: StandardCursor?
     private var pointerBeamLength: CGFloat = 0
+    private var localPointerImage: (cursor: StandardCursor, beamLength: CGFloat, displayScale: CGFloat, image: CGImage, hotspot: CGPoint)?
     private var lastLockedMoveTime: TimeInterval = 0
     private var lockedMouseSpeed: CGFloat = 0
 
@@ -324,6 +328,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         var last: CGPoint
         var phase = Phase.pending
         var travel: CGFloat = 0
+        var continuesTap = false
         private var samples: [(point: CGPoint, time: TimeInterval)]
 
         init(touch: UITouch, location: CGPoint, pointer: CGPoint) {
@@ -360,13 +365,25 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             touchBegan(touch)
             return
         }
+        let pendingRelease = tapRelease
+        pendingRelease?.task.cancel()
+        tapRelease = nil
         guard fingers.count == 1 else {
             if let finger { end(finger, liftedAt: nil) }
+            if pendingRelease != nil { controller.release(.primary) }
             return
         }
         let next = Finger(touch: touch, location: touch.location(in: view), pointer: controller.pointerPosition)
         finger = next
-        guard controller.isControlling else { return }
+        if let pendingRelease {
+            if controller.isControlling, hypot(next.start.x - pendingRelease.location.x, next.start.y - pendingRelease.location.y) <= Self.doubleTapDistance {
+                next.phase = .dragging
+                next.continuesTap = true
+                return
+            }
+            controller.release(.primary)
+        }
+        guard controller.isControlling, !AppSettings.shared.usesTraditionalPressGesture else { return }
         holdTask = Task { [weak self] in
             try? await Task.sleep(seconds: Self.pressHold)
             guard !Task.isCancelled, let self, self.finger === next, next.phase == .pending else { return }
@@ -407,14 +424,30 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         holdTask = nil
         switch finger.phase {
         case .pending:
-            if let time, finger.isTap(endedAt: time), controller.isControlling {
-                controller.movePointer(to: finger.startPointer)
+            guard let time, finger.isTap(endedAt: time), controller.isControlling else { break }
+            controller.movePointer(to: finger.startPointer)
+            guard AppSettings.shared.usesTraditionalPressGesture else {
                 controller.click(.primary)
+                break
             }
+            controller.press(.primary)
+            let task = Task { [weak self] in
+                try? await Task.sleep(seconds: Self.tapDragWindow)
+                guard !Task.isCancelled, let self else { return }
+                self.tapRelease = nil
+                self.controller.release(.primary)
+            }
+            tapRelease = (task, finger.start)
         case .pointing:
             break
         case .dragging:
+            guard finger.continuesTap, let time, finger.isTap(endedAt: time) else {
+                controller.release(.primary)
+                break
+            }
+            controller.movePointer(to: finger.startPointer)
             controller.release(.primary)
+            controller.click(.primary)
         }
     }
 
@@ -803,42 +836,12 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     func pointerInteraction(_ interaction: UIPointerInteraction, styleFor region: UIPointerRegion) -> UIPointerStyle? {
         guard (region.identifier as? NSString) == "screen", controller.isControlling else { return nil }
         guard let pointerCursor else { return .hidden() }
-        var accessories: [UIPointerAccessory] = []
-        switch pointerCursor {
-        case .iBeam:
-            return UIPointerStyle(shape: .verticalBeam(length: pointerBeamLength), constrainedAxes: [])
-        case .verticalIBeam:
-            return UIPointerStyle(shape: .horizontalBeam(length: pointerBeamLength), constrainedAxes: [])
-        case .crosshair:
-            return UIPointerStyle(shape: .path(Self.cross(length: 20, thickness: 2)), constrainedAxes: [])
-        case .arrow, .contextualMenu, .pointingHand, .openHand, .closedHand, .dragLink:
-            break
-        case .dragCopy, .zoomIn:
-            accessories = [UIPointerAccessory(.path(Self.cross(length: 8, thickness: 2)), position: .bottomRight)]
-        case .zoomOut:
-            accessories = [UIPointerAccessory(.path(UIBezierPath(rect: CGRect(x: -4, y: -1, width: 8, height: 2))), position: .bottomRight)]
-        case .operationNotAllowed:
-            let path = UIBezierPath(ovalIn: CGRect(x: -4.5, y: -4.5, width: 9, height: 9))
-            path.append(UIBezierPath(ovalIn: CGRect(x: -3, y: -3, width: 6, height: 6)).reversing())
-            let slash = UIBezierPath(rect: CGRect(x: -2.8, y: -0.75, width: 5.6, height: 1.5))
-            slash.apply(CGAffineTransform(rotationAngle: .pi / 4))
-            path.append(slash)
-            accessories = [UIPointerAccessory(.path(path), position: .bottomRight)]
-        case .resize(let directions):
-            let positions: [(MacCursor.ResizeDirections, UIPointerAccessory.Position)] = [
-                (.up, .top), (.down, .bottom), (.left, .left), (.right, .right),
-                (.upLeft, .topLeft), (.upRight, .topRight), (.downLeft, .bottomLeft), (.downRight, .bottomRight),
-            ]
-            accessories = positions.filter { directions.contains($0.0) }.map { .arrow($0.1) }
-        }
-        let style = UIPointerStyle.system()
-        style.accessories = accessories
-        return style
+        return PointerShape.style(for: pointerCursor, beamLength: pointerBeamLength)
     }
 
     func showsCursorAsPointer(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> Bool {
-        let cursor = visible && !AppSettings.shared.usesRemotePointerStyle ? shape?.kind : nil
-        let beamLength = Self.iBeamPixels * scale
+        let cursor = visible && AppSettings.shared.cursorStyle == .system ? shape?.kind : nil
+        let beamLength = Self.iBeamPoints * scale * controller.cursorPixelsPerPoint
         if cursor != pointerCursor || (cursor == .iBeam || cursor == .verticalIBeam) && beamLength != pointerBeamLength {
             pointerCursor = cursor
             pointerBeamLength = beamLength
@@ -848,10 +851,31 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             && !controller.isToolbarVisible && !controller.isZoomModeOn
     }
 
-    private static func cross(length: CGFloat, thickness: CGFloat) -> UIBezierPath {
-        let path = UIBezierPath(rect: CGRect(x: -length / 2, y: -thickness / 2, width: length, height: thickness))
-        path.append(UIBezierPath(rect: CGRect(x: -thickness / 2, y: -length / 2, width: thickness, height: length)))
-        return path
+    func localPointer(for shape: CursorShape?, scale: CGFloat) -> CursorShape? {
+        guard let shape, scale > 0 else { return nil }
+        let displayScale = view.traitCollection.displayScale
+        if case .theme(let id) = AppSettings.shared.cursorStyle {
+            guard let kind = shape.kind, let drawn = CursorThemeStore.shared.theme(id: id)?.image(for: kind, scale: displayScale) else {
+                return nil
+            }
+            return CursorShape(
+                image: drawn.image, hotspot: CGPoint(x: drawn.hotspot.x / scale, y: drawn.hotspot.y / scale), kind: kind,
+                scale: drawn.scale * scale)
+        }
+        guard let pointerCursor else { return nil }
+        if localPointerImage?.cursor != pointerCursor || localPointerImage?.beamLength != pointerBeamLength
+            || localPointerImage?.displayScale != displayScale
+        {
+            guard let drawn = PointerShape.mask(for: pointerCursor, beamLength: pointerBeamLength, scale: displayScale) else { return nil }
+            localPointerImage = (pointerCursor, pointerBeamLength, displayScale, drawn.image, drawn.hotspot)
+        }
+        guard let localPointerImage else { return nil }
+        return CursorShape(
+            image: localPointerImage.image, hotspot: CGPoint(x: localPointerImage.hotspot.x / scale, y: localPointerImage.hotspot.y / scale),
+            kind: shape.kind, scale: displayScale * scale,
+            material: CursorMaterial(
+                isDarkInterface: view.traitCollection.userInterfaceStyle == .dark,
+                increasesContrast: UIAccessibility.isDarkerSystemColorsEnabled))
     }
 
 

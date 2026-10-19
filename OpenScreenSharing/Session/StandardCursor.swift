@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum MacCursor: Equatable, Sendable {
+nonisolated enum StandardCursor: Equatable, Sendable {
     case arrow
     case contextualMenu
     case pointingHand
@@ -29,9 +29,10 @@ nonisolated enum MacCursor: Equatable, Sendable {
         static let downRight = ResizeDirections(rawValue: 1 << 7)
     }
 
-    // Cursor images screensharingd sends for the AppKit cursors of macOS 27.0.1 26A434
-    // (SLSGetGlobalCursorData, forwarded unscaled).
-    private static let known: [UInt64: MacCursor] = [
+    // Cursor images the Mac sends for the AppKit cursors of macOS 27.0.1 26A434: ScreensharingAgent passes the
+    // CGSGetGlobalCursorData image and hotspot to screensharingd unscaled (ScreensharingAgent 756.36.5.2,
+    // UUID DA1CD9BA-97A1-3758-B425-00FA34B428A3, sub_100029818 0x100029860..0x10002991c).
+    private static let known: [UInt64: StandardCursor] = [
         0x550c_f3e1_2f82_e290: .arrow,
         0xa1d0_4e5d_7b36_38c1: .contextualMenu,
         0x794a_89c5_f925_811d: .pointingHand,
@@ -67,9 +68,20 @@ nonisolated enum MacCursor: Equatable, Sendable {
         0x6f4f_0072_c53c_6f0a: .resize([.upLeft, .downRight]),
         0xd739_435c_b04b_b4c2: .resize([.upRight, .downLeft]),
         0x7659_61df_f520_bfd4: .resize([.upRight, .downLeft]),
+        // RDP pointer updates from Windows 11 26200 for the IDC_* cursors at desktop scale 200.
+        0xb2f7_1b96_3f1e_d1e4: .arrow,
+        0x067a_adb2_834f_6e3b: .iBeam,
+        0xc5c5_8c55_5943_12a3: .crosshair,
+        0x0813_db11_b868_f101: .pointingHand,
+        0xa196_06bd_3c41_0ec1: .operationNotAllowed,
+        0x8898_abd5_9d4e_c795: .resize([.upLeft, .downRight]),
+        0x0155_8509_6f91_42dd: .resize([.upRight, .downLeft]),
+        0xca86_7364_a1e8_0c4c: .resize([.left, .right]),
+        0x42df_45dc_09d5_4621: .resize([.up, .down]),
+        0x5047_ed4a_7be5_e306: .resize([.up, .down, .left, .right]),
     ]
 
-    init?(width: Int, height: Int, hotspotX: Int, hotspotY: Int, pixels: Data) {
+    static func fingerprint(width: Int, height: Int, hotspotX: Int, hotspotY: Int, pixels: Data) -> UInt64? {
         guard pixels.count >= width * height * 4 else { return nil }
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         func mix(_ byte: UInt8) {
@@ -89,7 +101,11 @@ nonisolated enum MacCursor: Equatable, Sendable {
                 }
             }
         }
-        guard let cursor = Self.known[hash] else { return nil }
+        return hash
+    }
+
+    init?(fingerprint: UInt64) {
+        guard let cursor = Self.known[fingerprint] else { return nil }
         self = cursor
     }
 }

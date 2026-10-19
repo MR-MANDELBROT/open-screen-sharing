@@ -305,6 +305,15 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         return id
     }
 
+    func downloadFiles(_ remotePaths: [String], localFolder: URL) throws {
+        guard let session else { throw MessageError("not connected") }
+        try session.downloadFiles(remotePaths.joined(separator: "\n"), localFolder: localFolder.path)
+    }
+
+    func setCursorAssets(_ assets: MacCursorAssets?) {
+        handler.setCursorAssets(assets)
+    }
+
     func startDrop(names: [String]) throws -> Int64 {
         guard let session else { throw MessageError("not connected") }
         var id: Int64 = 0
@@ -458,6 +467,9 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
     var onConnected: (@Sendable (Bool) -> Void)?
     var onMediaStopped: (@Sendable () -> Void)?
     var onTransferFinished: (@Sendable (Int64) -> Void)?
+    private let cursorLock = NSRecursiveLock()
+    private var cursorAssets: MacCursorAssets?
+    private var lastCursor: LibsharingCursorImage?
 
     init(delegate: SessionEventSink, remoteProtocol: RemoteProtocol, platform: RemotePlatform?) {
         self.delegate = delegate
@@ -657,7 +669,17 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
         delegate?.sessionDisplaysChanged(result, selection: selection)
     }
 
+    func setCursorAssets(_ assets: MacCursorAssets?) {
+        cursorLock.lock()
+        defer { cursorLock.unlock() }
+        cursorAssets = assets
+        if let lastCursor { onCursorImage(lastCursor) }
+    }
+
     func onCursorImage(_ cursor: LibsharingCursorImage?) {
+        cursorLock.lock()
+        defer { cursorLock.unlock() }
+        lastCursor = cursor
         guard let cursor, cursor.width > 0, cursor.height > 0, let pixels = cursor.pixels,
             pixels.count >= Int(cursor.width) * Int(cursor.height) * 4,
             let provider = CGDataProvider(data: pixels as CFData),
@@ -671,7 +693,7 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
             delegate?.sessionCursorChanged(nil)
             return
         }
-        let kind = MacCursor(
+        let fingerprint = StandardCursor.fingerprint(
             width: Int(cursor.width), height: Int(cursor.height), hotspotX: Int(cursor.hotspotX), hotspotY: Int(cursor.hotspotY), pixels: pixels)
         var inversion: CGImage?
         if let mask = cursor.invert, mask.count == Int(cursor.width) * Int(cursor.height), let provider = CGDataProvider(data: mask as CFData) {
@@ -681,9 +703,14 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
             )
         }
-        delegate?.sessionCursorChanged(
-            CursorShape(
-                image: image, hotspot: CGPoint(x: Int(cursor.hotspotX), y: Int(cursor.hotspotY)), kind: kind, inversion: inversion))
+        var shape = CursorShape(
+            image: image, hotspot: CGPoint(x: Int(cursor.hotspotX), y: Int(cursor.hotspotY)),
+            kind: fingerprint.flatMap(StandardCursor.init(fingerprint:)), inversion: inversion)
+        if let fingerprint, let sharp = cursorAssets?.image(for: fingerprint) {
+            shape.image = sharp
+            shape.scale = MacCursorAssets.scale
+        }
+        delegate?.sessionCursorChanged(shape)
     }
 
     func onCursorPosition(_ x: Int32, y: Int32) {

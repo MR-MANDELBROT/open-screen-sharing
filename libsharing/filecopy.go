@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"net"
+	"strings"
 	"sync/atomic"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/rfb/filecopy"
@@ -110,6 +111,37 @@ func (s *Session) DownloadFile(remotePath string, localFolder string) (*FileTran
 	transferID := new(atomic.Int64)
 	transfer, err := client.FileCopy().Download(ctx, remotePath, localFolder, s.fileProgress(transferID))
 	return s.startTransfer(transfer, transferID, cancel, err)
+}
+
+func (s *Session) DownloadFiles(remotePaths string, localFolder string) error {
+	client, err := s.connected()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sources := strings.Split(remotePaths, "\n")
+	transfers := make([]*filecopy.Transfer, 0, len(sources))
+	for _, source := range sources {
+		transfer, err := client.FileCopy().Download(ctx, source, localFolder, func(filecopy.Progress) {})
+		if err != nil {
+			for _, started := range transfers {
+				started.Cancel()
+			}
+			return E.Cause(err, "download ", source)
+		}
+		transfers = append(transfers, transfer)
+	}
+	for index, transfer := range transfers {
+		_, err = transfer.Wait(ctx)
+		if err != nil {
+			for _, remaining := range transfers[index+1:] {
+				remaining.Cancel()
+			}
+			return E.Cause(err, "download ", sources[index])
+		}
+	}
+	return nil
 }
 
 func (s *Session) fileProgress(transferID *atomic.Int64) func(filecopy.Progress) {

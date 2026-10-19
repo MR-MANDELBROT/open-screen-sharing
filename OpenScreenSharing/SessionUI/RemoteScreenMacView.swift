@@ -42,7 +42,7 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
     private var trackingArea: NSTrackingArea?
     private var systemPointerLocation: CGPoint?
     private var drawsCursorLocally = false
-    private var remoteCursor: (image: CGImage, scale: CGFloat, cursor: NSCursor)?
+    private var remoteCursor: (image: CGImage, scale: CGFloat, backingScale: CGFloat, style: CursorStyle, cursor: NSCursor, drawn: CursorShape)?
     private var remoteCursorVisible = true
     private var clickedButtons: PointerButtons = []
     private var panStart: CGPoint?
@@ -575,22 +575,45 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
         return imageRect.contains(systemPointerLocation)
     }
 
-    func drawsCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> Bool {
+    func drawnCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> CursorShape? {
         updateRemoteCursor(shape, visible: visible, scale: scale)
         drawsCursorLocally = showsRemoteCursorLocally
-        return !drawsCursorLocally
+        return drawsCursorLocally ? nil : remoteCursor?.drawn
     }
 
     private func updateRemoteCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) {
         var changed = visible != remoteCursorVisible
         remoteCursorVisible = visible
         if let shape {
-            if shape.image !== remoteCursor?.image || scale != remoteCursor?.scale {
-                let size = NSSize(width: CGFloat(shape.image.width) * scale, height: CGFloat(shape.image.height) * scale)
-                let cursor = NSCursor(
-                    image: NSImage(cgImage: shape.image, size: size),
-                    hotSpot: NSPoint(x: shape.hotspot.x * scale, y: shape.hotspot.y * scale))
-                remoteCursor = (shape.image, scale, cursor)
+            let style = AppSettings.shared.cursorStyle
+            if shape.image !== remoteCursor?.image || scale != remoteCursor?.scale || backingScale != remoteCursor?.backingScale
+                || style != remoteCursor?.style
+            {
+                var local: NSCursor?
+                switch style {
+                case .system:
+                    local = shape.kind?.systemCursor
+                case .remote:
+                    break
+                case .theme(let id):
+                    if let kind = shape.kind, let drawn = CursorThemeStore.shared.theme(id: id)?.image(for: kind, scale: backingScale) {
+                        let size = NSSize(width: CGFloat(drawn.image.width) / drawn.scale, height: CGFloat(drawn.image.height) / drawn.scale)
+                        local = NSCursor(image: NSImage(cgImage: drawn.image, size: size), hotSpot: drawn.hotspot)
+                    }
+                }
+                var rect = CGRect(origin: .zero, size: (local?.image.size ?? .zero).applying(CGAffineTransform(scaleX: backingScale, y: backingScale)))
+                if let local, let image = local.image.cgImage(forProposedRect: &rect, context: nil, hints: nil) {
+                    let drawn = CursorShape(
+                        image: image, hotspot: CGPoint(x: local.hotSpot.x / scale, y: local.hotSpot.y / scale), kind: shape.kind,
+                        scale: CGFloat(image.width) / local.image.size.width * scale)
+                    remoteCursor = (shape.image, scale, backingScale, style, local, drawn)
+                } else {
+                    let size = NSSize(width: CGFloat(shape.image.width) / shape.scale * scale, height: CGFloat(shape.image.height) / shape.scale * scale)
+                    let cursor = NSCursor(
+                        image: NSImage(cgImage: shape.image, size: size),
+                        hotSpot: NSPoint(x: shape.hotspot.x * scale, y: shape.hotspot.y * scale))
+                    remoteCursor = (shape.image, scale, backingScale, style, cursor, shape)
+                }
                 changed = true
             }
         } else if remoteCursor != nil {
@@ -1106,6 +1129,56 @@ private extension GesturePhase {
         case .ended: self = .ended
         case .cancelled: self = .cancelled
         default: return nil
+        }
+    }
+}
+
+extension StandardCursor {
+    var systemCursor: NSCursor? {
+        switch self {
+        case .arrow: return .arrow
+        case .contextualMenu: return .contextualMenu
+        case .pointingHand: return .pointingHand
+        case .openHand: return .openHand
+        case .closedHand: return .closedHand
+        case .dragLink: return .dragLink
+        case .dragCopy: return .dragCopy
+        case .operationNotAllowed: return .operationNotAllowed
+        case .iBeam: return .iBeam
+        case .verticalIBeam: return .iBeamCursorForVerticalLayout
+        case .crosshair: return .crosshair
+        case .zoomIn:
+            guard #available(macOS 15, *) else { return nil }
+            return .zoomIn
+        case .zoomOut:
+            guard #available(macOS 15, *) else { return nil }
+            return .zoomOut
+        case .resize(let directions):
+            if #available(macOS 15, *) {
+                let positions: [(StandardCursor.ResizeDirections, NSCursor.FrameResizePosition)] = [
+                    (.up, .top), (.down, .bottom), (.left, .left), (.right, .right),
+                    (.upLeft, .topLeft), (.upRight, .topRight), (.downLeft, .bottomLeft), (.downRight, .bottomRight),
+                ]
+                if let position = positions.first(where: { $0.0 == directions })?.1 {
+                    return .frameResize(position: position, directions: .outward)
+                }
+                switch directions {
+                case [.up, .down]: return .frameResize(position: .top, directions: .all)
+                case [.left, .right]: return .frameResize(position: .left, directions: .all)
+                case [.upLeft, .downRight]: return .frameResize(position: .topLeft, directions: .all)
+                case [.upRight, .downLeft]: return .frameResize(position: .topRight, directions: .all)
+                default: return nil
+                }
+            }
+            switch directions {
+            case .up: return .resizeUp
+            case .down: return .resizeDown
+            case .left: return .resizeLeft
+            case .right: return .resizeRight
+            case [.up, .down]: return .resizeUpDown
+            case [.left, .right]: return .resizeLeftRight
+            default: return nil
+            }
         }
     }
 }

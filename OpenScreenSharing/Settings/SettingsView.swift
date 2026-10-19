@@ -19,13 +19,11 @@ struct SettingsView: View {
                 } label: {
                     Label("Keyboard", systemImage: "keyboard")
                 }
-                #if os(iOS)
                 NavigationLink {
-                    BehaviorSettingsView()
+                    ControlSettingsView()
                 } label: {
-                    Label("Behavior", systemImage: "slider.horizontal.3")
+                    Label("Control", systemImage: "slider.horizontal.3")
                 }
-                #endif
             }
             Section("About") {
                 Link(destination: Self.sourceCode) {
@@ -42,22 +40,46 @@ struct SettingsView: View {
     }
 }
 
-#if os(iOS)
-private struct BehaviorSettingsView: View {
+private struct ControlSettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var themes = CursorThemeStore.shared
 
     var body: some View {
         Form {
-            Section("Connection") {
-                Toggle(isOn: $settings.usesRemotePointerStyle) {
-                    Label("Use Remote Pointer Style", systemImage: "cursorarrow")
+            Section("Custom") {
+                NavigationLink {
+                    CursorStyleView()
+                } label: {
+                    LabeledContentCompat {
+                        switch settings.cursorStyle {
+                        case .system: Text(CursorStyleView.systemStyleName)
+                        case .remote: Text("Remote Style")
+                        case .theme(let id): Text(verbatim: themes.theme(id: id)?.name ?? "")
+                        }
+                    } label: {
+                        Label("Cursor Style", systemImage: "cursorarrow")
+                    }
                 }
             }
+            #if os(iOS)
+            Section {
+                Toggle(isOn: $settings.usesTraditionalPressGesture) {
+                    Label("Traditional Press Gesture", systemImage: "hand.tap")
+                }
+            } header: {
+                Text("Behavior")
+            } footer: {
+                Text("When controlling the pointer by touch, double-tap quickly and hold instead of pressing for a while to hold down the left button and drag.")
+            }
+            #endif
         }
-        .navigationTitle("Behavior")
+        #if os(macOS)
+        .formStyle(.grouped)
+        .unboundedFormWidth()
+        #endif
+        .navigationTitle("Control")
     }
 }
-#endif
 
 private struct AppSettingsView: View {
     @State private var language = AppLanguage.selected

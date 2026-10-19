@@ -9,6 +9,7 @@ nonisolated enum SessionPhase: Equatable, Sendable {
     case authenticating
     case waitingForPermission
     case choosingSession(SessionChoicePrompt)
+    case preparingCursors
     case connected
     case reconnecting(attempt: Int)
     case disconnected
@@ -159,8 +160,42 @@ nonisolated struct PointerButtons: OptionSet, Hashable, Sendable {
 nonisolated struct CursorShape: @unchecked Sendable {
     var image: CGImage
     var hotspot: CGPoint
-    var kind: MacCursor?
+    var kind: StandardCursor?
     var inversion: CGImage?
+    var scale: CGFloat = 1
+    var material: CursorMaterial?
+}
+
+nonisolated struct CursorMaterial: Equatable, Sendable {
+    // Colour matrices of the pointer material for a light or dark pointer, with or without
+    // _AXSPointerIncreasedContrastEnabled (PointerUIServices 172, iPadOS 27.2 24B5110a,
+    // UUID D63E9940-478E-322E-A6A3-66E96D5B679C, _PSPointerVibrantColorMatrixForLuminanceWithPlasmaEnabled
+    // 0x227816d70..0x227816dcc, matrices 0x2278190c8..0x227819208).
+    private static let lightPointerMatrix: [SIMD4<Float>] = [
+        SIMD4(0.03331, -0.07167, -0.07173, 0.20796), SIMD4(-0.14078, -0.03573, -0.14068, 0.23153),
+        SIMD4(-0.02729, -0.02735, 0.07767, 0.04501), SIMD4(0.95, 0.95, 0.95, 1 - 0.40335),
+    ]
+    private static let lightPointerContrastMatrix: [SIMD4<Float>] = [
+        lightPointerMatrix[0], lightPointerMatrix[1], lightPointerMatrix[2], SIMD4(1.05, 1.05, 1.05, 1 - 0.40335),
+    ]
+    private static let darkPointerMatrix: [SIMD4<Float>] = [
+        SIMD4(0.15, 0.10, 0.10, -0.025), SIMD4(0.10, 0.15, 0.10, -0.025), SIMD4(0.10, 0.10, 0.15, -0.025), SIMD4(0.05, 0.05, 0.05, 1),
+    ]
+    private static let darkPointerContrastMatrix: [SIMD4<Float>] = [
+        SIMD4(0.15, 0.05, 0.05, 0.12), SIMD4(0.05, 0.15, 0.07, 0.12), SIMD4(0.05, 0.05, 0.15, 0.12), SIMD4(0, 0, 0, 1),
+    ]
+
+    var isDarkInterface: Bool
+    var increasesContrast: Bool
+
+    func matrix(lightPointer: Bool) -> [SIMD4<Float>] {
+        switch (lightPointer, increasesContrast) {
+        case (true, false): Self.lightPointerMatrix
+        case (true, true): Self.lightPointerContrastMatrix
+        case (false, false): Self.darkPointerMatrix
+        case (false, true): Self.darkPointerContrastMatrix
+        }
+    }
 }
 
 nonisolated struct DeviceInfo: Equatable, Sendable {

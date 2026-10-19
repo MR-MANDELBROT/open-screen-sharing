@@ -25,6 +25,7 @@ struct SessionStatusOverlay: View {
 
     private var progressTitle: String? {
         switch (controller.phase, controller.picture) {
+        case (.preparingCursors, _): String(localized: "Preparing Remote Cursors…")
         case _ where isConnecting: String(localized: "Connecting…")
         case _ where isReconnecting: String(localized: "Reconnecting…")
         case (.waitingForPermission, _): String(localized: "Waiting for Permission…")

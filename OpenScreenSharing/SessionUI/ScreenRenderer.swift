@@ -4,7 +4,7 @@ import Metal
 import QuartzCore
 
 final class ScreenRenderer {
-    private static let shaderSource = """
+    private static let commonShaderSource = """
         #include <metal_stdlib>
         using namespace metal;
 
@@ -12,6 +12,19 @@ final class ScreenRenderer {
             float4 position [[position]];
             float2 textureCoordinate;
         };
+
+        static float3 sRGBToPQ(float3 encoded) {
+            float3 linear = select(pow((encoded + 0.055) / 1.055, 2.4), encoded / 12.92, encoded <= 0.04045);
+            float3x3 sRGBToDisplayP3 = float3x3(
+                float3(0.82246197, 0.03319420, 0.01708263), float3(0.17753803, 0.96680580, 0.07239744), float3(0, 0, 0.91051993));
+            float3 scaled = pow(sRGBToDisplayP3 * linear * 0.01, 0.1593017578125);
+            return pow((0.8359375 + 18.8515625 * scaled) / (1 + 18.6875 * scaled), 78.84375);
+        }
+
+        """
+
+    private static let shaderSource =
+        commonShaderSource + """
 
         vertex QuadVertex quadVertex(
             uint vertexID [[vertex_id]], constant float4 &rect [[buffer(0)]], constant float4 &textureRect [[buffer(1)]],
@@ -54,13 +67,55 @@ final class ScreenRenderer {
             if (color.a <= 0) {
                 return float4(0);
             }
-            float3 encoded = color.rgb / color.a;
-            float3 linear = select(pow((encoded + 0.055) / 1.055, 2.4), encoded / 12.92, encoded <= 0.04045);
-            float3x3 sRGBToDisplayP3 = float3x3(
-                float3(0.82246197, 0.03319420, 0.01708263), float3(0.17753803, 0.96680580, 0.07239744), float3(0, 0, 0.91051993));
-            float3 scaled = pow(sRGBToDisplayP3 * linear * 0.01, 0.1593017578125);
-            float3 pq = pow((0.8359375 + 18.8515625 * scaled) / (1 + 18.6875 * scaled), 78.84375);
-            return float4(pq * color.a, color.a);
+            return float4(sRGBToPQ(color.rgb / color.a) * color.a, color.a);
+        }
+
+        fragment float4 pointerFallbackFragment(
+            QuadVertex in [[stage_in]], texture2d<float> texture [[texture(0)]], sampler textureSampler [[sampler(0)]]
+        ) {
+            float2 coverage = texture.sample(textureSampler, in.textureCoordinate).rg;
+            float alpha = max(coverage.r, coverage.g) * 0.6;
+            return float4(float3(0.5 * alpha), alpha);
+        }
+        """
+
+    private static let pointerShaderSource =
+        commonShaderSource + """
+        struct PointerMaterial {
+            float4 body[4];
+            float4 accessory[4];
+        };
+
+        static float3 pointerBackdrop(float3 backdrop, float coverage, constant float4 *matrix) {
+            float4 tinted = saturate(matrix[0] * backdrop.r + matrix[1] * backdrop.g + matrix[2] * backdrop.b + matrix[3]);
+            return mix(backdrop, tinted.rgb, tinted.a * coverage);
+        }
+
+        fragment float4 pointerFragment(
+            QuadVertex in [[stage_in]], float4 destination [[color(0)]], texture2d<float> texture [[texture(0)]],
+            sampler textureSampler [[sampler(0)]], constant PointerMaterial &material [[buffer(0)]]
+        ) {
+            float2 coverage = texture.sample(textureSampler, in.textureCoordinate).rg;
+            float3 color = pointerBackdrop(destination.rgb, coverage.g, material.accessory);
+            return float4(pointerBackdrop(color, coverage.r, material.body), 1);
+        }
+
+        fragment float4 pointerFragmentPQ(
+            QuadVertex in [[stage_in]], float4 destination [[color(0)]], texture2d<float> texture [[texture(0)]],
+            sampler textureSampler [[sampler(0)]], constant PointerMaterial &material [[buffer(0)]]
+        ) {
+            float2 coverage = texture.sample(textureSampler, in.textureCoordinate).rg;
+            if (coverage.r <= 0 && coverage.g <= 0) {
+                return destination;
+            }
+            float3 p = pow(max(destination.rgb, 0), 1 / 78.84375);
+            float3 linear = pow(max(p - 0.8359375, 0) / (18.8515625 - 18.6875 * p), 1 / 0.1593017578125) * 100;
+            float3x3 displayP3ToSRGB = float3x3(
+                float3(1.22494017, -0.04205696, -0.01963755), float3(-0.22494017, 1.04205696, -0.07863604), float3(0, 0, 1.09827360));
+            linear = saturate(displayP3ToSRGB * linear);
+            float3 backdrop = select(1.055 * pow(linear, 1 / 2.4) - 0.055, linear * 12.92, linear <= 0.0031308);
+            float3 color = pointerBackdrop(backdrop, coverage.g, material.accessory);
+            return float4(sRGBToPQ(pointerBackdrop(color, coverage.r, material.body)), 1);
         }
         """
 
@@ -69,6 +124,8 @@ final class ScreenRenderer {
         var cursor: MTLRenderPipelineState
         var maskedCursor: MTLRenderPipelineState?
         var cursorInversion: MTLRenderPipelineState?
+        var pointer: MTLRenderPipelineState
+        var pointerReadsBackdrop: Bool
     }
 
     private let device: MTLDevice
@@ -79,6 +136,7 @@ final class ScreenRenderer {
     private var colorSpaceName: CFString?
     private let linearSampler: MTLSamplerState
     private let nearestSampler: MTLSamplerState
+    private let mipmappedSampler: MTLSamplerState
     private var textureCache: CVMetalTextureCache?
     private var cursorTextures: [(image: CGImage, texture: MTLTexture)] = []
 
@@ -93,12 +151,19 @@ final class ScreenRenderer {
         layer.framebufferOnly = true
         layer.isOpaque = true
 
-        func makePipelines(pixelFormat: MTLPixelFormat, cursorFunction: String, invertsCursor: Bool) throws -> Pipelines {
+        let pointerLibrary = try? device.makeLibrary(source: Self.pointerShaderSource, options: nil)
+
+        func makePipelines(pixelFormat: MTLPixelFormat, cursorFunction: String, pointerFunction: String, invertsCursor: Bool) throws -> Pipelines {
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.vertexFunction = library.makeFunction(name: "quadVertex")
             descriptor.fragmentFunction = library.makeFunction(name: "screenFragment")
             descriptor.colorAttachments[0].pixelFormat = pixelFormat
             let screen = try device.makeRenderPipelineState(descriptor: descriptor)
+            var backdropPointer: MTLRenderPipelineState?
+            if let function = pointerLibrary?.makeFunction(name: pointerFunction) {
+                descriptor.fragmentFunction = function
+                backdropPointer = try? device.makeRenderPipelineState(descriptor: descriptor)
+            }
             descriptor.fragmentFunction = library.makeFunction(name: cursorFunction)
             let attachment = descriptor.colorAttachments[0]!
             attachment.isBlendingEnabled = true
@@ -107,19 +172,29 @@ final class ScreenRenderer {
             attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
             attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
             let cursor = try device.makeRenderPipelineState(descriptor: descriptor)
-            guard invertsCursor else { return Pipelines(screen: screen, cursor: cursor) }
+            let pointer: MTLRenderPipelineState
+            if let backdropPointer {
+                pointer = backdropPointer
+            } else {
+                descriptor.fragmentFunction = library.makeFunction(name: "pointerFallbackFragment")
+                pointer = try device.makeRenderPipelineState(descriptor: descriptor)
+            }
+            var pipelines = Pipelines(screen: screen, cursor: cursor, pointer: pointer, pointerReadsBackdrop: backdropPointer != nil)
+            guard invertsCursor else { return pipelines }
             descriptor.fragmentFunction = library.makeFunction(name: "maskedCursorFragment")
-            let maskedCursor = try device.makeRenderPipelineState(descriptor: descriptor)
+            pipelines.maskedCursor = try device.makeRenderPipelineState(descriptor: descriptor)
             descriptor.fragmentFunction = library.makeFunction(name: "cursorInversionFragment")
             attachment.sourceRGBBlendFactor = .oneMinusDestinationColor
             attachment.destinationRGBBlendFactor = .oneMinusSourceColor
             attachment.sourceAlphaBlendFactor = .zero
             attachment.destinationAlphaBlendFactor = .one
-            let cursorInversion = try device.makeRenderPipelineState(descriptor: descriptor)
-            return Pipelines(screen: screen, cursor: cursor, maskedCursor: maskedCursor, cursorInversion: cursorInversion)
+            pipelines.cursorInversion = try device.makeRenderPipelineState(descriptor: descriptor)
+            return pipelines
         }
-        standardPipelines = try makePipelines(pixelFormat: .bgra8Unorm, cursorFunction: "cursorFragment", invertsCursor: true)
-        hdrPipelines = try makePipelines(pixelFormat: .rgba16Float, cursorFunction: "cursorFragmentPQ", invertsCursor: false)
+        standardPipelines = try makePipelines(
+            pixelFormat: .bgra8Unorm, cursorFunction: "cursorFragment", pointerFunction: "pointerFragment", invertsCursor: true)
+        hdrPipelines = try makePipelines(
+            pixelFormat: .rgba16Float, cursorFunction: "cursorFragmentPQ", pointerFunction: "pointerFragmentPQ", invertsCursor: false)
 
         let samplerDescriptor = MTLSamplerDescriptor()
         samplerDescriptor.minFilter = .linear
@@ -129,6 +204,9 @@ final class ScreenRenderer {
         linearSampler = device.makeSamplerState(descriptor: samplerDescriptor)!
         samplerDescriptor.magFilter = .nearest
         nearestSampler = device.makeSamplerState(descriptor: samplerDescriptor)!
+        samplerDescriptor.magFilter = .linear
+        samplerDescriptor.mipFilter = .linear
+        mipmappedSampler = device.makeSamplerState(descriptor: samplerDescriptor)!
         let status = CVMetalTextureCacheCreate(nil, nil, device, nil, &textureCache)
         guard status == kCVReturnSuccess else { throw MessageError("CVMetalTextureCacheCreate", status: status) }
     }
@@ -142,6 +220,7 @@ final class ScreenRenderer {
         var turns: PictureTurns
         var cursor: CursorShape?
         var cursorRect: CGRect?
+        var cursorOverDarkBackdrop: Bool?
         var viewSize: CGSize
         var pixelsPerImagePixel: CGFloat
         var pixelsPerCursorPixel: CGFloat
@@ -177,15 +256,21 @@ final class ScreenRenderer {
                 images.append((texture, rect, SIMD4<Float>(0, 0, 1, Float(visible / CGFloat(frame.stripHeight)))))
             }
         }
-        var drawnCursor: (texture: MTLTexture, inversion: MTLTexture?, rect: CGRect)?
+        var drawnCursor: (texture: MTLTexture, inversion: MTLTexture?, rect: CGRect, sampler: MTLSamplerState, material: [SIMD4<Float>]?)?
         if let cursor = frame.cursor, let cursorRect = frame.cursorRect {
-            guard let texture = texture(for: cursor.image) else { return false }
+            let mipmapped = cursor.scale > 1
+            guard let texture = texture(for: cursor.image, mipmapped: mipmapped) else { return false }
             var inversion: MTLTexture?
             if let image = cursor.inversion {
-                guard let texture = self.texture(for: image) else { return false }
+                guard let texture = self.texture(for: image, mipmapped: false) else { return false }
                 inversion = texture
             }
-            drawnCursor = (texture, inversion, cursorRect)
+            let material = cursor.material.map {
+                $0.matrix(lightPointer: frame.cursorOverDarkBackdrop ?? $0.isDarkInterface) + $0.matrix(lightPointer: $0.isDarkInterface)
+            }
+            drawnCursor = (
+                texture, inversion, cursorRect, mipmapped ? mipmappedSampler : sampler(pixelsPerTexel: frame.pixelsPerCursorPixel), material
+            )
         }
         configure(layer, for: frame.pixelBuffer ?? frame.strips.compactMap { $0 }.first)
         let pipelines = isHDR ? hdrPipelines : standardPipelines
@@ -210,8 +295,13 @@ final class ScreenRenderer {
             encoder.setVertexBytes(&textureRect, length: MemoryLayout<SIMD4<Float>>.size, index: 1)
             encoder.setVertexBytes(&turns, length: MemoryLayout<UInt32>.size, index: 2)
             encoder.setFragmentTexture(drawnCursor.texture, index: 0)
-            encoder.setFragmentSamplerState(self.sampler(pixelsPerTexel: frame.pixelsPerCursorPixel), index: 0)
-            if let inversion = drawnCursor.inversion, let maskedCursor = pipelines.maskedCursor,
+            encoder.setFragmentSamplerState(drawnCursor.sampler, index: 0)
+            if let material = drawnCursor.material {
+                encoder.setRenderPipelineState(pipelines.pointer)
+                if pipelines.pointerReadsBackdrop {
+                    material.withUnsafeBytes { encoder.setFragmentBytes($0.baseAddress!, length: $0.count, index: 0) }
+                }
+            } else if let inversion = drawnCursor.inversion, let maskedCursor = pipelines.maskedCursor,
                 let cursorInversion = pipelines.cursorInversion
             {
                 encoder.setFragmentTexture(inversion, index: 1)
@@ -330,8 +420,10 @@ final class ScreenRenderer {
         return texture
     }
 
-    private func texture(for image: CGImage) -> MTLTexture? {
-        if let cached = cursorTextures.first(where: { $0.image === image }) { return cached.texture }
+    private func texture(for image: CGImage, mipmapped: Bool) -> MTLTexture? {
+        if let cached = cursorTextures.first(where: { $0.image === image && (!mipmapped || $0.texture.mipmapLevelCount > 1) }) {
+            return cached.texture
+        }
         let width = image.width
         let height = image.height
         let bytesPerRow = width * 4
@@ -348,10 +440,16 @@ final class ScreenRenderer {
             return true
         }
         guard drawn else { return nil }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: mipmapped)
         descriptor.usage = .shaderRead
         guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
         texture.replace(region: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0, withBytes: pixels, bytesPerRow: bytesPerRow)
+        if mipmapped {
+            guard let commandBuffer = commandQueue.makeCommandBuffer(), let blit = commandBuffer.makeBlitCommandEncoder() else { return nil }
+            blit.generateMipmaps(for: texture)
+            blit.endEncoding()
+            commandBuffer.commit()
+        }
         cursorTextures = cursorTextures.suffix(1) + [(image, texture)]
         return texture
     }
@@ -370,10 +468,12 @@ protocol RemoteScreen: AnyObject {
     var imageRect: CGRect { get }
     var displayScale: CGFloat { get }
     var isOccluded: Bool { get }
-    func drawsCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> Bool
+    func drawnCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> CursorShape?
 }
 
 final class ScreenPresenter {
+    private static let backdropSampleSize: CGFloat = 19
+
     private unowned let screen: any RemoteScreen
     private unowned let controller: SessionController
     private let pipeline: DisplayPipeline
@@ -387,6 +487,7 @@ final class ScreenPresenter {
     private var idleFrames = 0
     private var lastSnapshot: DisplayPipeline.Snapshot?
     private var refreshRate = 0
+    private var cursorOverDarkBackdrop: Bool?
 
     init(screen: any RemoteScreen, controller: SessionController, layer: CAMetalLayer) {
         self.screen = screen
@@ -512,16 +613,40 @@ final class ScreenPresenter {
         let resolutionScale = controller.pictureMatchesWindow ? controller.resolutionScale : 1
         let cursorScale = max(
             scale * controller.info.framebufferPixelsPerCursorPixel, 1 / (controller.cursorPixelsPerPoint * resolutionScale))
-        let drawsCursor = screen.drawsCursor(snapshot.cursor, visible: snapshot.cursorVisible, scale: cursorScale)
+        let cursor = screen.drawnCursor(snapshot.cursor, visible: snapshot.cursorVisible, scale: cursorScale)
+        #if os(iOS)
+        // pointeruid tracks the luma behind the pointer with a 19 x 19 pt _UILumaTrackingBackdropView, which turns the
+        // pointer light at luma <= 0.45 and dark at >= 0.55, and splits a first sample in between at 0.5; Core
+        // Animation takes the luma as 0.2126 R + 0.7152 G + 0.0722 B of the mean encoded backdrop colour (pointeruid
+        // 172, iPadOS 27.2 24B5110a, UUID DC5440B7-2A3E-3CB1-BFC8-F86EEB565E5C,
+        // -[PUIDSystemPointerRootViewController viewDidLoad] 0x10001e6ec..0x10001e714, sub_100007328
+        // 0x100007360..0x100007374; UIKitCore 9127.1.13.1.106, UUID 56EB6C8F-D489-378F-AABA-81975A6D213E,
+        // -[_UILumaTrackingBackdropView backdropLayer:didChangeLuma:] 0x184b9654c..0x184b966c8; QuartzCore 1223.10.19,
+        // UUID 2F6224C2-91DC-30A3-A132-806F887DD1D8, CA::OGL::MetalContext::calculate_average_luma block
+        // 0x18460876c..0x1846087b8).
+        if cursor?.material != nil,
+            let brightness = Self.brightness(of: snapshot, around: snapshot.cursorPosition, radius: Self.backdropSampleSize / 2 / scale)
+        {
+            if brightness >= 0.55 {
+                cursorOverDarkBackdrop = false
+            } else if brightness <= 0.45 {
+                cursorOverDarkBackdrop = true
+            } else if cursorOverDarkBackdrop == nil {
+                cursorOverDarkBackdrop = brightness < 0.5
+            }
+        }
+        #endif
         var cursorRect: CGRect?
-        if let cursor = snapshot.cursor, snapshot.cursorVisible, controller.phase == .connected, drawsCursor {
+        if let cursor, snapshot.cursorVisible, controller.phase == .connected {
             let origin = CGPoint(
                 x: imageRect.minX + snapshot.cursorPosition.x * scale - cursor.hotspot.x * cursorScale,
                 y: imageRect.minY + snapshot.cursorPosition.y * scale - cursor.hotspot.y * cursorScale
             )
             cursorRect = CGRect(
                 origin: origin,
-                size: CGSize(width: CGFloat(cursor.image.width) * cursorScale, height: CGFloat(cursor.image.height) * cursorScale))
+                size: CGSize(
+                    width: CGFloat(cursor.image.width) / cursor.scale * cursorScale,
+                    height: CGFloat(cursor.image.height) / cursor.scale * cursorScale))
         }
         return renderer.render(
             ScreenRenderer.Frame(
@@ -531,8 +656,9 @@ final class ScreenPresenter {
                 canvasHeight: snapshot.canvasHeight,
                 imageRect: imageRect,
                 turns: snapshot.turns,
-                cursor: snapshot.cursor,
+                cursor: cursor,
                 cursorRect: cursorRect,
+                cursorOverDarkBackdrop: cursorOverDarkBackdrop,
                 viewSize: viewSize,
                 pixelsPerImagePixel: scale * layer.contentsScale,
                 pixelsPerCursorPixel: cursorScale * layer.contentsScale
@@ -553,6 +679,65 @@ final class ScreenPresenter {
         )
     }
 }
+
+#if os(iOS)
+extension ScreenPresenter {
+    fileprivate static func brightness(of snapshot: DisplayPipeline.Snapshot, around center: CGPoint, radius: CGFloat) -> CGFloat? {
+        let pictureSize = CGSize(width: snapshot.width, height: snapshot.height)
+        var locked: [CVPixelBuffer] = []
+        defer {
+            for buffer in locked { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        }
+        var total: CGFloat = 0
+        var count = 0
+        for row in 0..<7 {
+            for column in 0..<7 {
+                let shown = CGPoint(x: center.x + radius * (CGFloat(column) / 3 - 1), y: center.y + radius * (CGFloat(row) / 3 - 1))
+                let point = snapshot.turns.picturePoint(shown, inPictureOf: pictureSize)
+                let x = Int(point.x.rounded(.down))
+                var y = Int(point.y.rounded(.down))
+                guard x >= 0, y >= 0, x < snapshot.width, y < snapshot.height else { continue }
+                var buffer = snapshot.pixelBuffer
+                if buffer == nil, snapshot.stripHeight > 0, y / snapshot.stripHeight < snapshot.strips.count {
+                    buffer = snapshot.strips[y / snapshot.stripHeight]
+                    y %= snapshot.stripHeight
+                }
+                guard let buffer, x < CVPixelBufferGetWidth(buffer), y < CVPixelBufferGetHeight(buffer) else { continue }
+                if !locked.contains(where: { $0 === buffer }) {
+                    guard CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess else { continue }
+                    locked.append(buffer)
+                }
+                guard let base = CVPixelBufferGetBaseAddress(buffer) else { continue }
+                let line = base + y * CVPixelBufferGetBytesPerRow(buffer)
+                switch CVPixelBufferGetPixelFormatType(buffer) {
+                case kCVPixelFormatType_32BGRA:
+                    let pixel = line.advanced(by: x * 4).assumingMemoryBound(to: UInt8.self)
+                    total += (0.0722 * CGFloat(pixel[0]) + 0.7152 * CGFloat(pixel[1]) + 0.2126 * CGFloat(pixel[2])) / 255
+                case kCVPixelFormatType_64RGBAHalf:
+                    let pixel = line.advanced(by: x * 8).assumingMemoryBound(to: Float16.self)
+                    let linear = (0..<3).map { channel in
+                        let p = pow(max(CGFloat(pixel[channel]), 0), 1 / 78.84375)
+                        return pow(max(p - 0.8359375, 0) / (18.8515625 - 18.6875 * p), 1 / 0.1593017578125) * 100
+                    }
+                    let encoded = [
+                        1.22494017 * linear[0] - 0.22494017 * linear[1],
+                        -0.04205696 * linear[0] + 1.04205696 * linear[1],
+                        -0.01963755 * linear[0] - 0.07863604 * linear[1] + 1.09827360 * linear[2],
+                    ].map { component in
+                        let component = min(max(component, 0), 1)
+                        return component <= 0.0031308 ? component * 12.92 : 1.055 * pow(component, 1 / 2.4) - 0.055
+                    }
+                    total += 0.2126 * encoded[0] + 0.7152 * encoded[1] + 0.0722 * encoded[2]
+                default:
+                    continue
+                }
+                count += 1
+            }
+        }
+        return count > 0 ? total / CGFloat(count) : nil
+    }
+}
+#endif
 
 private final class DisplayLinkTarget {
     weak var presenter: ScreenPresenter?
