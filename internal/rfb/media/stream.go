@@ -420,7 +420,9 @@ func (s *Stream) receiveVideo(video *leg) {
 				s.requestKeyframe(video, true)
 			default:
 			}
-			s.applyVideoAnswer(assembler, &appliedAnswer, &unitsAtAnswer)
+			if s.applyVideoAnswer(assembler, &appliedAnswer, &unitsAtAnswer) {
+				s.requestKeyframe(video, false)
+			}
 			if index < len(datagrams) && len(datagrams[index]) > 0 {
 				s.handleVideoDatagram(video, &assembler, datagrams[index], now)
 			}
@@ -463,20 +465,22 @@ func (s *Stream) receiveVideo(video *leg) {
 	}
 }
 
-func (s *Stream) applyVideoAnswer(assembler *videoAssembler, applied **Answer, unitsAtAnswer *uint64) {
+func (s *Stream) applyVideoAnswer(assembler *videoAssembler, applied **Answer, unitsAtAnswer *uint64) (missedVideo bool) {
 	s.access.Lock()
 	defer s.access.Unlock()
 	if s.answer == nil || s.answer == *applied {
-		return
+		return false
 	}
 	*applied = s.answer
 	*unitsAtAnswer = 0
-	if assembler != nil {
-		if s.answer.SSRC != 0 {
-			assembler.expectAnswer(s.answer)
-		}
-		*unitsAtAnswer = assembler.units
+	if assembler == nil {
+		return s.stats.VideoPackets > 0
 	}
+	if s.answer.SSRC != 0 {
+		assembler.expectAnswer(s.answer)
+	}
+	*unitsAtAnswer = assembler.units
+	return false
 }
 
 func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, datagram []byte, now time.Time) {
@@ -521,10 +525,19 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 		bands := s.config.Offer.options.TilesPerFrame
 		s.access.Lock()
 		answer := s.answer
-		if s.answer != nil && s.answer.TilesPerFrame >= 1 && s.answer.TilesPerFrame <= bands {
-			bands = s.answer.TilesPerFrame
-		}
 		s.access.Unlock()
+		if answer != nil && answer.TilesPerFrame >= 1 && answer.TilesPerFrame <= bands {
+			bands = answer.TilesPerFrame
+		}
+		if bands > 1 {
+			if answer == nil {
+				return
+			}
+			if answer.SSRC == 0 || answer.Height <= 0 {
+				s.stop(E.New("media: the answer gives no layout for ", bands, " bands (SSRC ", answer.SSRC, ", height ", answer.Height, ")"))
+				return
+			}
+		}
 		*assembler = newVideoAssembler(codec, bands, s.config.Offer.options.ImmediatePlayout, s.config.Sink, func() {
 			s.requestKeyframe(video, false)
 		})
