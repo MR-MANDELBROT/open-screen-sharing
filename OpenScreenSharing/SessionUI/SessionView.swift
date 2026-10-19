@@ -9,9 +9,10 @@ struct SessionView: View {
     @ObservedObject private var iOSToolbar = ToolbarLayout.iOS
     @ObservedObject private var pcToolbar = ToolbarLayout.pc
     @ScaledMetric(relativeTo: .body) private var toolbarItemWidth = ToolbarLayout.itemSize
+    @State private var letterbox: Letterbox?
 
     private var dock: ToolbarDock? {
-        controller.pictureMatchesWindow ? nil : ToolbarDock(letterbox: controller.letterbox, itemWidth: toolbarItemWidth)
+        controller.pictureMatchesWindow ? nil : ToolbarDock(letterbox: letterbox, itemWidth: toolbarItemWidth)
     }
     #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
@@ -141,6 +142,7 @@ struct SessionView: View {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in
                 controller.abort()
             }
+            .onReceive(controller.letterbox) { letterbox = $0 }
             .onChangeCompat(of: controller.isFullScreen) {
                 controller.isToolbarVisible = false
             }
@@ -241,6 +243,7 @@ struct SessionView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                 controller.abort()
             }
+            .onReceive(controller.letterbox) { letterbox = $0 }
     }
     #endif
 

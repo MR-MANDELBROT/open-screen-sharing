@@ -127,7 +127,6 @@ final class SessionController: ObservableObject, Identifiable {
     @Published var isFullScreen = false
     @Published var isToolbarVisible = false
     @Published var isToolbarDocked = false
-    @Published var letterbox: Letterbox?
     @Published private(set) var isPointerLockOn = false
     @Published private(set) var isZoomModeOn = false
     @Published var isPointerLocked = false {
@@ -149,6 +148,7 @@ final class SessionController: ObservableObject, Identifiable {
     @Published var isShowingResolution = false
     @Published var isCustomizingToolbar = false
     let debugInfo = DebugInfoMonitor()
+    let letterbox = CurrentValueSubject<Letterbox?, Never>(nil)
     private var transfers: [FileTransfer] = [] {
         didSet { updateTransferTask() }
     }

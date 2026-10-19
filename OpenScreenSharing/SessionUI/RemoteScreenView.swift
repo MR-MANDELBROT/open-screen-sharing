@@ -1,4 +1,5 @@
 #if os(iOS)
+import Combine
 import SwiftUI
 import UIKit
 
@@ -144,8 +145,8 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
 
     private func updateLetterbox() {
         let letterbox = measureLetterbox()
-        if controller.letterbox != letterbox {
-            controller.letterbox = letterbox
+        if controller.letterbox.value != letterbox {
+            controller.letterbox.send(letterbox)
         }
     }
 

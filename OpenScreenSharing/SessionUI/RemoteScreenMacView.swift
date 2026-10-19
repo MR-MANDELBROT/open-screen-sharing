@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import Carbon
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -369,8 +370,8 @@ final class RemoteScreenNSView: NSView, RemoteScreen {
 
     private func updateLetterbox() {
         let letterbox = measureLetterbox()
-        if controller.letterbox != letterbox {
-            controller.letterbox = letterbox
+        if controller.letterbox.value != letterbox {
+            controller.letterbox.send(letterbox)
         }
     }
 
