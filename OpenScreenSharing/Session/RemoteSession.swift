@@ -292,6 +292,7 @@ nonisolated struct SessionCapabilities: OptionSet, Hashable, Sendable {
     static let audio = SessionCapabilities(rawValue: 1 << 19)
     static let clipboardRequest = SessionCapabilities(rawValue: 1 << 20)
     static let unicodeText = SessionCapabilities(rawValue: 1 << 21)
+    static let touch = SessionCapabilities(rawValue: 1 << 22)
 }
 
 nonisolated enum GesturePhase: Sendable {
@@ -300,6 +301,19 @@ nonisolated enum GesturePhase: Sendable {
     case changed
     case ended
     case cancelled
+}
+
+nonisolated enum TouchPhase: Sendable {
+    case began
+    case moved
+    case ended
+    case cancelled
+}
+
+nonisolated struct RemoteTouch: Sendable {
+    var id: Int64
+    var phase: TouchPhase
+    var location: CGPoint
 }
 
 nonisolated enum SystemCommand: CaseIterable, Identifiable, Sendable {

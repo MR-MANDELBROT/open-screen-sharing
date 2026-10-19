@@ -110,6 +110,21 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         try? session?.sendScroll(Int32(x), y: Int32(y), deltaX: deltaX * pointsPerPixel, deltaY: deltaY * pointsPerPixel)
     }
 
+    func sendTouches(_ touches: [RemoteTouch]) {
+        let frame = LibsharingTouchFrame()
+        for touch in touches {
+            let phase =
+                switch touch.phase {
+                case .began: LibsharingTouchPhaseBegan
+                case .moved: LibsharingTouchPhaseMoved
+                case .ended: LibsharingTouchPhaseEnded
+                case .cancelled: LibsharingTouchPhaseCancelled
+                }
+            frame.add(touch.id, phase: phase, x: Int32(touch.location.x.rounded(.down)), y: Int32(touch.location.y.rounded(.down)))
+        }
+        try? session?.sendTouches(frame)
+    }
+
     func sendKey(_ key: MacKey, keyboardType: MacKeyboardType, down: Bool) {
         guard let keyCode = key.keyCode else {
             try? session?.sendKey(Int32(bitPattern: key.keysym), down: down)
@@ -573,6 +588,7 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
         if serverInfo.supportsAudio { capabilities.insert(.audio) }
         if serverInfo.supportsClipboardRequest { capabilities.insert(.clipboardRequest) }
         if serverInfo.supportsUnicodeText { capabilities.insert(.unicodeText) }
+        if serverInfo.supportsTouch { capabilities.insert(.touch) }
         locked { self.capabilities = capabilities }
         delegate?.sessionCapabilitiesChanged(capabilities)
         updateInfo { info in

@@ -49,7 +49,7 @@ func run() error {
 	checkLogin := flag.Bool("check-login", false, "verify TLS and NLA without opening a desktop")
 	debug := flag.Bool("debug", false, "log protocol details to standard error")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: rdpctl [flags] [wait:DURATION | png:FILE | move:X,Y | click:X,Y[,left|right|middle] | scroll:X,Y,DY[,DX] | shared-clipboard:on|off | keysym:KEYSYM[,down|up] | mackey|mackeydown|mackeyup:CODE[,iso[,KEYSYM]] | pause | type:TEXT | paste:TEXT | clipboard-set:TEXT | clipboard-get | resize:WxH[,SCALE] | suppress:on|off | refresh | stats ...]")
+		fmt.Fprintln(os.Stderr, "usage: rdpctl [flags] [wait:DURATION | png:FILE | move:X,Y | click:X,Y[,left|right|middle] | scroll:X,Y,DY[,DX] | touch:began|moved|ended|cancelled,ID,X,Y | shared-clipboard:on|off | keysym:KEYSYM[,down|up] | mackey|mackeydown|mackeyup:CODE[,iso[,KEYSYM]] | pause | type:TEXT | paste:TEXT | clipboard-set:TEXT | clipboard-get | resize:WxH[,SCALE] | suppress:on|off | refresh | stats ...]")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -247,6 +247,18 @@ func perform(ctx context.Context, c *rdp.Client, h *handler, action string, done
 			deltaX = n[3]
 		}
 		return c.SendScroll(int(n[0]), int(n[1]), deltaX, n[2])
+	case "touch":
+		phaseName, position, _ := strings.Cut(value, ",")
+		phases := map[string]rdp.TouchPhase{"began": rdp.TouchBegan, "moved": rdp.TouchMoved, "ended": rdp.TouchEnded, "cancelled": rdp.TouchCancelled}
+		phase, ok := phases[phaseName]
+		if !ok {
+			return E.New("unknown touch phase ", strconv.Quote(phaseName), "; it must be began, moved, ended or cancelled")
+		}
+		n, err := ctl.ParseNumbers(position, 3, strconv.Atoi)
+		if err != nil {
+			return err
+		}
+		return c.SendTouches([]rdp.Touch{{ID: int64(n[0]), Phase: phase, X: n[1], Y: n[2]}})
 	case "pause":
 		return c.SendKey(0xff13, true)
 	case "keysym":

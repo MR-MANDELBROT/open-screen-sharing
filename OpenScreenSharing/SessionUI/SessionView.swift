@@ -35,7 +35,7 @@ struct SessionView: View {
         return SessionTutorial.allCases.filter { tutorial in
             guard !settings.seenTutorials.contains(tutorial) else { return false }
             switch tutorial {
-            case .pressToDrag: return !controller.touchesDirectly
+            case .pressToDrag: return !controller.touchesDirectly && !controller.touchesNatively
             case .pointerLock: return pointerLockAvailable
             }
         }
@@ -120,6 +120,9 @@ struct SessionView: View {
             }
             .onChangeCompat(of: availableTutorials, initial: true) { available in
                 if tutorials.isEmpty { tutorials = available }
+            }
+            .onChangeCompat(of: controller.touchesNatively) { native in
+                if native { tutorials.removeAll { $0 == .pressToDrag } }
             }
             .onGeometryChangeCompat(for: CGFloat.self) { proxy in
                 proxy.size.width - proxy.safeAreaInsets.leading - proxy.safeAreaInsets.trailing

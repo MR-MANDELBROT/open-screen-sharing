@@ -98,6 +98,7 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var remoteAudio = RemoteAudio.fromMac
     var windowSize: CGSize?
     var locksPointer = false
+    var usesNativeTouch = true
 }
 
 final class SessionController: ObservableObject, Identifiable {
@@ -128,6 +129,7 @@ final class SessionController: ObservableObject, Identifiable {
     @Published var isToolbarVisible = false
     @Published var isToolbarDocked = false
     @Published private(set) var isPointerLockOn = false
+    @Published private(set) var isNativeTouchOn = true
     @Published private(set) var isZoomModeOn = false
     @Published var isPointerLocked = false {
         didSet {
@@ -200,6 +202,7 @@ final class SessionController: ObservableObject, Identifiable {
     private var pictureTurns = PictureTurns.none
     private(set) var pointerButtons: PointerButtons = []
     private var pointerModifiers: Set<ModifierKey> = []
+    private var nativeTouchIDs: Set<Int64> = []
     private var lastPointerMoveTime: TimeInterval = 0
     private var pointerMovedSinceTouch = false
     private var displayArea = CGSize.zero
@@ -378,6 +381,7 @@ final class SessionController: ObservableObject, Identifiable {
         remoteAudio = memory.remoteAudio
         windowSize = memory.windowSize
         isPointerLockOn = memory.locksPointer
+        isNativeTouchOn = memory.usesNativeTouch
     }
 
     private var memory: SessionMemory {
@@ -390,7 +394,8 @@ final class SessionController: ObservableObject, Identifiable {
             usesHDR: hdrEnabled,
             remoteAudio: remoteAudio,
             windowSize: windowSize,
-            locksPointer: isPointerLockOn
+            locksPointer: isPointerLockOn,
+            usesNativeTouch: isNativeTouchOn
         )
     }
 
@@ -583,6 +588,7 @@ final class SessionController: ObservableObject, Identifiable {
         remoteDragActive = false
         pointerButtons = []
         pointerModifiers = []
+        nativeTouchIDs = []
         dragID = nil
         dropTarget = nil
         remoteDragOffer = nil
@@ -1644,6 +1650,12 @@ final class SessionController: ObservableObject, Identifiable {
         if !available { pointerLockHasLocked = false }
     }
 
+    func setNativeTouch(_ on: Bool) {
+        guard on != isNativeTouchOn else { return }
+        isNativeTouchOn = on
+        rememberState()
+    }
+
     func setZoomMode(_ on: Bool) {
         guard on != isZoomModeOn else { return }
         isZoomModeOn = on
@@ -1676,6 +1688,28 @@ final class SessionController: ObservableObject, Identifiable {
 
     var touchesDirectly: Bool {
         isIOS && isControlling
+    }
+
+    var touchesNatively: Bool {
+        isNativeTouchOn && capabilities.contains(.touch) && isControlling
+    }
+
+    func sendTouches(_ touches: [RemoteTouch]) {
+        guard !touches.isEmpty else { return }
+        for touch in touches where touch.phase == .began {
+            beginPointerInput()
+            nativeTouchIDs.insert(touch.id)
+        }
+        session?.sendTouches(
+            touches.map { touch in
+                var touch = touch
+                touch.location = serverPoint(clampToImage(touch.location))
+                return touch
+            })
+        for touch in touches where touch.phase == .ended || touch.phase == .cancelled {
+            nativeTouchIDs.remove(touch.id)
+        }
+        endPointerInput()
     }
 
     var hidesPointerForTouch: Bool {
@@ -1726,25 +1760,33 @@ final class SessionController: ObservableObject, Identifiable {
     }
 
     func press(_ button: PointerButtons) {
-        if isControlling { textCursorMayHaveMoved() }
-        if pointerButtons.isEmpty, isControlling {
-            if platform == .pc, pressedKeys.values.contains(where: { ModifierKey(keysym: $0.keysym) == .command }) {
-                commandTapPending = false
-                var modifiers = Set(pressedKeys.values.compactMap { ModifierKey(keysym: $0.keysym) })
-                modifiers.remove(.command)
-                modifiers.insert(.control)
-                setSentModifiers(modifiers)
-            }
-            pointerModifiers = stickyModifiers.subtracting(lockedModifiers).subtracting(pressedModifiers)
-            stickyModifiers.removeAll()
-            for modifier in ModifierKey.allCases where pointerModifiers.contains(modifier) { send(modifier.macKey, down: true) }
-        }
+        beginPointerInput()
         setButtons(pointerButtons.union(button))
     }
 
     func release(_ button: PointerButtons) {
         setButtons(pointerButtons.subtracting(button))
-        guard pointerButtons.isEmpty, !pointerModifiers.isEmpty else { return }
+        endPointerInput()
+    }
+
+    private func beginPointerInput() {
+        guard isControlling else { return }
+        textCursorMayHaveMoved()
+        guard pointerButtons.isEmpty, nativeTouchIDs.isEmpty else { return }
+        if platform == .pc, pressedKeys.values.contains(where: { ModifierKey(keysym: $0.keysym) == .command }) {
+            commandTapPending = false
+            var modifiers = Set(pressedKeys.values.compactMap { ModifierKey(keysym: $0.keysym) })
+            modifiers.remove(.command)
+            modifiers.insert(.control)
+            setSentModifiers(modifiers)
+        }
+        pointerModifiers = stickyModifiers.subtracting(lockedModifiers).subtracting(pressedModifiers)
+        stickyModifiers.removeAll()
+        for modifier in ModifierKey.allCases where pointerModifiers.contains(modifier) { send(modifier.macKey, down: true) }
+    }
+
+    private func endPointerInput() {
+        guard pointerButtons.isEmpty, nativeTouchIDs.isEmpty, !pointerModifiers.isEmpty else { return }
         for modifier in ModifierKey.allCases.reversed() where pointerModifiers.contains(modifier) { send(modifier.macKey, down: false) }
         pointerModifiers = []
     }

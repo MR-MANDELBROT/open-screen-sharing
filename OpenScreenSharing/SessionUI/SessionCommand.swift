@@ -3,6 +3,7 @@ import SwiftUI
 enum SessionCommand: String, CaseIterable, Identifiable {
     case zoomMode, scale, displays, quality, resolution, hdr
     case audio
+    case nativeTouch
     case observe = "control"
     case pointerLock, keyboard, functionKeys, moreKeys
     case missionControl, appWindows, showDesktop, launchpad
@@ -23,6 +24,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .audio: "Sound"
         case .observe: "Observe Mode"
         case .pointerLock: "Pointer Lock"
+        case .nativeTouch: "Native Touch"
         case .keyboard: "Keyboard"
         case .functionKeys: "Function Keys"
         case .moreKeys: "More Keys"
@@ -48,6 +50,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .audio: "speaker.wave.2"
         case .observe: "eye"
         case .pointerLock: "computermouse"
+        case .nativeTouch: "hand.tap"
         case .keyboard: "keyboard"
         case .functionKeys: "fn"
         case .moreKeys: if #available(iOS 16, *) { "arrow.up.and.down.text.horizontal" } else { "ellipsis" }
@@ -66,8 +69,8 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         switch self {
         case .zoomMode, .scale, .displays, .quality, .resolution, .hdr: .view
         case .audio: .sound
-        case .observe, .pointerLock, .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows, .showDesktop,
-            .launchpad, .home, .appSwitcher, .lock, .volumeUp, .volumeDown:
+        case .observe, .pointerLock, .nativeTouch, .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows,
+            .showDesktop, .launchpad, .home, .appSwitcher, .lock, .volumeUp, .volumeDown:
             .control
         case .clipboard: .clipboard
         case .debugInfo: .debug
@@ -92,9 +95,10 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .zoomMode, .scale, .audio, .observe, .pointerLock, .clipboard, .debugInfo: true
         #if os(iOS)
         case .keyboard: true
+        case .nativeTouch: platform == .pc
         case .functionKeys, .moreKeys: false
         #else
-        case .keyboard: false
+        case .keyboard, .nativeTouch: false
         case .functionKeys, .moreKeys: platform != .iOS
         #endif
         }
@@ -117,6 +121,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
                 && controller.networkSupportsHDR
         case .observe: return offers(.control) && offers(.observe)
         case .keyboard, .lock, .volumeUp, .volumeDown, .functionKeys, .moreKeys: return offers(.control)
+        case .nativeTouch: return capabilities.contains(.touch)
         #if os(iOS)
         case .pointerLock: return offers(.control) && PointerLock.hasMouse
         #else
@@ -139,8 +144,8 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .hdr: return controller.canUseHDR
         case .observe: return controller.capabilities.contains(.control)
         case .pointerLock: return controller.canLockPointer
-        case .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows, .showDesktop, .launchpad, .home, .appSwitcher, .lock,
-            .volumeUp, .volumeDown:
+        case .nativeTouch, .keyboard, .functionKeys, .moreKeys, .missionControl, .appWindows, .showDesktop, .launchpad, .home,
+            .appSwitcher, .lock, .volumeUp, .volumeDown:
             return controller.isControlling
         }
     }
@@ -245,6 +250,8 @@ struct SessionCommandView: View {
             toggle(isOn: Binding(get: { controller.mode == .observe }, set: { controller.setMode($0 ? .observe : .control) }))
         case .pointerLock:
             toggle(isOn: Binding(get: { controller.isPointerLockOn }, set: { controller.setPointerLock($0) }))
+        case .nativeTouch:
+            toggle(isOn: Binding(get: { controller.isNativeTouchOn }, set: { controller.setNativeTouch($0) }))
         case .keyboard:
             Button {
                 controller.toggleKeyboard()

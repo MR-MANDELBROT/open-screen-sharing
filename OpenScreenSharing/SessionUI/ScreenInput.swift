@@ -34,6 +34,8 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private var fingersTouchDirectly = false
     private var touchFinger: UITouch?
     private var touchPressed = false
+    private var nativeTouches: [UITouch: Int64] = [:]
+    private var nextNativeTouchID: Int64 = 0
 
     private var pointerTouches: Set<UITouch> = []
     private var lockedButtons: PointerButtons = []
@@ -147,6 +149,9 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         if controller.isZoomModeOn, gestureRecognizer.numberOfTouches > 0 || gestureRecognizer === rotationGesture {
             return false
         }
+        if gestureRecognizer.numberOfTouches > 0, controller.touchesNatively || !nativeTouches.isEmpty {
+            return false
+        }
         if gestureRecognizer.numberOfTouches > 0, fingersTouchDirectly {
             if gestureRecognizer === pinchGesture || gestureRecognizer === rotationGesture {
                 return controller.sendsGesturesToMac
@@ -170,6 +175,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         guard !drag.isDragging else { return }
         controller.stopScrollMomentum()
         view.takeKeyFocus()
+        var began: [RemoteTouch] = []
         for touch in touches {
             switch touch.type {
             case .indirectPointer where isPointerLocked:
@@ -181,6 +187,11 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             case .direct, .pencil:
                 if handleTouch == nil, isPointerLocked, controller.toolbarHandleFrame?.contains(touch.location(in: nil)) == true {
                     handleTouch = touch
+                } else if controller.touchesNatively {
+                    guard view.imageRect.insetBy(dx: -Self.touchMargin, dy: -Self.touchMargin).contains(touch.location(in: view)) else { break }
+                    nextNativeTouchID += 1
+                    nativeTouches[touch] = nextNativeTouchID
+                    began.append(nativeTouch(touch, phase: .began))
                 } else {
                     fingerBegan(touch)
                 }
@@ -188,11 +199,13 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             default: break
             }
         }
+        controller.sendTouches(began)
     }
 
     func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         zoomTouchesMoved(touches)
-        for touch in touches where zoomTouches[touch] == nil {
+        controller.sendTouches(touches.filter { nativeTouches[$0] != nil }.map { nativeTouch($0, phase: .moved) })
+        for touch in touches where zoomTouches[touch] == nil && nativeTouches[touch] == nil {
             switch touch.type {
             case .direct, .pencil: fingerMoved(touch)
             case .indirectPointer: pointerMoved(touch, event: event)
@@ -202,7 +215,9 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     }
 
     func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
+        let native = touches.filter { nativeTouches[$0] != nil }
+        liftNativeTouches(native, phase: .ended)
+        for touch in touches.subtracting(native) {
             if toolbarTouches.remove(touch) != nil {
                 if controller.isToolbarVisible { controller.toggleToolbar() }
                 continue
@@ -226,7 +241,9 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     }
 
     func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches {
+        let native = touches.filter { nativeTouches[$0] != nil }
+        liftNativeTouches(native, phase: .cancelled)
+        for touch in touches.subtracting(native) {
             if toolbarTouches.remove(touch) != nil { continue }
             if touch === drag.takenTouch {
                 fingers.remove(touch)
@@ -253,6 +270,16 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             default: break
             }
         }
+    }
+
+
+    private func nativeTouch(_ touch: UITouch, phase: TouchPhase) -> RemoteTouch {
+        RemoteTouch(id: nativeTouches[touch] ?? 0, phase: phase, location: view.imagePoint(for: touch.location(in: view)))
+    }
+
+    private func liftNativeTouches(_ touches: Set<UITouch>, phase: TouchPhase) {
+        controller.sendTouches(touches.map { nativeTouch($0, phase: phase) })
+        for touch in touches { nativeTouches[touch] = nil }
     }
 
 

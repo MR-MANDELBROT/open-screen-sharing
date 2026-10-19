@@ -49,6 +49,7 @@ const (
 	staticChannelDevice    = "rdpdr"
 	dynamicChannelGraphics = "Microsoft::Windows::RDS::Graphics"
 	dynamicChannelDisplay  = "Microsoft::Windows::RDS::DisplayControl"
+	dynamicChannelTouch    = "Microsoft::Windows::RDS::Input"
 
 	refreshAreaCount       = 1
 	suppressDisplayUpdates = 0
@@ -72,6 +73,7 @@ type Client struct {
 	input      *inputQueue
 	clipboard  *clipboardChannel
 	display    *displayChannel
+	touch      *touchChannel
 	audio      *audioChannel
 
 	infoAccess sync.Mutex
@@ -171,6 +173,7 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 	c.graphics = newGraphics(events, c.logger, opts.Width, opts.Height, c)
 	c.clipboard = &clipboardChannel{events: events, changed: c.refreshInfo, shared: opts.Clipboard}
 	c.display = &displayChannel{logger: c.logger, changed: c.refreshInfo, width: opts.Width, height: opts.Height, scale: opts.DesktopScaleFactor, sentScale: opts.DesktopScaleFactor}
+	c.touch = &touchChannel{logger: c.logger, changed: c.refreshInfo}
 	c.audio = &audioChannel{events: events, changed: c.refreshInfo}
 	c.session = &session{
 		mcs:            c.mcs,
@@ -187,6 +190,7 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 	dynamic := &drdynvc{logger: c.logger, listeners: []*dynamicListener{
 		{name: dynamicChannelGraphics, handler: &rdpgfx{g: c.graphics}, required: true},
 		{name: dynamicChannelDisplay, handler: c.display},
+		{name: dynamicChannelTouch, handler: c.touch},
 	}}
 	c.channels = &channelRegistry{mcs: c.mcs, logger: c.logger, channels: []*staticChannel{
 		{name: staticChannelClipboard, options: channelOptionInitialized | channelOptionShowProtocol, handler: c.clipboard},
@@ -396,6 +400,7 @@ func (c *Client) Info() Info {
 		Resize:    c.display.enabled(),
 		Audio:     c.audio.available.Load(),
 		Unicode:   c.session.inputFlags.Load()&inputFlagUnicode != 0,
+		Touch:     c.touch.enabled(),
 	}
 }
 

@@ -69,6 +69,7 @@ enum AppDatabase {
         migrator.registerMigration("1.0.2") { db in
             try db.alter(table: "computers") { t in
                 t.add(column: "locksPointer", .boolean).notNull().defaults(to: false)
+                t.add(column: "usesNativeTouch", .boolean).notNull().defaults(to: true)
                 t.drop(column: "supportsHighPerformance")
                 t.drop(column: "usesDynamicResolution")
             }

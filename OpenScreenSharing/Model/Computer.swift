@@ -33,6 +33,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var windowWidth: Double = 0
     var windowHeight: Double = 0
     var locksPointer = false
+    var usesNativeTouch = true
 
     init(name: String, address: ComputerAddress, remoteProtocol: RemoteProtocol = .vnc, username: String = "") {
         self.name = name
@@ -101,7 +102,8 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
             usesHDR: usesHDR,
             remoteAudio: remoteAudio,
             windowSize: windowWidth > 0 && windowHeight > 0 ? CGSize(width: windowWidth, height: windowHeight) : nil,
-            locksPointer: locksPointer
+            locksPointer: locksPointer,
+            usesNativeTouch: usesNativeTouch
         )
     }
 
@@ -116,6 +118,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
         windowWidth = memory.windowSize.map { Double($0.width) } ?? 0
         windowHeight = memory.windowSize.map { Double($0.height) } ?? 0
         locksPointer = memory.locksPointer
+        usesNativeTouch = memory.usesNativeTouch
     }
 
     mutating func apply(_ device: DeviceInfo) {

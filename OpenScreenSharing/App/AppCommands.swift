@@ -212,6 +212,12 @@ struct AppCommands: Commands {
         CommandMenu("Control") {
             ObservingSession(session: session) {
                 Section {
+                    #if os(iOS)
+                    if let session, SessionCommand.nativeTouch.isOffered(by: session) {
+                        Toggle("Native Touch", isOn: Binding(get: { session.isNativeTouchOn }, set: { session.setNativeTouch($0) }))
+                            .disabled(!controlling)
+                    }
+                    #endif
                     Toggle("Observe Mode", isOn: Binding(get: { session?.mode == .observe }, set: { session?.setMode($0 ? .observe : .control) }))
                         .modifier(ActionShortcut(action: .observe))
                         .disabled(session.map { !SessionCommand.observe.isOffered(by: $0) || !SessionCommand.observe.isEnabled(in: $0) } ?? true)

@@ -181,6 +181,7 @@ type ServerInfo struct {
 	SupportsDragFromRemote bool
 
 	SupportsGestures bool
+	SupportsTouch    bool
 
 	SupportsAssistCursor bool
 

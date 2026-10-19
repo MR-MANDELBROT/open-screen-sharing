@@ -60,6 +60,23 @@ type Info struct {
 	Resize    bool
 	Audio     bool
 	Unicode   bool
+	Touch     bool
+}
+
+type TouchPhase uint8
+
+const (
+	TouchBegan TouchPhase = iota + 1
+	TouchMoved
+	TouchEnded
+	TouchCancelled
+)
+
+type Touch struct {
+	ID    int64
+	Phase TouchPhase
+	X     int
+	Y     int
 }
 
 type Statistics struct {
