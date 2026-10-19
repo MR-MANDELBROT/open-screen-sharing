@@ -12,6 +12,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private static let touchMargin: CGFloat = 24
     private static let doubleTapDistance: CGFloat = 40
     private static let wheelPointsPerZoomDoubling: CGFloat = 100
+    private static let iBeamPixels: CGFloat = 18
 
     private unowned let view: RemoteScreenUIView
     private unowned let controller: SessionController
@@ -38,6 +39,13 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private let systemPointerHover = UIHoverGestureRecognizer()
     private let windowTouches = TouchObserver(target: nil, action: nil)
     private var systemPointerLocation: CGPoint?
+    private var systemPointerOverPicture = false {
+        didSet {
+            if systemPointerOverPicture != oldValue { view.setNeedsRender() }
+        }
+    }
+    private var pointerCursor: MacCursor?
+    private var pointerBeamLength: CGFloat = 0
     private var lastLockedMoveTime: TimeInterval = 0
     private var lockedMouseSpeed: CGFloat = 0
 
@@ -771,11 +779,15 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         if controller.isSystemPointerOverPicture != overPicture {
             controller.isSystemPointerOverPicture = overPicture
         }
+        var fromPointer = true
+        if #available(iOS 16.1, *) { fromPointer = gesture.zOffset == 0 }
+        systemPointerOverPicture = overPicture && fromPointer
     }
 
     private func windowTouchBegan(_ touch: UITouch) {
         if touch.type != .indirectPointer {
             systemPointerLocation = nil
+            systemPointerOverPicture = false
         } else if !isPointerLocked {
             systemPointerLocation = touch.location(in: nil)
             controller.lastSystemPointerLocation = systemPointerLocation
@@ -789,7 +801,57 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     }
 
     func pointerInteraction(_ interaction: UIPointerInteraction, styleFor region: UIPointerRegion) -> UIPointerStyle? {
-        (region.identifier as? NSString) == "screen" && controller.isControlling ? .hidden() : nil
+        guard (region.identifier as? NSString) == "screen", controller.isControlling else { return nil }
+        guard let pointerCursor else { return .hidden() }
+        var accessories: [UIPointerAccessory] = []
+        switch pointerCursor {
+        case .iBeam:
+            return UIPointerStyle(shape: .verticalBeam(length: pointerBeamLength), constrainedAxes: [])
+        case .verticalIBeam:
+            return UIPointerStyle(shape: .horizontalBeam(length: pointerBeamLength), constrainedAxes: [])
+        case .crosshair:
+            return UIPointerStyle(shape: .path(Self.cross(length: 20, thickness: 2)), constrainedAxes: [])
+        case .arrow, .contextualMenu, .pointingHand, .openHand, .closedHand, .dragLink:
+            break
+        case .dragCopy, .zoomIn:
+            accessories = [UIPointerAccessory(.path(Self.cross(length: 8, thickness: 2)), position: .bottomRight)]
+        case .zoomOut:
+            accessories = [UIPointerAccessory(.path(UIBezierPath(rect: CGRect(x: -4, y: -1, width: 8, height: 2))), position: .bottomRight)]
+        case .operationNotAllowed:
+            let path = UIBezierPath(ovalIn: CGRect(x: -4.5, y: -4.5, width: 9, height: 9))
+            path.append(UIBezierPath(ovalIn: CGRect(x: -3, y: -3, width: 6, height: 6)).reversing())
+            let slash = UIBezierPath(rect: CGRect(x: -2.8, y: -0.75, width: 5.6, height: 1.5))
+            slash.apply(CGAffineTransform(rotationAngle: .pi / 4))
+            path.append(slash)
+            accessories = [UIPointerAccessory(.path(path), position: .bottomRight)]
+        case .resize(let directions):
+            let positions: [(MacCursor.ResizeDirections, UIPointerAccessory.Position)] = [
+                (.up, .top), (.down, .bottom), (.left, .left), (.right, .right),
+                (.upLeft, .topLeft), (.upRight, .topRight), (.downLeft, .bottomLeft), (.downRight, .bottomRight),
+            ]
+            accessories = positions.filter { directions.contains($0.0) }.map { .arrow($0.1) }
+        }
+        let style = UIPointerStyle.system()
+        style.accessories = accessories
+        return style
+    }
+
+    func showsCursorAsPointer(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> Bool {
+        let cursor = visible && !AppSettings.shared.usesRemotePointerStyle ? shape?.kind : nil
+        let beamLength = Self.iBeamPixels * scale
+        if cursor != pointerCursor || (cursor == .iBeam || cursor == .verticalIBeam) && beamLength != pointerBeamLength {
+            pointerCursor = cursor
+            pointerBeamLength = beamLength
+            pointerInteraction.invalidate()
+        }
+        return pointerCursor != nil && systemPointerOverPicture && !isPointerLocked && controller.isControlling
+            && !controller.isToolbarVisible && !controller.isZoomModeOn
+    }
+
+    private static func cross(length: CGFloat, thickness: CGFloat) -> UIBezierPath {
+        let path = UIBezierPath(rect: CGRect(x: -length / 2, y: -thickness / 2, width: length, height: thickness))
+        path.append(UIBezierPath(rect: CGRect(x: -thickness / 2, y: -length / 2, width: thickness, height: length)))
+        return path
     }
 
 

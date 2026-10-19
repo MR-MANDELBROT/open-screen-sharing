@@ -127,7 +127,7 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
     }
 
     func drawsCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> Bool {
-        !controller.hidesPointerForTouch
+        !input.showsCursorAsPointer(shape, visible: visible, scale: scale) && !controller.hidesPointerForTouch
     }
 
     func backgroundStateDidChange() {
@@ -138,7 +138,7 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
         }
     }
 
-    private func setNeedsRender() {
+    func setNeedsRender() {
         updateLetterbox()
         presenter.setNeedsRender()
     }

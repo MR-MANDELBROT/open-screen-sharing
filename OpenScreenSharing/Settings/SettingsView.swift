@@ -19,6 +19,13 @@ struct SettingsView: View {
                 } label: {
                     Label("Keyboard", systemImage: "keyboard")
                 }
+                #if os(iOS)
+                NavigationLink {
+                    BehaviorSettingsView()
+                } label: {
+                    Label("Behavior", systemImage: "slider.horizontal.3")
+                }
+                #endif
             }
             Section("About") {
                 Link(destination: Self.sourceCode) {
@@ -33,6 +40,23 @@ struct SettingsView: View {
         .navigationTitle("Settings")
     }
 }
+
+#if os(iOS)
+private struct BehaviorSettingsView: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        Form {
+            Section("Connection") {
+                Toggle(isOn: $settings.usesRemotePointerStyle) {
+                    Label("Use Remote Pointer Style", systemImage: "cursorarrow")
+                }
+            }
+        }
+        .navigationTitle("Behavior")
+    }
+}
+#endif
 
 private struct AppSettingsView: View {
     @State private var language = AppLanguage.selected

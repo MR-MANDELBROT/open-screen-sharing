@@ -6,12 +6,17 @@ final class AppSettings: ObservableObject {
 
     private enum Key {
         static let showsDebugInfo = "showsDebugInfo"
+        static let usesRemotePointerStyle = "usesRemotePointerStyle"
         static let computerLayout = "computerLayout"
         static let computerOrder = "computerOrder"
     }
 
     @Published var showsDebugInfo: Bool {
         didSet { store.set(showsDebugInfo, for: Key.showsDebugInfo) }
+    }
+
+    @Published var usesRemotePointerStyle: Bool {
+        didSet { store.set(usesRemotePointerStyle, for: Key.usesRemotePointerStyle) }
     }
 
     @Published var computerLayout: ComputerLayout {
@@ -26,6 +31,7 @@ final class AppSettings: ObservableObject {
 
     init() {
         showsDebugInfo = store.value(Bool.self, for: Key.showsDebugInfo) ?? false
+        usesRemotePointerStyle = store.value(Bool.self, for: Key.usesRemotePointerStyle) ?? false
         computerLayout = store.value(ComputerLayout.self, for: Key.computerLayout) ?? .grid
         computerOrder = store.value([UUID].self, for: Key.computerOrder) ?? []
     }
