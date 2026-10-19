@@ -13205,6 +13205,310 @@
         }
       }
     },
+    "Behavior" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "السلوك"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поведение"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আচরণ"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportament"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chování"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adfærd"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verhalten"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συμπεριφορά"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportamiento"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportamiento"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toiminta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportement"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportement"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "વર્તન"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "התנהגות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "व्यवहार"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ponašanje"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Működés"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perilaku"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportamento"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "動作"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Әрекет"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ವರ್ತನೆ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "동작"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elgsena"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "പ്രവർത്തനരീതി"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वर्तन"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tingkah Laku"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atferd"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gedrag"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଆଚରଣ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਵਿਹਾਰ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zachowanie"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportamento"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportamento"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportament"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поведение"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Správanie"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delovanje"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beteende"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நடத்தை"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ప్రవర్తన"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การทำงาน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Davranış"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поведінка"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رویہ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hành vi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行为"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行為"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行為"
+          }
+        }
+      }
+    },
     "Cache" : {
       "localizations" : {
         "ar" : {
@@ -22017,6 +22321,310 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在連線…"
+          }
+        }
+      }
+    },
+    "Connection" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاتصال"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Връзка"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "কানেকশন"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connexió"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Připojení"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forbindelse"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbindung"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σύνδεση"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conexión"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conexión"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yhteys"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connexion"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connexion"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "કનેક્શન"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חיבור"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कनेक्शन"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veza"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kapcsolat"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koneksi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connessione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接続"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Қосылым"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಕನೆಕ್ಷನ್"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "연결"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ryšys"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "കണക്ഷൻ"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कनेक्शन"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sambungan"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilkobling"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbinding"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ସଂଯୋଗ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਕਨੈਕਸ਼ਨ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Połączenie"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conexão"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ligação"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conexiune"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подключение"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pripojenie"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Povezava"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anslutning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இணைப்பு"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "కనెక్షన్"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การเชื่อมต่อ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bağlantı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зʼєднання"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کنکشن"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kết nối"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連線"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連線"
           }
         }
       }
@@ -45242,6 +45850,310 @@
         }
       }
     },
+    "Hold Still…" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا تحرّك إصبعك…"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не мърдайте…"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "স্থির রাখুন…"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No el moguis…"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nehýbejte prstem…"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold stille…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht bewegen …"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μην κινείτε το δάχτυλο…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No muevas el dedo…"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No muevas el dedo…"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pidä paikallaan…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne bougez plus…"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne bougez plus…"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "સ્થિર રાખો…"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא להזיז את האצבע…"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "स्थिर रखें…"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne pomičite prst…"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne mozdítsa az ujját…"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tahan Tanpa Bergerak…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non muovere il dito…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指を動かさないで…"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Саусақты қозғалтпаңыз…"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಬೆರಳನ್ನು ಅಲುಗಾಡಿಸಬೇಡಿ…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "그대로 유지…"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nejudinkite piršto…"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "വിരൽ അനക്കാതെ പിടിക്കുക…"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बोट स्थिर ठेवा…"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jangan Gerakkan Jari…"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold fingeren i ro…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beweeg je vinger niet…"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଆଙ୍ଗୁଠି ସ୍ଥିର ରଖନ୍ତୁ…"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਉਂਗਲ ਸਥਿਰ ਰੱਖੋ…"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie ruszaj palcem…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não Mova o Dedo…"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não mova o dedo…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu mișcați degetul…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не двигайте пальцем…"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nehýbte prstom…"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne premikajte prsta …"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Håll fingret stilla…"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "விரலை அசைக்காமல் வைத்திருக்கவும்…"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "వేలిని కదలకుండా ఉంచండి…"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ค้างนิ้วไว้นิ่งๆ…"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parmağınızı Hareket Ettirmeyin…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не рухайте пальцем…"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انگلی ساکن رکھیں…"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giữ yên ngón tay…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保持不动…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保持不動…"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保持不動…"
+          }
+        }
+      }
+    },
     "Home" : {
       "localizations" : {
         "ar" : {
@@ -53146,6 +54058,310 @@
         }
       }
     },
+    "Lift to Drop" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ارفع إصبعك للإفلات"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вдигнете, за да пуснете"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ছেড়ে দিতে আঙুল তুলুন"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aixeca per deixar anar"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zvednutím pusťte"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Løft for at slippe"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zum Ablegen loslassen"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Σηκώστε για απόθεση"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Levanta para soltar"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Levanta para soltar"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pudota nostamalla"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relâchez pour déposer"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relâchez pour déposer"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "મૂકવા માટે આંગળી ઉઠાવો"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להרים כדי לשחרר"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "छोड़ने के लिए उंगली उठाएँ"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podignite za ispuštanje"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Emelje fel az elengedéshez"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angkat untuk Melepas"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solleva per rilasciare"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指を離してドロップ"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тастау үшін саусақты көтеріңіз"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಬಿಡಲು ಬೆರಳನ್ನು ಎತ್ತಿ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "손가락을 떼서 놓기"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pakelkite, kad numestumėte"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ഇടാൻ വിരൽ ഉയർത്തുക"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सोडण्यासाठी बोट उचला"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angkat untuk Lepaskan"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Løft for å slippe"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Til op om neer te zetten"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଛାଡ଼ିବା ପାଇଁ ଆଙ୍ଗୁଠି ଉଠାନ୍ତୁ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਛੱਡਣ ਲਈ ਉਂਗਲ ਚੁੱਕੋ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unieś, aby upuścić"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Levante para Soltar"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Levante para largar"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ridicați pentru a plasa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поднимите палец, чтобы отпустить"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zdvihnutím pustite"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dvignite za spust"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyft för att släppa"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "விட விரலை உயர்த்தவும்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "వదలడానికి వేలిని ఎత్తండి"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยกนิ้วเพื่อวาง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bırakmak İçin Kaldırın"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підніміть палець, щоб відпустити"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "چھوڑنے کے لیے انگلی اٹھائیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nhấc ngón tay để thả"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "松开手指放下"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放開手指放下"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "鬆開手指放下"
+          }
+        }
+      }
+    },
     "List" : {
       "localizations" : {
         "ar" : {
@@ -59226,6 +60442,310 @@
         }
       }
     },
+    "Move to Drag" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حرّك للسحب"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Местете за плъзгане"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "টেনে আনতে সরান"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mou per arrossegar"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Táhněte pohybem prstu"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flyt for at trække"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zum Ziehen bewegen"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Μετακινήστε για μεταφορά"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mueve para arrastrar"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mueve para arrastrar"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vedä liikuttamalla"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacez pour faire glisser"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacez pour faire glisser"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ખેંચવા માટે ખસેડો"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להזיז כדי לגרור"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ड्रैग करने के लिए खिसकाएँ"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pomaknite za povlačenje"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mozgassa a húzáshoz"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gerakkan untuk Menyeret"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muovi per trascinare"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "動かしてドラッグ"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сүйреу үшін жылжытыңыз"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಎಳೆಯಲು ಸರಿಸಿ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "움직여서 드래그"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Judinkite, kad vilktumėte"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "വലിച്ചിടാൻ നീക്കുക"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ड्रॅग करण्यासाठी हलवा"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gerakkan untuk Seret"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flytt for å dra"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beweeg om te slepen"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଟାଣିବା ପାଇଁ ଘୁଞ୍ଚାନ୍ତୁ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਘਸੀਟਣ ਲਈ ਹਿਲਾਓ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przesuń, aby przeciągnąć"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mova para Arrastar"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mova para arrastar"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mișcați pentru a trage"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Двигайте, чтобы перетащить"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Potiahnite pohybom prsta"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Premaknite za vlečenje"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flytta för att dra"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இழுக்க நகர்த்தவும்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "లాగడానికి కదిలించండి"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เลื่อนเพื่อลาก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sürüklemek İçin Hareket Ettirin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рухайте, щоб перетягнути"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "گھسیٹنے کے لیے ہلائیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Di chuyển để kéo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移动手指拖动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移動手指拖移"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移動手指拖移"
+          }
+        }
+      }
+    },
     "Move Up" : {
       "localizations" : {
         "ar" : {
@@ -62566,6 +64086,310 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一步"
+          }
+        }
+      }
+    },
+    "Next Tip" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النصيحة التالية"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Следващ съвет"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পরবর্তী টিপ"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consell següent"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Další tip"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Næste tip"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nächster Tipp"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Επόμενη συμβουλή"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siguiente consejo"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siguiente consejo"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seuraava vinkki"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conseil suivant"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conseil suivant"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "આગલી ટિપ"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "העצה הבאה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अगला सुझाव"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sljedeći savjet"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Következő tipp"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kiat Berikutnya"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggerimento successivo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次のヒント"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Келесі кеңес"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಮುಂದಿನ ಸಲಹೆ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다음 팁"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kitas patarimas"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "അടുത്ത നുറുങ്ങ്"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पुढील टीप"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Petua Seterusnya"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neste tips"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volgende tip"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ପରବର୍ତ୍ତୀ ଟିପ୍"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਅਗਲਾ ਸੁਝਾਅ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Następna wskazówka"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Próxima Dica"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dica seguinte"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfatul următor"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Следующий совет"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ďalší tip"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naslednji nasvet"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nästa tips"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அடுத்த உதவிக்குறிப்பு"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "తదుపరి చిట్కా"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เคล็ดลับถัดไป"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonraki İpucu"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Наступна порада"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اگلا مشورہ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mẹo tiếp theo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一条提示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一則提示"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一個提示"
           }
         }
       }
@@ -74144,6 +75968,310 @@
         }
       }
     },
+    "Pointer Pressed" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم الضغط على المؤشر"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показалецът е натиснат"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পয়েন্টার চাপা হয়েছে"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Punter premut"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ukazatel stisknut"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markøren er trykket ned"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeiger gedrückt"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ο δείκτης πατήθηκε"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puntero pulsado"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puntero presionado"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Osoitin painettu"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pointeur enfoncé"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pointeur enfoncé"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "પૉઇંટર દબાયું"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המצביע נלחץ"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पॉइंटर दबा"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokazivač pritisnut"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mutató lenyomva"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Penunjuk Ditekan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puntatore premuto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ポインタが押されました"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Меңзер басылды"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಪಾಯಿಂಟರ್ ಒತ್ತಲಾಗಿದೆ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "포인터 눌림"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Žymeklis paspaustas"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "പോയിന്റർ അമർത്തി"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पॉइंटर दाबला"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Penuding Ditekan"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pekeren er trykket ned"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aanwijzer ingedrukt"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ପଏଣ୍ଟର୍ ଦବିଗଲା"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਪੁਆਇੰਟਰ ਦੱਬਿਆ ਗਿਆ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wskaźnik wciśnięty"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cursor Pressionado"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cursor premido"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cursor apăsat"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Указатель нажат"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurzor stlačený"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kazalnik pritisnjen"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pekaren nedtryckt"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பாயிண்டர் அழுத்தப்பட்டது"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "పాయింటర్ నొక్కబడింది"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กดตัวชี้แล้ว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İmleç Basıldı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вказівник натиснуто"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پوائنٹر دب گیا"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã nhấn con trỏ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指针已按下"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指標已按下"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指標已按下"
+          }
+        }
+      }
+    },
     "Port" : {
       "localizations" : {
         "ar" : {
@@ -74748,6 +76876,310 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按下 %@ 以釋放指標"
+          }
+        }
+      }
+    },
+    "Press and Hold to Drag" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اضغط مطولًا للسحب"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Натиснете и задръжте за плъзгане"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "টেনে আনতে চেপে ধরে রাখুন"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén premut per arrossegar"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podržte a přetáhněte"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold nede for at trække"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zum Ziehen gedrückt halten"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Πατήστε παρατεταμένα για μεταφορά"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén pulsado para arrastrar"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén presionado para arrastrar"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vedä painamalla pitkään"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenir pour faire glisser"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenir pour faire glisser"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ખેંચવા માટે દબાવીને પકડી રાખો"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לחיצה ממושכת לגרירה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ड्रैग करने के लिए दबाकर रखें"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zadržite za povlačenje"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Húzás nyomva tartással"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tekan dan Tahan untuk Menyeret"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tieni premuto per trascinare"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "長押ししてドラッグ"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сүйреу үшін басып тұрыңыз"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಎಳೆಯಲು ಒತ್ತಿ ಹಿಡಿಯಿರಿ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "길게 눌러서 드래그하기"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paspauskite ir laikykite, kad vilktumėte"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "വലിച്ചിടാൻ അമർത്തിപ്പിടിക്കുക"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ड्रॅग करण्यासाठी दाबून धरा"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tekan dan Tahan untuk Seret"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold inne for å dra"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Houd ingedrukt om te slepen"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଟାଣିବା ପାଇଁ ଦବାଇ ଧରନ୍ତୁ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਘਸੀਟਣ ਲਈ ਦਬਾ ਕੇ ਰੱਖੋ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przytrzymaj, aby przeciągnąć"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantenha Pressionado para Arrastar"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantenha premido para arrastar"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Țineți apăsat pentru a trage"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удерживайте, чтобы перетащить"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podržte a potiahnite"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pridržite za vlečenje"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Håll ned för att dra"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இழுக்க அழுத்திப் பிடிக்கவும்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "లాగడానికి నొక్కి పట్టుకోండి"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แตะค้างไว้เพื่อลาก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sürüklemek İçin Basılı Tutun"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Утримуйте, щоб перетягнути"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "گھسیٹنے کے لیے دبا کر رکھیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chạm và giữ để kéo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住拖动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住拖移"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住拖移"
           }
         }
       }
@@ -90582,6 +93014,310 @@
         }
       }
     },
+    "Show Tips" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إظهار النصائح"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Покажи съветите"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "টিপস দেখান"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra els consells"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zobrazit tipy"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis tips"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipps anzeigen"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Εμφάνιση συμβουλών"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar consejos"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar consejos"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Näytä vinkit"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les conseils"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher les conseils"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ટિપ્સ બતાવો"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הצגת עצות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सुझाव दिखाएँ"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prikaži savjete"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tippek megjelenítése"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tampilkan Kiat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra i suggerimenti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヒントを表示"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кеңестерді көрсету"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಸಲಹೆಗಳನ್ನು ತೋರಿಸಿ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "팁 보기"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rodyti patarimus"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "നുറുങ്ങുകൾ കാണിക്കൂ"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "टिपा दाखवा"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tunjukkan Petua"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis tips"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toon tips"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଟିପ୍ସ ଦେଖାନ୍ତୁ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਸੁਝਾਅ ਦਿਖਾਓ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokaż wskazówki"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar Dicas"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar dicas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afișați sfaturile"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать советы"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zobraziť tipy"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prikaži nasvete"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visa tips"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உதவிக்குறிப்புகளைக் காட்டு"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "చిట్కాలను చూపించండి"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แสดงเคล็ดลับ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İpuçlarını Göster"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показати поради"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مشورے دکھائیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiển thị mẹo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示提示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示提示"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示提示"
+          }
+        }
+      }
+    },
     "Show Toolbar" : {
       "localizations" : {
         "ar" : {
@@ -101526,6 +104262,918 @@
         }
       }
     },
+    "Tips" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النصائح"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Съвети"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "টিপস"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consells"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipy"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tips"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipps"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Συμβουλές"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consejos"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consejos"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vinkit"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conseils"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conseils"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ટિપ્સ"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עצות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सुझाव"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Savjeti"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tippek"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kiat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggerimenti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヒント"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кеңестер"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಸಲಹೆಗಳು"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "팁"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Patarimai"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "നുറുങ്ങുകൾ"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "टिपा"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Petua"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tips"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tips"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଟିପ୍ସ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਸੁਝਾਅ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wskazówki"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dicas"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dicas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfaturi"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Советы"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipy"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nasveti"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tips"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உதவிக்குறிப்புகள்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "చిట్కాలు"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เคล็ดลับ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İpuçları"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поради"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مشورے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mẹo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提示"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提示"
+          }
+        }
+      }
+    },
+    "Touch and Hold Anywhere" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المس مطولًا أي مكان"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Задръжте където и да е"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "যেকোনো জায়গায় স্পর্শ করে ধরে রাখুন"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén premut a qualsevol lloc"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podržte kdekoli"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold nede et vilkårligt sted"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Irgendwo gedrückt halten"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αγγίξτε παρατεταμένα οπουδήποτε"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén pulsado en cualquier punto"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén presionado en cualquier parte"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paina pitkään missä tahansa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenez n’importe où"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenez n’importe où"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ગમે ત્યાં ટચ કરીને પકડી રાખો"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לגעת ולהחזיק בכל מקום"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कहीं भी छूकर रखें"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zadržite bilo gdje"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tartsa nyomva bárhol"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentuh dan Tahan di Mana Saja"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tieni premuto ovunque"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任意の場所を長押し"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кез келген жерді басып тұрыңыз"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಎಲ್ಲಿಯಾದರೂ ಸ್ಪರ್ಶಿಸಿ ಹಿಡಿಯಿರಿ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아무 곳이나 길게 터치"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palieskite ir laikykite bet kur"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "എവിടെയെങ്കിലും സ്‌പർശിച്ച് പിടിക്കുക"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कुठेही स्पर्श करून धरा"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentuh dan Tahan di Mana-mana"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold inne hvor som helst"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Houd ergens ingedrukt"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ଯେକୌଣସି ସ୍ଥାନରେ ଛୁଇଁ ଧରନ୍ତୁ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਕਿਤੇ ਵੀ ਛੂਹ ਕੇ ਰੱਖੋ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przytrzymaj w dowolnym miejscu"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantenha Pressionado em Qualquer Lugar"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantenha premido em qualquer ponto"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Țineți apăsat oriunde"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удерживайте в любом месте"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podržte kdekoľvek"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pridržite kjer koli"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Håll ned var som helst"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "எங்கு வேண்டுமானாலும் தொட்டுப் பிடிக்கவும்"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ఎక్కడైనా తాకి పట్టుకోండి"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แตะค้างไว้ที่ใดก็ได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herhangi Bir Yere Basılı Tutun"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Утримуйте в будь-якому місці"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کہیں بھی چھو کر رکھیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chạm và giữ ở bất kỳ đâu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住屏幕任意位置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住螢幕任意位置"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住螢幕任何位置"
+          }
+        }
+      }
+    },
+    "Touch and hold anywhere on the screen until the pointer presses down, then move your finger to drag windows or select text." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المس مطولًا أي مكان على الشاشة حتى يُضغط المؤشر، ثم حرّك إصبعك لسحب النوافذ أو تحديد النص."
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Докоснете и задръжте където и да е на екрана, докато показалецът не се натисне, след което местете пръста си, за да плъзгате прозорци или да избирате текст."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "স্ক্রিনের যেকোনো জায়গায় স্পর্শ করে ধরে রাখুন যতক্ষণ না পয়েন্টার চাপা হয়, তারপর উইন্ডো টেনে আনতে বা টেক্সট বেছে নিতে আঙুল সরান।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén el dit premut en qualsevol lloc de la pantalla fins que el punter quedi premut i, després, mou el dit per arrossegar finestres o seleccionar text."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podržte prst kdekoli na obrazovce, dokud se ukazatel nestiskne, a potom pohybem prstu přetahujte okna nebo vybírejte text."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold fingeren nede et vilkårligt sted på skærmen, indtil markøren trykkes ned, og flyt derefter fingeren for at trække vinduer eller vælge tekst."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Halte den Finger an einer beliebigen Stelle des Bildschirms, bis der Zeiger gedrückt wird, und bewege ihn dann, um Fenster zu ziehen oder Text auszuwählen."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Αγγίξτε παρατεταμένα οπουδήποτε στην οθόνη μέχρι να πατηθεί ο δείκτης και, στη συνέχεια, μετακινήστε το δάχτυλό σας για να μεταφέρετε παράθυρα ή να επιλέξετε κείμενο."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén el dedo en cualquier punto de la pantalla hasta que el puntero quede pulsado y, después, muévelo para arrastrar ventanas o seleccionar texto."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén el dedo en cualquier parte de la pantalla hasta que el puntero quede presionado y, después, muévelo para arrastrar ventanas o seleccionar texto."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pidä sormea missä tahansa näytöllä, kunnes osoitin painuu alas, ja liikuta sitten sormea vetääksesi ikkunoita tai valitaksesi tekstiä."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenez le doigt n’importe où sur l’écran jusqu’à ce que le pointeur s’enfonce, puis déplacez-le pour faire glisser des fenêtres ou sélectionner du texte."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenez le doigt n’importe où sur l’écran jusqu’à ce que le pointeur s’enfonce, puis déplacez-le pour faire glisser des fenêtres ou sélectionner du texte."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "પૉઇંટર દબાય ત્યાં સુધી સ્ક્રીન પર ગમે ત્યાં ટચ કરીને પકડી રાખો, પછી વિન્ડો ખેંચવા અથવા ટેક્સ્ટ પસંદ કરવા માટે તમારી આંગળી ખસેડો."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יש לגעת ולהחזיק בכל מקום במסך עד שהמצביע נלחץ, ואז להזיז את האצבע כדי לגרור חלונות או לבחור טקסט."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "स्क्रीन पर कहीं भी तब तक छूकर रखें जब तक पॉइंटर दब न जाए, फिर विंडो ड्रैग करने या टेक्स्ट चुनने के लिए अपनी उंगली खिसकाएँ।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zadržite prst bilo gdje na zaslonu dok se pokazivač ne pritisne, a zatim pomičite prst kako biste povlačili prozore ili odabrali tekst."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tartsa az ujját a képernyő bármely pontján, amíg a mutató le nem nyomódik, majd mozgassa az ujját az ablakok húzásához vagy a szöveg kijelöléséhez."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentuh dan tahan di mana saja pada layar hingga penunjuk tertekan, lalu gerakkan jari Anda untuk menyeret jendela atau memilih teks."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tieni il dito premuto in un punto qualsiasi dello schermo finché il puntatore non viene premuto, quindi muovi il dito per trascinare finestre o selezionare testo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ポインタが押されるまで画面の任意の場所を長押しし、そのまま指を動かすとウインドウをドラッグしたりテキストを選択したりできます。"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Меңзер басылғанша экранның кез келген жерін басып тұрыңыз, содан кейін терезелерді сүйреу немесе мәтінді таңдау үшін саусағыңызды жылжытыңыз."
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಪಾಯಿಂಟರ್ ಒತ್ತಲ್ಪಡುವವರೆಗೆ ಸ್ಕ್ರೀನ್‌ನ ಯಾವುದೇ ಸ್ಥಳದಲ್ಲಿ ಸ್ಪರ್ಶಿಸಿ ಹಿಡಿಯಿರಿ, ನಂತರ ವಿಂಡೋಗಳನ್ನು ಎಳೆಯಲು ಅಥವಾ ಪಠ್ಯವನ್ನು ಆಯ್ಕೆ ಮಾಡಲು ನಿಮ್ಮ ಬೆರಳನ್ನು ಸರಿಸಿ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "포인터가 눌릴 때까지 화면의 아무 곳이나 길게 터치한 다음, 손가락을 움직여 윈도우를 드래그하거나 텍스트를 선택하십시오."
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palieskite ir laikykite bet kurioje ekrano vietoje, kol žymeklis bus paspaustas, tada judinkite pirštą, kad vilktumėte langus arba pažymėtumėte tekstą."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "പോയിന്റർ അമരുന്നത് വരെ സ്ക്രീനിൽ എവിടെയെങ്കിലും സ്‌പർശിച്ച് പിടിക്കുക, തുടർന്ന് വിൻഡോകൾ വലിച്ചിടാനോ ടെക്‌സ്‌റ്റ് തിരഞ്ഞെടുക്കാനോ വിരൽ നീക്കുക."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पॉइंटर दाबला जाईपर्यंत स्क्रीनवर कुठेही स्पर्श करून धरा, नंतर विंडो ड्रॅग करण्यासाठी किंवा मजकूर निवडण्यासाठी बोट हलवा."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentuh dan tahan di mana-mana pada skrin sehingga penuding ditekan, kemudian gerakkan jari anda untuk menyeret tetingkap atau memilih teks."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold fingeren inne hvor som helst på skjermen til pekeren trykkes ned, og flytt deretter fingeren for å dra vinduer eller markere tekst."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Houd je vinger ergens op het scherm totdat de aanwijzer wordt ingedrukt en beweeg je vinger daarna om vensters te slepen of tekst te selecteren."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ପଏଣ୍ଟର୍ ଦବିବା ପର୍ଯ୍ୟନ୍ତ ସ୍କ୍ରିନ୍‌ର ଯେକୌଣସି ସ୍ଥାନରେ ଛୁଇଁ ଧରି ରଖନ୍ତୁ, ତାପରେ ୱିଣ୍ଡୋ ଟାଣିବା କିମ୍ବା ଟେକ୍ସଟ୍ ବାଛିବା ପାଇଁ ଆପଣଙ୍କ ଆଙ୍ଗୁଠି ଘୁଞ୍ଚାନ୍ତୁ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਜਦੋਂ ਤੱਕ ਪੁਆਇੰਟਰ ਦੱਬਿਆ ਨਾ ਜਾਵੇ, ਸਕ੍ਰੀਨ ’ਤੇ ਕਿਤੇ ਵੀ ਛੂਹ ਕੇ ਰੱਖੋ, ਫਿਰ ਵਿੰਡੋਆਂ ਨੂੰ ਘਸੀਟਣ ਜਾਂ ਟੈਕਸਟ ਚੁਣਨ ਲਈ ਆਪਣੀ ਉਂਗਲ ਹਿਲਾਓ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Przytrzymaj palec w dowolnym miejscu ekranu, aż wskaźnik zostanie wciśnięty, a następnie przesuwaj palec, aby przeciągać okna lub zaznaczać tekst."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque e mantenha o dedo em qualquer lugar da tela até que o cursor seja pressionado e, em seguida, mova o dedo para arrastar janelas ou selecionar texto."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantenha o dedo em qualquer ponto do ecrã até o cursor ser premido e, em seguida, mova o dedo para arrastar janelas ou selecionar texto."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atingeți și mențineți oriunde pe ecran până când cursorul este apăsat, apoi mișcați degetul pentru a trage ferestre sau a selecta text."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коснитесь любого места на экране и удерживайте палец, пока указатель не будет нажат, затем двигайте палец, чтобы перетаскивать окна или выделять текст."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Podržte prst kdekoľvek na obrazovke, kým sa kurzor nestlačí, a potom pohybom prsta presúvajte okná alebo vyberajte text."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pridržite prst kjer koli na zaslonu, dokler se kazalnik ne pritisne, nato pa premikajte prst, da vlečete okna ali izberete besedilo."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Håll fingret var som helst på skärmen tills pekaren trycks ned och flytta sedan fingret för att dra fönster eller markera text."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பாயிண்டர் அழுத்தப்படும் வரை திரையில் எங்கு வேண்டுமானாலும் தொட்டுப் பிடிக்கவும், பின்னர் சாளரங்களை இழுக்க அல்லது உரையைத் தேர்ந்தெடுக்க உங்கள் விரலை நகர்த்தவும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "పాయింటర్ నొక్కబడే వరకు స్క్రీన్‌పై ఎక్కడైనా తాకి పట్టుకోండి, ఆపై విండోలను లాగడానికి లేదా టెక్స్ట్‌ను ఎంచుకోవడానికి మీ వేలిని కదిలించండి."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แตะค้างไว้ที่ใดก็ได้บนหน้าจอจนกว่าตัวชี้จะถูกกด แล้วเลื่อนนิ้วเพื่อลากหน้าต่างหรือเลือกข้อความ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İmleç basılı hâle gelene kadar ekranın herhangi bir yerine dokunup basılı tutun, ardından pencereleri sürüklemek veya metin seçmek için parmağınızı hareket ettirin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Торкніться будь-якого місця на екрані й утримуйте палець, доки вказівник не буде натиснуто, а потім рухайте пальцем, щоб перетягувати вікна або виділяти текст."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسکرین پر کہیں بھی چھو کر رکھیں جب تک پوائنٹر دب نہ جائے، پھر ونڈوز گھسیٹنے یا ٹیکسٹ منتخب کرنے کے لیے اپنی انگلی ہلائیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chạm và giữ ở bất kỳ đâu trên màn hình cho đến khi con trỏ được nhấn xuống, sau đó di chuyển ngón tay để kéo cửa sổ hoặc chọn văn bản."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在屏幕任意位置按住手指，等指针按下后再移动，就能拖动窗口或选择文字。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在螢幕上任意位置按住手指，等指標按下後再移動，就能拖移視窗或選取文字。"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在螢幕上任何位置按住手指，等指標按下後再移動，就能拖移視窗或選取文字。"
+          }
+        }
+      }
+    },
     "Type Key" : {
       "localizations" : {
         "ar" : {
@@ -104562,6 +108210,310 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "URL"
+          }
+        }
+      }
+    },
+    "Use Remote Pointer Style" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استخدام نمط المؤشر البعيد"
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Използване на стила на отдалечения показалец"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "রিমোট পয়েন্টারের স্টাইল ব্যবহার করুন"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilitzar l’estil del punter remot"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Používat styl vzdáleného ukazatele"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brug fjernmarkørens stil"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stil des entfernten Zeigers verwenden"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Χρήση στυλ απομακρυσμένου δείκτη"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar el estilo del puntero remoto"
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar el estilo del puntero remoto"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Käytä etäosoittimen tyyliä"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utiliser le style du pointeur distant"
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utiliser le style du pointeur distant"
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "રિમોટ પૉઇંટરની સ્ટાઇલનો ઉપયોગ કરો"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שימוש בסגנון המצביע המרוחק"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रिमोट पॉइंटर की स्टाइल इस्तेमाल करें"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koristi stil udaljenog pokazivača"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A távoli mutató stílusának használata"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gunakan Gaya Penunjuk Jarak Jauh"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa lo stile del puntatore remoto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リモートのポインタスタイルを使用"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Қашықтағы меңзер стилін пайдалану"
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ರಿಮೋಟ್ ಪಾಯಿಂಟರ್ ಶೈಲಿಯನ್ನು ಬಳಸಿ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "원격 포인터 스타일 사용"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naudoti nuotolinio žymeklio stilių"
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "റിമോട്ട് പോയിന്റർ ശൈലി ഉപയോഗിക്കൂ"
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रिमोट पॉइंटरची स्टाइल वापरा"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gunakan Gaya Penuding Jauh"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruk stilen til den eksterne pekeren"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gebruik stijl van externe aanwijzer"
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ରିମୋଟ୍ ପଏଣ୍ଟର୍ ଶୈଳୀ ବ୍ୟବହାର କରନ୍ତୁ"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਰਿਮੋਟ ਪੁਆਇੰਟਰ ਦੀ ਸ਼ੈਲੀ ਵਰਤੋ"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Używaj stylu zdalnego wskaźnika"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar Estilo do Cursor Remoto"
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar o estilo do cursor remoto"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folosește stilul cursorului la distanță"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Использовать стиль удаленного указателя"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Používať štýl vzdialeného kurzora"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uporabi slog oddaljenega kazalnika"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Använd fjärrpekarens stil"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ரிமோட் பாயிண்டர் ஸ்டைலைப் பயன்படுத்து"
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "రిమోట్ పాయింటర్ స్టైల్‌ను ఉపయోగించండి"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ใช้รูปแบบตัวชี้ระยะไกล"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uzak İmleç Stilini Kullan"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Використовувати стиль віддаленого вказівника"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ریموٹ پوائنٹر کا اسٹائل استعمال کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dùng kiểu con trỏ từ xa"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用远程鼠标样式"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用遠端滑鼠樣式"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用遙距滑鼠樣式"
           }
         }
       }
@@ -108818,6 +112770,310 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在等待 VPN"
+          }
+        }
+      }
+    },
+    "When using a mouse or trackpad, turn on %@ › %@ so moving to the edge of the screen won’t open the Dock or Control Center." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عند استخدام الماوس أو لوحة التعقب، شغّل %1$@ > %2$@ حتى لا يؤدي الانتقال إلى حافة الشاشة إلى فتح شريط Dock أو مركز التحكم."
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Когато използвате мишка или тракпад, включете %1$@ › %2$@, за да не се отварят лентата Dock или Контролният център, когато стигнете до ръба на екрана."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মাউস বা ট্র্যাকপ্যাড ব্যবহার করার সময় %1$@ › %2$@ চালু করুন, যাতে স্ক্রিনের প্রান্তে গেলে ডক বা কন্ট্রোল সেন্টার না খোলে।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quan facis servir un ratolí o un trackpad, activa %1$@ › %2$@ perquè, en arribar a la vora de la pantalla, no s’obri el Dock ni el centre de control."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Když používáte myš nebo trackpad, zapněte %1$@ › %2$@ – po najetí k okraji obrazovky se pak neotevře Dock ani Ovládací centrum."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når du bruger en mus eller et pegefelt, skal du slå %1$@ › %2$@ til, så Dock eller Kontrolcenter ikke åbnes, når du bevæger dig ud til skærmens kant."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn du eine Maus oder ein Trackpad verwendest, aktiviere „%1$@“ > „%2$@“, damit sich am Bildschirmrand nicht das Dock oder das Kontrollzentrum öffnet."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Όταν χρησιμοποιείτε ποντίκι ή trackpad, ενεργοποιήστε το %1$@ › %2$@, ώστε η μετακίνηση στην άκρη της οθόνης να μην ανοίγει το Dock ή το Κέντρο ελέγχου."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuando uses un ratón o un trackpad, activa %1$@ > %2$@ para que, al llegar al borde de la pantalla, no se abra el Dock ni el centro de control."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuando uses un mouse o un trackpad, activa %1$@ > %2$@ para que, al llegar al borde de la pantalla, no se abra el Dock ni el centro de control."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kun käytät hiirtä tai ohjauslevyä, laita %1$@ › %2$@ päälle, jotta näytön reunaan siirtyminen ei avaa Dockia tai Ohjauskeskusta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsque vous utilisez une souris ou un trackpad, activez %1$@ > %2$@ pour que le Dock ou le centre de contrôle ne s’ouvre pas lorsque vous atteignez le bord de l’écran."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsque vous utilisez une souris ou un trackpad, activez %1$@ > %2$@ pour que le Dock ou le centre de contrôle ne s’ouvre pas lorsque vous atteignez le bord de l’écran."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "માઉસ અથવા ટ્રેકપેડનો ઉપયોગ કરતી વખતે %1$@ › %2$@ ચાલુ કરો, જેથી સ્ક્રીનની કિનારી પર જવાથી ડૉક અથવા કંટ્રોલ સેન્ટર ખૂલે નહીં."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בעת שימוש בעכבר או במשטח מגע, יש להפעיל את ״%1$@״ › ״%2$@״ כדי שתנועה לקצה המסך לא תפתח את ה‑Dock או את מרכז הבקרה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "माउस या ट्रैकपैड का उपयोग करते समय %1$@ › %2$@ चालू करें, ताकि स्क्रीन के किनारे पर जाने से डॉक या कंट्रोल सेंटर न खुले।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kada upotrebljavate miš ili trackpad, uključite %1$@ › %2$@ kako se pomicanjem do ruba zaslona ne bi otvarali Dock ili Kontrolni centar."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Egér vagy trackpad használatakor kapcsolja be a(z) %1$@ › %2$@ lehetőséget, így a képernyő széléhez érve nem nyílik meg a Dock vagy a Vezérlőközpont."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saat menggunakan mouse atau trackpad, nyalakan %1$@ › %2$@ agar bergerak ke tepi layar tidak membuka Dock atau Pusat Kontrol."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando usi un mouse o un trackpad, attiva %1$@ › %2$@: così, raggiungendo il bordo dello schermo, non si apriranno il Dock o Centro di Controllo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "マウスまたはトラックパッドを使用しているときは、“%1$@”＞“%2$@”をオンにすると、画面の端に移動してもDockやコントロールセンターが開かなくなります。"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тінтуір немесе трекпад пайдаланғанда %1$@ › %2$@ параметрін қосыңыз, сонда экран шетіне жеткенде Dock немесе Басқару орталығы ашылмайды."
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ಮೌಸ್ ಅಥವಾ ಟ್ರ್ಯಾಕ್‌ಪ್ಯಾಡ್ ಬಳಸುವಾಗ %1$@ › %2$@ ಆನ್ ಮಾಡಿ, ಆಗ ಸ್ಕ್ರೀನ್‌ನ ಅಂಚಿಗೆ ಹೋದಾಗ ಡಾಕ್ ಅಥವಾ ಕಂಟ್ರೋಲ್ ಸೆಂಟರ್ ತೆರೆಯುವುದಿಲ್ಲ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "마우스나 트랙패드를 사용할 때 ‘%1$@’ > ‘%2$@’을(를) 켜면 화면 가장자리로 이동해도 Dock이나 제어 센터가 열리지 않습니다."
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naudodami pelę arba jutiklinį kilimėlį, įjunkite „%1$@” › „%2$@”, kad pasiekus ekrano kraštą neatsidarytų „Dock” arba Valdymo centras."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "മൗസോ ട്രാക്ക്‌പാഡോ ഉപയോഗിക്കുമ്പോൾ %1$@ › %2$@ ഓണാക്കുക, അപ്പോൾ സ്ക്രീനിന്റെ അരികിലേക്ക് നീങ്ങുമ്പോൾ ഡോക്കോ കൺട്രോൾ സെന്ററോ തുറക്കില്ല."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "माउस किंवा ट्रॅकपॅड वापरताना %1$@ › %2$@ चालू करा, म्हणजे स्क्रीनच्या कडेला गेल्यावर डॉक किंवा कंट्रोल सेंटर उघडणार नाही."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apabila menggunakan tetikus atau pad jejak, aktifkan %1$@ › %2$@ supaya bergerak ke tepi skrin tidak membuka Dock atau Pusat Kawalan."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når du bruker mus eller styreflate, slår du på %1$@ › %2$@, slik at Dock eller Kontrollsenter ikke åpnes når du beveger deg til kanten av skjermen."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Als je een muis of trackpad gebruikt, schakel je %1$@ › %2$@ in, zodat het Dock of het bedieningspaneel niet opent wanneer je naar de rand van het scherm gaat."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ମାଉସ୍ କିମ୍ବା ଟ୍ରାକ୍‌ପ୍ୟାଡ୍ ବ୍ୟବହାର କରିବା ସମୟରେ %1$@ › %2$@ ଅନ୍ କରନ୍ତୁ, ଯାହାଦ୍ୱାରା ସ୍କ୍ରିନ୍‌ର ଧାରକୁ ଗଲେ ଡକ୍ କିମ୍ବା କଣ୍ଟ୍ରୋଲ୍ ସେଣ୍ଟର୍ ଖୋଲିବ ନାହିଁ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ਮਾਊਸ ਜਾਂ ਟ੍ਰੈਕਪੈਡ ਵਰਤਦੇ ਸਮੇਂ %1$@ › %2$@ ਚਾਲੂ ਕਰੋ, ਤਾਂ ਜੋ ਸਕ੍ਰੀਨ ਦੇ ਕਿਨਾਰੇ ’ਤੇ ਜਾਣ ਨਾਲ ਡੌਕ ਜਾਂ ਕੰਟਰੋਲ ਸੈਂਟਰ ਨਾ ਖੁੱਲ੍ਹੇ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gdy używasz myszy lub gładzika, włącz %1$@ › %2$@, aby przesunięcie do krawędzi ekranu nie otwierało Docka ani centrum sterowania."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ao usar um mouse ou trackpad, ative %1$@ › %2$@ para que mover até a borda da tela não abra o Dock ou a Central de Controle."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ao usar um rato ou um trackpad, ative %1$@ › %2$@ para que, ao chegar à margem do ecrã, não se abra a Dock nem a central de controlo."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Când folosiți un mouse sau un trackpad, activați %1$@ › %2$@, astfel încât deplasarea spre marginea ecranului să nu deschidă Dock-ul sau Centrul de control."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "При использовании мыши или трекпада включите «%1$@» > «%2$@», чтобы при перемещении к краю экрана не открывались Dock или Пункт управления."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keď používate myš alebo trackpad, zapnite %1$@ › %2$@ – po presune k okraju obrazovky sa potom neotvorí Dock ani Ovládacie centrum."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ko uporabljate miško ali sledilno ploščico, vklopite %1$@ › %2$@, da se ob premiku do roba zaslona ne odpre Dock ali Nadzorno središče."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "När du använder en mus eller styrplatta slår du på %1$@ › %2$@ så att Dock eller Kontrollcenter inte öppnas när du rör dig till skärmens kant."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மவுஸ் அல்லது டிராக்பேடைப் பயன்படுத்தும்போது %1$@ › %2$@ என்பதை இயக்கவும், அப்போது திரையின் விளிம்புக்குச் சென்றாலும் டாக் அல்லது கட்டுப்பாட்டு மையம் திறக்காது."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "మౌస్ లేదా ట్రాక్‌ప్యాడ్ ఉపయోగిస్తున్నప్పుడు ‘%1$@’ › ‘%2$@’ ఆన్ చేయండి, అప్పుడు స్క్రీన్ అంచుకు వెళ్లినా డాక్ లేదా కంట్రోల్ సెంటర్ తెరుచుకోదు."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เมื่อใช้เมาส์หรือแทร็คแพด ให้เปิด %1$@ › %2$@ เพื่อไม่ให้ Dock หรือศูนย์ควบคุมเปิดขึ้นเมื่อเลื่อนไปที่ขอบหน้าจอ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fare veya izleme dörtgeni kullanırken %1$@ › %2$@ seçeneğini açın; böylece ekranın kenarına gittiğinizde Dock veya Denetim Merkezi açılmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коли використовуєте мишу або трекпад, увімкніть %1$@ › %2$@, щоб під час переміщення до краю екрана не відкривалися Dock або Пункт керування."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ماؤس یا ٹریک پیڈ استعمال کرتے وقت %1$@ › %2$@ آن کریں، تاکہ اسکرین کے کنارے پر جانے سے ڈاک یا کنٹرول سینٹر نہ کھلے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Khi dùng chuột hoặc bàn di chuột, hãy bật %1$@ > %2$@ để việc di chuyển tới cạnh màn hình không mở Dock hoặc Trung tâm điều khiển."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用鼠标或触控板时，打开“%1$@”>“%2$@”，移到屏幕边缘就不会弹出程序坞或控制中心。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用滑鼠或觸控式軌跡板時，開啟「%1$@」>「%2$@」，移到螢幕邊緣就不會打開 Dock 或控制中心。"
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用滑鼠或觸控式軌跡板時，開啟「%1$@」>「%2$@」，移到螢幕邊緣就不會打開 Dock 或控制中心。"
           }
         }
       }
