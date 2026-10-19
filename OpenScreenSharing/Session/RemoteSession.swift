@@ -159,6 +159,7 @@ nonisolated struct PointerButtons: OptionSet, Hashable, Sendable {
 nonisolated struct CursorShape: @unchecked Sendable {
     var image: CGImage
     var hotspot: CGPoint
+    var inversion: CGImage?
 }
 
 nonisolated struct DeviceInfo: Equatable, Sendable {

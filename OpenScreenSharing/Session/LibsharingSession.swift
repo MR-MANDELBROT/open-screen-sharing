@@ -671,7 +671,16 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
             delegate?.sessionCursorChanged(nil)
             return
         }
-        delegate?.sessionCursorChanged(CursorShape(image: image, hotspot: CGPoint(x: Int(cursor.hotspotX), y: Int(cursor.hotspotY))))
+        var inversion: CGImage?
+        if let mask = cursor.invert, mask.count == Int(cursor.width) * Int(cursor.height), let provider = CGDataProvider(data: mask as CFData) {
+            inversion = CGImage(
+                width: Int(cursor.width), height: Int(cursor.height), bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: Int(cursor.width),
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
+            )
+        }
+        delegate?.sessionCursorChanged(
+            CursorShape(image: image, hotspot: CGPoint(x: Int(cursor.hotspotX), y: Int(cursor.hotspotY)), inversion: inversion))
     }
 
     func onCursorPosition(_ x: Int32, y: Int32) {

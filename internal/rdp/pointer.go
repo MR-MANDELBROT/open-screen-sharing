@@ -178,6 +178,10 @@ func (g *graphics) readPointer(r *reader, bpp int, large bool) (uint16, *bgra.Cu
 			if pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 && pixel[3] == 255 {
 				pixel[3] = 0
 			} else if pixel[0] == 255 && pixel[1] == 255 && pixel[2] == 255 && pixel[3] == 255 {
+				if cursor.Invert == nil {
+					cursor.Invert = make([]byte, width*height)
+				}
+				cursor.Invert[y*width+x] = 255
 				shade := byte(255)
 				if (x+y)%2 != 0 {
 					shade = 0

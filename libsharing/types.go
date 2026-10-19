@@ -275,6 +275,7 @@ type CursorImage struct {
 	HotspotX int32
 	HotspotY int32
 	Pixels   []byte
+	Invert   []byte
 }
 
 type Clipboard struct {

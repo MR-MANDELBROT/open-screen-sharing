@@ -36,6 +36,19 @@ final class ScreenRenderer {
             return texture.sample(textureSampler, in.textureCoordinate);
         }
 
+        fragment float4 maskedCursorFragment(
+            QuadVertex in [[stage_in]], texture2d<float> texture [[texture(0)]], texture2d<float> inversion [[texture(1)]],
+            sampler textureSampler [[sampler(0)]]
+        ) {
+            return texture.sample(textureSampler, in.textureCoordinate) * (1 - inversion.sample(textureSampler, in.textureCoordinate).r);
+        }
+
+        fragment float4 cursorInversionFragment(
+            QuadVertex in [[stage_in]], texture2d<float> inversion [[texture(1)]], sampler textureSampler [[sampler(0)]]
+        ) {
+            return float4(inversion.sample(textureSampler, in.textureCoordinate).r);
+        }
+
         fragment float4 cursorFragmentPQ(QuadVertex in [[stage_in]], texture2d<float> texture [[texture(0)]], sampler textureSampler [[sampler(0)]]) {
             float4 color = texture.sample(textureSampler, in.textureCoordinate);
             if (color.a <= 0) {
@@ -54,6 +67,8 @@ final class ScreenRenderer {
     private struct Pipelines {
         var screen: MTLRenderPipelineState
         var cursor: MTLRenderPipelineState
+        var maskedCursor: MTLRenderPipelineState?
+        var cursorInversion: MTLRenderPipelineState?
     }
 
     private let device: MTLDevice
@@ -65,8 +80,7 @@ final class ScreenRenderer {
     private let linearSampler: MTLSamplerState
     private let nearestSampler: MTLSamplerState
     private var textureCache: CVMetalTextureCache?
-    private var cursorTexture: MTLTexture?
-    private var cursorImage: CGImage?
+    private var cursorTextures: [(image: CGImage, texture: MTLTexture)] = []
 
     init(layer: CAMetalLayer) throws {
         guard let device = MTLCreateSystemDefaultDevice() else { throw MessageError("MTLCreateSystemDefaultDevice returned no device") }
@@ -79,7 +93,7 @@ final class ScreenRenderer {
         layer.framebufferOnly = true
         layer.isOpaque = true
 
-        func makePipelines(pixelFormat: MTLPixelFormat, cursorFunction: String) throws -> Pipelines {
+        func makePipelines(pixelFormat: MTLPixelFormat, cursorFunction: String, invertsCursor: Bool) throws -> Pipelines {
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.vertexFunction = library.makeFunction(name: "quadVertex")
             descriptor.fragmentFunction = library.makeFunction(name: "screenFragment")
@@ -93,10 +107,19 @@ final class ScreenRenderer {
             attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
             attachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
             let cursor = try device.makeRenderPipelineState(descriptor: descriptor)
-            return Pipelines(screen: screen, cursor: cursor)
+            guard invertsCursor else { return Pipelines(screen: screen, cursor: cursor) }
+            descriptor.fragmentFunction = library.makeFunction(name: "maskedCursorFragment")
+            let maskedCursor = try device.makeRenderPipelineState(descriptor: descriptor)
+            descriptor.fragmentFunction = library.makeFunction(name: "cursorInversionFragment")
+            attachment.sourceRGBBlendFactor = .oneMinusDestinationColor
+            attachment.destinationRGBBlendFactor = .oneMinusSourceColor
+            attachment.sourceAlphaBlendFactor = .zero
+            attachment.destinationAlphaBlendFactor = .one
+            let cursorInversion = try device.makeRenderPipelineState(descriptor: descriptor)
+            return Pipelines(screen: screen, cursor: cursor, maskedCursor: maskedCursor, cursorInversion: cursorInversion)
         }
-        standardPipelines = try makePipelines(pixelFormat: .bgra8Unorm, cursorFunction: "cursorFragment")
-        hdrPipelines = try makePipelines(pixelFormat: .rgba16Float, cursorFunction: "cursorFragmentPQ")
+        standardPipelines = try makePipelines(pixelFormat: .bgra8Unorm, cursorFunction: "cursorFragment", invertsCursor: true)
+        hdrPipelines = try makePipelines(pixelFormat: .rgba16Float, cursorFunction: "cursorFragmentPQ", invertsCursor: false)
 
         let samplerDescriptor = MTLSamplerDescriptor()
         samplerDescriptor.minFilter = .linear
@@ -154,10 +177,15 @@ final class ScreenRenderer {
                 images.append((texture, rect, SIMD4<Float>(0, 0, 1, Float(visible / CGFloat(frame.stripHeight)))))
             }
         }
-        var drawnCursor: (texture: MTLTexture, rect: CGRect)?
+        var drawnCursor: (texture: MTLTexture, inversion: MTLTexture?, rect: CGRect)?
         if let cursor = frame.cursor, let cursorRect = frame.cursorRect {
             guard let texture = texture(for: cursor.image) else { return false }
-            drawnCursor = (texture, cursorRect)
+            var inversion: MTLTexture?
+            if let image = cursor.inversion {
+                guard let texture = self.texture(for: image) else { return false }
+                inversion = texture
+            }
+            drawnCursor = (texture, inversion, cursorRect)
         }
         configure(layer, for: frame.pixelBuffer ?? frame.strips.compactMap { $0 }.first)
         let pipelines = isHDR ? hdrPipelines : standardPipelines
@@ -175,7 +203,6 @@ final class ScreenRenderer {
                 sampler: sampler, pipeline: pipelines.screen, encoder: encoder)
         }
         if let drawnCursor {
-            encoder.setRenderPipelineState(pipelines.cursor)
             var rect = ndc(drawnCursor.rect, in: frame.viewSize)
             var textureRect = SIMD4<Float>(0, 0, 1, 1)
             var turns: UInt32 = 0
@@ -184,6 +211,16 @@ final class ScreenRenderer {
             encoder.setVertexBytes(&turns, length: MemoryLayout<UInt32>.size, index: 2)
             encoder.setFragmentTexture(drawnCursor.texture, index: 0)
             encoder.setFragmentSamplerState(self.sampler(pixelsPerTexel: frame.pixelsPerCursorPixel), index: 0)
+            if let inversion = drawnCursor.inversion, let maskedCursor = pipelines.maskedCursor,
+                let cursorInversion = pipelines.cursorInversion
+            {
+                encoder.setFragmentTexture(inversion, index: 1)
+                encoder.setRenderPipelineState(maskedCursor)
+                encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+                encoder.setRenderPipelineState(cursorInversion)
+            } else {
+                encoder.setRenderPipelineState(pipelines.cursor)
+            }
             encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         }
         encoder.endEncoding()
@@ -294,7 +331,7 @@ final class ScreenRenderer {
     }
 
     private func texture(for image: CGImage) -> MTLTexture? {
-        if image === cursorImage, let cursorTexture { return cursorTexture }
+        if let cached = cursorTextures.first(where: { $0.image === image }) { return cached.texture }
         let width = image.width
         let height = image.height
         let bytesPerRow = width * 4
@@ -315,8 +352,7 @@ final class ScreenRenderer {
         descriptor.usage = .shaderRead
         guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
         texture.replace(region: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0, withBytes: pixels, bytesPerRow: bytesPerRow)
-        cursorImage = image
-        cursorTexture = texture
+        cursorTextures = cursorTextures.suffix(1) + [(image, texture)]
         return texture
     }
 }

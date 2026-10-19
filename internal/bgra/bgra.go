@@ -91,4 +91,5 @@ type Cursor struct {
 	HotspotX int
 	HotspotY int
 	Pixels   []byte
+	Invert   []byte
 }

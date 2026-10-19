@@ -778,6 +778,7 @@ func newCursorImage(cursor *bgra.Cursor) *CursorImage {
 		HotspotX: int32(cursor.HotspotX),
 		HotspotY: int32(cursor.HotspotY),
 		Pixels:   cursor.Pixels,
+		Invert:   cursor.Invert,
 	}
 }
 
