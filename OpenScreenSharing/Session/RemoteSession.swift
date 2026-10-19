@@ -236,6 +236,7 @@ nonisolated struct SessionConfiguration: Sendable {
     var remoteAudio: RemoteAudio
     var updateRate: Int
     var networkConfiguration = NetworkConfiguration()
+    var keepsAlive = false
 }
 
 nonisolated struct SessionInfo: Equatable, Sendable {

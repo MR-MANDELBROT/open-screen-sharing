@@ -21,6 +21,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var internetMaximumFrameRate = MaximumFrameRate.sixty
     var remoteProtocol = RemoteProtocol.vnc
     var trustedFingerprint = ""
+    var keepsAlive = false
 
     var quality = SessionQuality.adaptive
     var observes = false

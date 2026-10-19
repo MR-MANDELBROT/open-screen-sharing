@@ -28,6 +28,7 @@ func rdpOptions(o *SessionOptions, seen func(fingerprint string)) (rdp.Options, 
 		KeyboardLayout: uint32(o.KeyboardLayout),
 		Clipboard:      o.SharedClipboard,
 		Audio:          o.Audio,
+		KeepAlive:      o.KeepAlive,
 		VerifyCertificate: func(fingerprint string) error {
 			seen(fingerprint)
 			if trusted != "" && !strings.EqualFold(fingerprint, trusted) {

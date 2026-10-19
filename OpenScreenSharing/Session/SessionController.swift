@@ -464,8 +464,10 @@ final class SessionController: ObservableObject, Identifiable {
 
     private func connect(with credentials: SessionCredentials) {
         self.credentials = credentials
+        var keepsAlive = false
         if let computerID, let computer = store.computer(computerID) {
             networkConfiguration = computer.networkConfiguration
+            keepsAlive = computer.keepsAlive
         }
         hdrEnabled = hdrEnabled && networkSupportsHDR
         highPerformanceStartPending = usesHighPerformance
@@ -485,7 +487,8 @@ final class SessionController: ObservableObject, Identifiable {
             sharesClipboard: clipboardSharing,
             remoteAudio: remoteAudio,
             updateRate: screenRefreshRate,
-            networkConfiguration: networkConfiguration
+            networkConfiguration: networkConfiguration,
+            keepsAlive: keepsAlive
         )
         let sink = SessionEventSink(controller: self, pipeline: pipeline)
         let session = LibsharingRemoteSession(configuration: configuration, delegate: sink)

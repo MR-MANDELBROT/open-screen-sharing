@@ -18,6 +18,7 @@ struct ComputerEditor: View {
     @State private var password: String
     @State private var choice: ServerChoice
     @State private var networkConfiguration: NetworkConfiguration
+    @State private var keepsAlive: Bool
     @State private var problem: Problem?
     @State private var alert: AlertState?
     @FocusState private var focusedField: Field?
@@ -44,6 +45,7 @@ struct ComputerEditor: View {
         _password = State(initialValue: computer.password)
         _choice = State(initialValue: ServerChoice(computer))
         _networkConfiguration = State(initialValue: computer.networkConfiguration)
+        _keepsAlive = State(initialValue: computer.keepsAlive)
     }
 
     private var trimmedUsername: String {
@@ -156,6 +158,13 @@ struct ComputerEditor: View {
                         Text("Authentication")
                     }
                 }
+                if choice == .rdp {
+                    Section {
+                        Toggle("Keep Alive", isOn: $keepsAlive)
+                    } header: {
+                        Text("Connection")
+                    }
+                }
             }
             .navigationTitle(setup == nil ? Text("Edit Connection") : Text("New Connection"))
             #if os(iOS)
@@ -212,6 +221,7 @@ struct ComputerEditor: View {
                 computer.networkConfiguration = networkConfiguration
                 computer.remoteProtocol = choice.remoteProtocol
                 computer.usesHighPerformance = choice.usesHighPerformance
+                computer.keepsAlive = keepsAlive
             }
         } catch {
             alert = AlertState(String(localized: "Couldn’t Save “\(name)”"), error: error)

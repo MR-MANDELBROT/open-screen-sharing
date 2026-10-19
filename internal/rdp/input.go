@@ -51,6 +51,8 @@ const (
 	// the button (12 ms ahead in a WinForms test); a 20 ms gap between pointer and keyboard keeps the order.
 	switchInterval = 20 * time.Millisecond
 
+	keepAliveInterval = 30 * time.Second
+
 	scancodeEnter        = 0x1c
 	scancodeTab          = 0x0f
 	scancodeBackspace    = 0x0e
@@ -101,10 +103,11 @@ type inputGroup struct {
 }
 
 type inputQueue struct {
-	send   func(events []inputEvent, motion bool) error
-	done   <-chan struct{}
-	wake   chan struct{}
-	logger *slog.Logger
+	send      func(events []inputEvent, motion bool) error
+	done      <-chan struct{}
+	wake      chan struct{}
+	logger    *slog.Logger
+	keepAlive bool
 
 	access    sync.Mutex
 	pending   []inputGroup
@@ -121,15 +124,16 @@ type inputQueue struct {
 	scrollY   float64
 }
 
-func newInputQueue(send func([]inputEvent, bool) error, done <-chan struct{}, logger *slog.Logger) *inputQueue {
+func newInputQueue(send func([]inputEvent, bool) error, done <-chan struct{}, logger *slog.Logger, keepAlive bool) *inputQueue {
 	return &inputQueue{
-		send:    send,
-		done:    done,
-		wake:    make(chan struct{}, 1),
-		logger:  logger,
-		locks:   numLock,
-		pressed: make(map[uint16]bool),
-		typed:   make(map[uint32]bool),
+		send:      send,
+		done:      done,
+		wake:      make(chan struct{}, 1),
+		logger:    logger,
+		keepAlive: keepAlive,
+		locks:     numLock,
+		pressed:   make(map[uint16]bool),
+		typed:     make(map[uint32]bool),
 	}
 }
 
@@ -240,6 +244,20 @@ func (q *inputQueue) run() {
 		var gate <-chan error
 		if len(q.pending) == 0 {
 			q.pending = nil
+			if q.keepAlive {
+				idle := time.Since(q.last)
+				if idle >= keepAliveInterval {
+					// Windows 11 26200 resets both the idle session limit and GetLastInputInfo on a synchronize
+					// event that leaves the lock keys unchanged.
+					err := q.deliver(inputGroup{events: []inputEvent{{kind: inputSynchronize, a: uint16(q.locks)}}})
+					q.access.Unlock()
+					if err != nil {
+						return
+					}
+					continue
+				}
+				timer = time.After(keepAliveInterval - idle)
+			}
 		} else if head := q.pending[0]; head.gate != nil {
 			gate = head.gate
 		} else if wait := q.delay(head); wait > 0 {

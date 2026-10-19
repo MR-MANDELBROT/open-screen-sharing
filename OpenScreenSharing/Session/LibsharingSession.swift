@@ -43,6 +43,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         options.decoderMaxPixelRate = DecoderCapabilities.current.maximumPixelRate
         options.maximumFrameRate = Int32(configuration.networkConfiguration.maximumFrameRate.rawValue)
         options.updateRate = Int32(configuration.updateRate)
+        options.keepAlive = configuration.keepsAlive
 
         let handler = LibsharingHandler(delegate: delegate, remoteProtocol: configuration.remoteProtocol, platform: configuration.platform)
         handler.forwardsClipboard = configuration.sharesClipboard

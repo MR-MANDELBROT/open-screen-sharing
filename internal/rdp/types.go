@@ -28,6 +28,7 @@ type Options struct {
 	Clipboard          bool
 	Audio              bool
 	VerifyCertificate  func(fingerprint string) error
+	KeepAlive          bool
 	DialTimeout        time.Duration
 	Logger             *slog.Logger
 }

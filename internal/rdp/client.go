@@ -185,7 +185,7 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 		license:        &licenseState{username: opts.Username, hostname: opts.ClientName},
 		keyboardLayout: opts.KeyboardLayout,
 	}
-	c.input = newInputQueue(c.session.sendInput, c.writerDone, c.logger)
+	c.input = newInputQueue(c.session.sendInput, c.writerDone, c.logger, opts.KeepAlive)
 	c.session.input = c.input
 	dynamic := &drdynvc{logger: c.logger, listeners: []*dynamicListener{
 		{name: dynamicChannelGraphics, handler: &rdpgfx{g: c.graphics}, required: true},

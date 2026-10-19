@@ -139,6 +139,8 @@ type SessionOptions struct {
 	MaximumFrameRate int32
 
 	UpdateRate int32
+
+	KeepAlive bool
 }
 
 func NewSessionOptions() *SessionOptions {
