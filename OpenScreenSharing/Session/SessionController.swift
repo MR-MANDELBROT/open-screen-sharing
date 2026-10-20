@@ -97,7 +97,15 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var receivesAudio = true
     var windowSize: CGSize?
     var locksPointer = false
-    var usesNativeTouch = true
+    var usesNativeTouch: Bool
+
+    @MainActor static var defaultUsesNativeTouch: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        false
+        #endif
+    }
 }
 
 private struct KeyboardSourceRequest {
@@ -144,7 +152,7 @@ final class SessionController: Identifiable {
     var isToolbarDocked = false
     var letterbox: Letterbox?
     private(set) var isPointerLockOn = false
-    private(set) var isNativeTouchOn = true
+    private(set) var isNativeTouchOn = SessionMemory.defaultUsesNativeTouch
     private(set) var isZoomModeOn = false
     var isPointerLocked = false {
         didSet {
