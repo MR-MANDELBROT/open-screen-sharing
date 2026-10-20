@@ -66,6 +66,7 @@ const (
 	licenseSignatureLength     = 72
 	licenseMACPad1             = 0x36
 	licenseMACPad2             = 0x5c
+	licensePremasterLength     = 48
 )
 
 type licenseState struct {
@@ -189,7 +190,7 @@ func (l *licenseState) receiveRequest(payload []byte) ([]byte, error) {
 		return nil, E.New("rdp: invalid licensing client identity")
 	}
 	var clientRandom [32]byte
-	var premaster [48]byte
+	var premaster [licensePremasterLength]byte
 	_, _ = rand.Read(clientRandom[:])
 	_, _ = rand.Read(premaster[:])
 	defer clear(premaster[:])
@@ -393,7 +394,8 @@ func parseLicensingCertificate(data []byte) (*rsa.PublicKey, error) {
 	default:
 		return nil, E.New("rdp: unsupported licensing certificate version ", version)
 	}
-	if key.N.BitLen() < 512 || key.N.BitLen() > 16384 || key.N.Bit(0) != 1 || key.E < 3 || key.E&1 != 1 || uint64(key.E) > 0x7fffffff {
+	// The fixed licensing key of xrdp before 0.10.1 has a 511-bit modulus, though its key blob declares 512 bits.
+	if key.N.BitLen() <= licensePremasterLength*8 || key.N.BitLen() > 16384 || key.N.Bit(0) != 1 || key.E < 3 || key.E&1 != 1 || uint64(key.E) > 0x7fffffff {
 		return nil, E.New("rdp: unsupported licensing RSA public key: ", key.N.BitLen(), "-bit modulus, exponent ", key.E)
 	}
 	return key, nil
@@ -413,7 +415,7 @@ func appendLicenseBlob(dst []byte, kind uint16, data []byte) []byte {
 
 func licenseBlob(r *reader, expected uint16) []byte {
 	kind, length := r.u16(), r.u16()
-	if r.err == nil && expected != licenseBlobAny && kind != expected && !(kind == licenseBlobAny && length == 0) {
+	if r.err == nil && expected != licenseBlobAny && kind != expected && length != 0 {
 		r.err = E.New("rdp: unexpected licensing blob type ", kind, ", expected ", expected)
 	}
 	return r.take(int(length))

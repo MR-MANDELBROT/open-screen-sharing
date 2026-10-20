@@ -47,6 +47,7 @@ const (
 	userDataClientNetwork        = 0xc003
 	userDataClientMessage        = 0xc006
 	userDataClientMultitransport = 0xc00a
+	userDataServerCore           = 0x0c01
 	userDataServerSecurity       = 0x0c02
 	userDataServerNetwork        = 0x0c03
 	userDataServerMessage        = 0x0c04
@@ -164,7 +165,7 @@ func readBER(r *reader, expected ...byte) *reader {
 	return r.sub(n)
 }
 
-func clientUserData(opts Options, channels []*staticChannel) []byte {
+func clientUserData(opts Options, protocol uint32, channels []*staticChannel) []byte {
 	core := binary.LittleEndian.AppendUint32(nil, rdpVersion5Plus)
 	core = binary.LittleEndian.AppendUint16(core, uint16(opts.Width))
 	core = binary.LittleEndian.AppendUint16(core, uint16(opts.Height))
@@ -185,7 +186,7 @@ func clientUserData(opts Options, channels []*staticChannel) []byte {
 	core = binary.LittleEndian.AppendUint16(core, earlySupportErrorInfo|earlyWant32BPP|earlyValidConnectionType|earlySupportNetcharDetect|earlySupportDynamicGFX)
 	core = zeros(core, clientDigitalProductIDLength)
 	core = append(core, connectionTypeAutodetect, 0)
-	core = binary.LittleEndian.AppendUint32(core, protocolHybrid)
+	core = binary.LittleEndian.AppendUint32(core, protocol)
 	core = binary.LittleEndian.AppendUint32(core, 0)
 	core = binary.LittleEndian.AppendUint32(core, 0)
 	core = binary.LittleEndian.AppendUint16(core, 0)
@@ -214,7 +215,7 @@ func (m *mcsLayer) connect(opts Options, channels []*staticChannel) error {
 	b = append(b, domainParameters(mcsTargetDomain)...)
 	b = append(b, domainParameters(mcsMinimumDomain)...)
 	b = append(b, domainParameters(mcsMaximumDomain)...)
-	b = append(b, berValue([]byte{berTagOctetString}, clientUserData(opts, channels))...)
+	b = append(b, berValue([]byte{berTagOctetString}, clientUserData(opts, m.transport.protocol, channels))...)
 	err := m.outbox.Push(tpkt(berValue(mcsConnectInitial, b)), false)
 	if err != nil {
 		return err
@@ -333,6 +334,11 @@ func (m *mcsLayer) parseConnectResponse(packet []byte, channels []*staticChannel
 		}
 		data := blocks.sub(size - 4)
 		switch kind {
+		case userDataServerCore:
+			data.u32()
+			if requested := data.u32(); data.err == nil && requested != requestedProtocols {
+				return E.New("rdp: the security negotiation was altered: the server received protocols 0x", strconv.FormatUint(uint64(requested), 16), " instead of 0x", strconv.FormatUint(requestedProtocols, 16))
+			}
 		case userDataServerSecurity:
 			method, level := data.u32(), data.u32()
 			if method != encryptionMethodNone || level != 0 {

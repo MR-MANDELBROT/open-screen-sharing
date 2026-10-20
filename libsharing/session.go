@@ -372,7 +372,7 @@ func classifyError(err error) (int32, string) {
 		return ErrorAuthentication, err.Error()
 	case E.IsMulti(err, rfb.ErrPermissionDenied, rdp.ErrRemoteLogonDenied):
 		return ErrorPermissionDenied, err.Error()
-	case E.IsMulti(err, rfb.ErrUnsupportedServer, rdp.ErrNotRDP, rdp.ErrNLAUnavailable):
+	case E.IsMulti(err, rfb.ErrUnsupportedServer, rdp.ErrNotRDP, rdp.ErrUnsupportedSecurity):
 		return ErrorUnsupportedServer, err.Error()
 	case errors.Is(err, rfb.ErrUnverifiedServer):
 		return ErrorUnverifiedServer, err.Error()

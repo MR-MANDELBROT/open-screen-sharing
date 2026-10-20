@@ -187,7 +187,7 @@ func (s *session) receive(payload []byte) error {
 		return E.New("rdp: truncated security header: ", len(payload), " of 4 bytes")
 	}
 	flags := binary.LittleEndian.Uint16(payload)
-	if binary.LittleEndian.Uint16(payload[2:]) == 0 {
+	if s.license.phase != licenseCompleted || binary.LittleEndian.Uint16(payload[2:]) == 0 {
 		switch {
 		case flags&securityLicensePacket != 0:
 			response, err := s.license.receive(payload[4:])

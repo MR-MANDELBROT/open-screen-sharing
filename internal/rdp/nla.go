@@ -19,6 +19,9 @@ import (
 const (
 	credSSPVersion     = 6
 	maximumAuthMessage = 1 << 20
+
+	authorizationSuccess      = 0x00000000
+	authorizationAccessDenied = 0x00000005
 )
 
 type negoToken struct {
@@ -114,7 +117,24 @@ func (t *transport) authenticate(opts Options, host string, cert *x509.Certifica
 		return err
 	}
 	defer clear(credentials)
-	return t.writeAuth(tsRequest{Version: credSSPVersion, AuthInfo: client.Seal(credentials)})
+	err = t.writeAuth(tsRequest{Version: credSSPVersion, AuthInfo: client.Seal(credentials)})
+	if err != nil || t.protocol != protocolHybridEx {
+		return err
+	}
+	var result [4]byte
+	_, err = io.ReadFull(t.reader, result[:])
+	if err != nil {
+		return E.Cause(err, "rdp: read early user authorization result")
+	}
+	t.read.Add(uint64(len(result)))
+	switch status := binary.LittleEndian.Uint32(result[:]); status {
+	case authorizationSuccess:
+		return nil
+	case authorizationAccessDenied:
+		return ErrRemoteLogonDenied
+	default:
+		return E.New("rdp: early user authorization result 0x", strconv.FormatUint(uint64(status), 16))
+	}
 }
 
 func (t *transport) writeAuth(request tsRequest) error {

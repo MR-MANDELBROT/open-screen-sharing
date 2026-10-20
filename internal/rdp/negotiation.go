@@ -15,8 +15,11 @@ import (
 )
 
 const (
-	protocolRDP    = 0
-	protocolHybrid = 2
+	protocolRDP        = 0
+	protocolSSL        = 1
+	protocolHybrid     = 2
+	protocolHybridEx   = 8
+	requestedProtocols = protocolSSL | protocolHybrid | protocolHybridEx
 
 	negotiationRequest  = 1
 	negotiationResponse = 2
@@ -29,7 +32,7 @@ const (
 var (
 	ErrNotRDP               = E.New("rdp: the server did not answer as an RDP server")
 	ErrRFBServer            = E.New("rdp: the server sent an RFB greeting")
-	ErrNLAUnavailable       = E.New("rdp: the server does not offer Network Level Authentication")
+	ErrUnsupportedSecurity  = E.New("rdp: the server offers neither TLS nor Network Level Authentication")
 	ErrAuthenticationFailed = E.New("rdp: authentication failed")
 	ErrRemoteLogonDenied    = E.New("rdp: the account is not allowed to sign in remotely")
 	ErrCertificateChanged   = E.New("rdp: the server certificate changed")
@@ -87,12 +90,14 @@ func negotiateTransport(ctx context.Context, opts Options, authenticating func()
 	if err != nil {
 		return nil, err
 	}
-	if authenticating != nil {
-		authenticating()
-	}
-	err = t.authenticate(opts, host, certificate)
-	if err != nil {
-		return nil, err
+	if t.protocol != protocolSSL {
+		if authenticating != nil {
+			authenticating()
+		}
+		err = t.authenticate(opts, host, certificate)
+		if err != nil {
+			return nil, err
+		}
 	}
 	err = ctx.Err()
 	if err != nil {
@@ -117,9 +122,12 @@ func (t *transport) negotiate(host string) (*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-	if protocol != protocolHybrid {
-		return nil, E.Extend(ErrNLAUnavailable, "the server selected protocol ", protocol)
+	switch protocol {
+	case protocolSSL, protocolHybrid, protocolHybridEx:
+	default:
+		return nil, E.Extend(ErrUnsupportedSecurity, "the server selected protocol ", protocol)
 	}
+	t.protocol = protocol
 	return t.upgrade(&tls.Config{
 		MinVersion: tls.VersionTLS12,
 		// Over TLS 1.3 negotiated by crypto/tls, Windows 11 26100 sends an internal_error alert in
@@ -134,7 +142,7 @@ func (t *transport) negotiate(host string) (*x509.Certificate, error) {
 func connectionRequest() []byte {
 	body := []byte{negotiationRequest, 0}
 	body = binary.LittleEndian.AppendUint16(body, negotiationLength)
-	body = binary.LittleEndian.AppendUint32(body, protocolHybrid)
+	body = binary.LittleEndian.AppendUint32(body, requestedProtocols)
 	packet := []byte{tpktVersion, 0}
 	packet = binary.BigEndian.AppendUint16(packet, uint16(tpktHeaderLength+1+x224ConnectionHeaderLength+len(body)))
 	packet = append(packet, byte(x224ConnectionHeaderLength+len(body)), x224Request, 0, 0, 0, 0, 0)
@@ -172,7 +180,7 @@ func parseConnectionConfirm(payload []byte) (uint32, error) {
 	case negotiationResponse:
 		return value, nil
 	case negotiationFailure:
-		return 0, E.Extend(ErrNLAUnavailable, "negotiation failure ", value)
+		return 0, E.Extend(ErrUnsupportedSecurity, "negotiation failure ", value)
 	default:
 		return 0, E.Extend(ErrNotRDP, "negotiation type ", kind)
 	}

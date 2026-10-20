@@ -39,6 +39,7 @@ type transport struct {
 	tcp         net.Conn
 	conn        net.Conn
 	certificate *x509.Certificate
+	protocol    uint32
 	reader      *bufio.Reader
 	receiver    *receiver
 	buffer      []byte
