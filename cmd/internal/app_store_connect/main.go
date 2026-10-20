@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -15,32 +16,34 @@ import (
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
-	"howett.net/plist"
 )
 
 const (
 	appID             = "6818992574"
 	groupID           = "c0f4368a-6283-4c47-86a3-aec179465ec2"
-	bundleID          = "io.nekohasekai.screensharing"
-	projectPath       = "OpenScreenSharing.xcodeproj/project.pbxproj"
 	buildPollInterval = 15 * time.Second
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("usage: app_store_connect next_project_version | publish_testflight <project version> [release notes]")
+		log.Fatal("usage: app_store_connect next_marketing_version | next_project_version <marketing version> | publish_testflight <marketing version> <project version> [release notes]")
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	var err error
 	switch os.Args[1] {
+	case "next_marketing_version":
+		err = printNextMarketingVersion(ctx)
 	case "next_project_version":
-		err = printNextProjectVersion(ctx)
-	case "publish_testflight":
 		if len(os.Args) < 3 {
-			log.Fatal("usage: app_store_connect publish_testflight <project version> [release notes]")
+			log.Fatal("usage: app_store_connect next_project_version <marketing version>")
 		}
-		err = publishTestflight(ctx, os.Args[2], strings.Join(os.Args[3:], " "))
+		err = printNextProjectVersion(ctx, os.Args[2])
+	case "publish_testflight":
+		if len(os.Args) < 4 {
+			log.Fatal("usage: app_store_connect publish_testflight <marketing version> <project version> [release notes]")
+		}
+		err = publishTestflight(ctx, os.Args[2], os.Args[3], strings.Join(os.Args[4:], " "))
 	default:
 		log.Fatal("unknown action: ", os.Args[1])
 	}
@@ -61,38 +64,50 @@ func createClient(expireDuration time.Duration) *asc.Client {
 	return asc.NewClient(tokenConfig.Client())
 }
 
-func readMarketingVersion() (string, error) {
-	content, err := os.ReadFile(projectPath)
-	if err != nil {
-		return "", err
-	}
-	var project struct {
-		Objects map[string]struct {
-			ISA           string         `plist:"isa"`
-			BuildSettings map[string]any `plist:"buildSettings"`
-		} `plist:"objects"`
-	}
-	_, err = plist.Unmarshal(content, &project)
-	if err != nil {
-		return "", E.Cause(err, "parse project")
-	}
-	for _, object := range project.Objects {
-		if object.ISA != "XCBuildConfiguration" || object.BuildSettings["PRODUCT_BUNDLE_IDENTIFIER"] != bundleID {
-			continue
-		}
-		version, isString := object.BuildSettings["MARKETING_VERSION"].(string)
-		if isString {
-			return version, nil
-		}
-	}
-	return "", E.New("missing MARKETING_VERSION for ", bundleID)
-}
-
-func printNextProjectVersion(ctx context.Context) error {
-	marketingVersion, err := readMarketingVersion()
+func printNextMarketingVersion(ctx context.Context) error {
+	versions, _, err := createClient(time.Minute).Apps.ListAppStoreVersionsForApp(ctx, appID, &asc.ListAppStoreVersionsQuery{
+		FilterPlatform: []string{string(asc.PlatformIOS)},
+		Limit:          200,
+	})
 	if err != nil {
 		return err
 	}
+	approvedStates := []asc.AppStoreVersionState{
+		asc.AppStoreVersionStatePendingDeveloperRelease,
+		asc.AppStoreVersionStateProcessingForAppStore,
+		asc.AppStoreVersionStatePendingAppleRelease,
+		asc.AppStoreVersionStatePreorderReadyForSale,
+		asc.AppStoreVersionStateReadyForSale,
+		asc.AppStoreVersionStateReplacedWithNewVersion,
+		asc.AppStoreVersionStateDeveloperRemovedFromSale,
+		asc.AppStoreVersionStateRemovedFromSale,
+	}
+	var approvedVersion []int
+	for _, version := range versions.Data {
+		if version.Attributes.AppStoreState == nil || !slices.Contains(approvedStates, *version.Attributes.AppStoreState) {
+			continue
+		}
+		var parts []int
+		for _, part := range strings.Split(*version.Attributes.VersionString, ".") {
+			number, err := strconv.Atoi(part)
+			if err != nil {
+				return E.Cause(err, "parse version ", *version.Attributes.VersionString)
+			}
+			parts = append(parts, number)
+		}
+		if slices.Compare(parts, approvedVersion) > 0 {
+			approvedVersion = parts
+		}
+	}
+	if approvedVersion == nil {
+		return E.New("no approved version")
+	}
+	approvedVersion[len(approvedVersion)-1]++
+	os.Stdout.WriteString(F.ToString(strings.Join(common.Map(approvedVersion, strconv.Itoa), "."), "\n"))
+	return nil
+}
+
+func printNextProjectVersion(ctx context.Context, marketingVersion string) error {
 	builds, _, err := createClient(time.Minute).Builds.ListBuilds(ctx, &asc.ListBuildsQuery{
 		FilterApp:                       []string{appID},
 		FilterPreReleaseVersionPlatform: []string{string(asc.PlatformIOS)},
@@ -114,11 +129,7 @@ func printNextProjectVersion(ctx context.Context) error {
 	return nil
 }
 
-func publishTestflight(ctx context.Context, projectVersion string, releaseNotes string) error {
-	marketingVersion, err := readMarketingVersion()
-	if err != nil {
-		return err
-	}
+func publishTestflight(ctx context.Context, marketingVersion string, projectVersion string, releaseNotes string) error {
 	if releaseNotes == "" {
 		releaseNotes = F.ToString("Screen Sharing ", marketingVersion, " (", projectVersion, ")")
 	}

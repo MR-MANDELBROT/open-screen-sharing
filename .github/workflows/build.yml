@@ -15,6 +15,7 @@ jobs:
     name: Calculate version
     runs-on: ubuntu-latest
     outputs:
+      version: ${{ steps.outputs.outputs.version }}
       build_number: ${{ steps.outputs.outputs.build_number }}
       library_hash: ${{ steps.outputs.outputs.library_hash }}
       app_store: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATES_P12 != '' }}
@@ -24,9 +25,21 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 1
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
       - name: Set outputs
         id: outputs
         run: |-
+          if [ -n "$ASC_KEY" ]; then
+            export ASC_KEY_PATH=$RUNNER_TEMP/ApiKey_$ASC_KEY_ID.p8
+            echo -n "$ASC_KEY" | base64 --decode > "$ASC_KEY_PATH"
+            VERSION=$(go run ./cmd/internal/app_store_connect next_marketing_version)
+            echo "version=$VERSION"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
           PREVIOUS=0
           if git fetch --depth=1 origin tag nightly; then
             PREVIOUS=$(git tag -l --format='%(contents:subject)' nightly)
@@ -34,6 +47,9 @@ jobs:
           echo "build_number=$((PREVIOUS + 1))"
           echo "build_number=$((PREVIOUS + 1))" >> "$GITHUB_OUTPUT"
           echo "library_hash=${{ hashFiles('go.mod', 'go.sum', 'libsharing/**', 'internal/**', 'cmd/internal/build_libsharing/**') }}" >> "$GITHUB_OUTPUT"
+        env:
+          ASC_KEY: ${{ secrets.ASC_KEY }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
   build_apple_library:
     name: Build Apple library (${{ matrix.artifact }})
     runs-on: xcode-27
@@ -155,7 +171,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       - name: Calculate project version
         run: |-
-          PROJECT_VERSION=$(go run ./cmd/internal/app_store_connect next_project_version)
+          PROJECT_VERSION=$(go run ./cmd/internal/app_store_connect next_project_version "${{ needs.calculate_version.outputs.version }}")
           echo "PROJECT_VERSION=$PROJECT_VERSION"
           echo "PROJECT_VERSION=$PROJECT_VERSION" >> "$GITHUB_ENV"
       - name: Restore library
@@ -175,7 +191,7 @@ jobs:
       - name: Build
         run: make archive_ios export_ios
         env:
-          XCODEBUILD_FLAGS: CURRENT_PROJECT_VERSION=${{ env.PROJECT_VERSION }} COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=${{ runner.temp }}/CompilationCache
+          XCODEBUILD_FLAGS: MARKETING_VERSION=${{ needs.calculate_version.outputs.version }} CURRENT_PROJECT_VERSION=${{ env.PROJECT_VERSION }} COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=${{ runner.temp }}/CompilationCache
       - name: Upload to App Store Connect
         run: |-
           xcrun altool --upload-app \
@@ -224,7 +240,7 @@ jobs:
       - name: Build
         run: make archive_ios_ipa altstore_source
         env:
-          XCODEBUILD_FLAGS: CURRENT_PROJECT_VERSION=${{ needs.calculate_version.outputs.build_number }} COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=${{ runner.temp }}/CompilationCache
+          XCODEBUILD_FLAGS: ${{ needs.calculate_version.outputs.version && format('MARKETING_VERSION={0} ', needs.calculate_version.outputs.version) }}CURRENT_PROJECT_VERSION=${{ needs.calculate_version.outputs.build_number }} COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=${{ runner.temp }}/CompilationCache
       - name: Package dSYMs
         run: ditto -c -k --keepParent build/OpenScreenSharing-Sideload.xcarchive/dSYMs build/OpenScreenSharing-iOS.dSYMs.zip
       - name: Upload build
@@ -301,7 +317,7 @@ jobs:
       - name: Build
         run: make archive_macos export_macos build_macos_pkg notarize_macos_pkg
         env:
-          XCODEBUILD_FLAGS: CURRENT_PROJECT_VERSION=${{ needs.calculate_version.outputs.build_number }} COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=${{ runner.temp }}/CompilationCache
+          XCODEBUILD_FLAGS: MARKETING_VERSION=${{ needs.calculate_version.outputs.version }} CURRENT_PROJECT_VERSION=${{ needs.calculate_version.outputs.build_number }} COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH=${{ runner.temp }}/CompilationCache
       - name: Package dSYMs
         run: ditto -c -k --keepParent build/OpenScreenSharing-macOS.xcarchive/dSYMs build/OpenScreenSharing-macOS.dSYMs.zip
       - name: Write metadata
