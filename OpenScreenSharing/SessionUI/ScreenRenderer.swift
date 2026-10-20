@@ -213,6 +213,7 @@ final class ScreenRenderer {
 
     struct Frame {
         var pixelBuffer: CVPixelBuffer?
+        var framebuffer: Framebuffer?
         var strips: [CVPixelBuffer?]
         var stripHeight: Int
         var canvasHeight: Int
@@ -315,7 +316,7 @@ final class ScreenRenderer {
         }
         encoder.endEncoding()
         let containsImage = !images.isEmpty
-        let box = TextureRetainer(textures: retained)
+        let box = TextureRetainer(textures: retained, framebuffer: frame.framebuffer)
         commandBuffer.addCompletedHandler { buffer in
             withExtendedLifetime(box) {}
             if buffer.status == .error {
@@ -457,9 +458,11 @@ final class ScreenRenderer {
 
 private nonisolated final class TextureRetainer: @unchecked Sendable {
     let textures: [CVMetalTexture]
+    let framebuffer: Framebuffer?
 
-    init(textures: [CVMetalTexture]) {
+    init(textures: [CVMetalTexture], framebuffer: Framebuffer?) {
         self.textures = textures
+        self.framebuffer = framebuffer
     }
 }
 
@@ -657,6 +660,7 @@ final class ScreenPresenter {
         return renderer.render(
             ScreenRenderer.Frame(
                 pixelBuffer: snapshot.pixelBuffer,
+                framebuffer: snapshot.framebuffer,
                 strips: snapshot.strips,
                 stripHeight: snapshot.stripHeight,
                 canvasHeight: snapshot.canvasHeight,

@@ -35,6 +35,20 @@ nonisolated final class Framebuffer: @unchecked Sendable {
         memset(address, 0, bytesPerRow * height)
     }
 
+    var bounds: CGRect {
+        CGRect(x: 0, y: 0, width: width, height: height)
+    }
+
+    func copy(_ rect: CGRect, from source: Framebuffer) {
+        let rect = rect.intersection(bounds).intersection(source.bounds)
+        guard !rect.isEmpty else { return }
+        let offset = Int(rect.minX) * 4
+        let length = Int(rect.width) * 4
+        for row in Int(rect.minY)..<Int(rect.maxY) {
+            memcpy(baseAddress + row * bytesPerRow + offset, source.baseAddress + row * source.bytesPerRow + offset, length)
+        }
+    }
+
     deinit {
         CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
     }

@@ -18,6 +18,7 @@ nonisolated enum PictureChange: Equatable {
 nonisolated final class DisplayPipeline: @unchecked Sendable {
     struct Snapshot {
         var pixelBuffer: CVPixelBuffer?
+        var framebuffer: Framebuffer?
         var strips: [CVPixelBuffer?] = []
         var stripHeight: Int = 0
         var canvasHeight: Int = 0
@@ -33,6 +34,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
 
     private struct Held {
         var pixelBuffer: CVPixelBuffer?
+        var framebuffer: Framebuffer?
         var strips: [CVPixelBuffer?]
         var canvasHeight: Int
         var width: Int
@@ -46,6 +48,11 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         var due: CFTimeInterval
         var arrivedAt: CFTimeInterval
         var ready: @Sendable (_ picture: Int, _ held: TimeInterval) -> Void
+    }
+
+    private struct Copy {
+        var framebuffer: Framebuffer
+        var stale: CGRect
     }
 
     private struct Shown: Equatable {
@@ -62,7 +69,10 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     private static let maxScheduled = 4
 
     private let lock = NSLock()
+    private let copyLock = NSLock()
+    private var copies: [Copy] = []
     private var framebuffer: Framebuffer?
+    private var presented: Framebuffer?
     private var framebufferUpdated = false
     private var framebufferHasPicture = false
     private var expectsVideo = false
@@ -136,11 +146,15 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     }
 
     func attachFramebuffer(_ framebuffer: Framebuffer) {
+        copyLock.lock()
+        defer { copyLock.unlock() }
+        copies.removeAll()
         update {
             presentationEpoch &+= 1
             resetPresentation()
             hold(.resize)
             self.framebuffer = framebuffer
+            presented = nil
             framebufferUpdated = false
             framebufferHasPicture = false
             isVideo = false
@@ -272,16 +286,42 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         return !promoted.isEmpty
     }
 
-    @discardableResult
-    func markDirty() -> Int? {
+    func updateFramebuffer(_ dirty: CGRect) throws -> Int? {
+        copyLock.lock()
+        defer { copyLock.unlock() }
+        for index in copies.indices {
+            copies[index].stale = copies[index].stale.union(dirty)
+        }
+        lock.lock()
+        let framebuffer = isVideo ? nil : framebuffer
+        lock.unlock()
+        guard let framebuffer else { return nil }
+        let target: Int
+        if let free = copies.indices.first(where: { isKnownUniquelyReferenced(&copies[$0].framebuffer) }) {
+            target = free
+        } else {
+            copies.append(Copy(framebuffer: try Framebuffer(width: framebuffer.width, height: framebuffer.height), stale: framebuffer.bounds))
+            target = copies.endIndex - 1
+        }
+        let picture = copies[target].framebuffer
+        picture.copy(copies[target].stale, from: framebuffer)
+        copies[target].stale = .null
         var taken: Int?
         update {
+            presented = picture
             guard !isVideo else { return }
             framebufferUpdated = true
             guard framebufferHasPicture || !expectsVideo else { return }
             pictureGeneration &+= 1
             taken = pictureGeneration
             framebufferHasPicture = true
+        }
+        var spares = 0
+        for index in copies.indices.reversed() where isKnownUniquelyReferenced(&copies[index].framebuffer) {
+            spares += 1
+            if spares > 1 {
+                copies.remove(at: index)
+            }
         }
         return taken
     }
@@ -340,11 +380,13 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         let snapshot = shownLocked().picture == .none ? nil : snapshotLocked()
         lock.unlock()
         guard let snapshot else { return nil }
-        if let pixelBuffer = snapshot.pixelBuffer {
-            return PixelBufferImage.makeThumbnail(pixelBuffer, turns: snapshot.turns)
+        return withExtendedLifetime(snapshot.framebuffer) {
+            if let pixelBuffer = snapshot.pixelBuffer {
+                return PixelBufferImage.makeThumbnail(pixelBuffer, turns: snapshot.turns)
+            }
+            return PixelBufferImage.makeThumbnail(
+                strips: snapshot.strips, stripHeight: snapshot.stripHeight, canvasHeight: snapshot.canvasHeight, turns: snapshot.turns)
         }
-        return PixelBufferImage.makeThumbnail(
-            strips: snapshot.strips, stripHeight: snapshot.stripHeight, canvasHeight: snapshot.canvasHeight, turns: snapshot.turns)
     }
 
     private var hasPicture: Bool {
@@ -360,7 +402,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
     private func hold(_ change: PictureChange) {
         guard hasPicture else { return }
         held = Held(
-            pixelBuffer: isVideo ? videoFrame : framebuffer?.pixelBuffer, strips: isVideo ? strips : [],
+            pixelBuffer: isVideo ? videoFrame : presented?.pixelBuffer, framebuffer: isVideo ? nil : presented, strips: isVideo ? strips : [],
             canvasHeight: canvasHeight, width: width, height: height, turns: turns, change: change)
     }
 
@@ -382,6 +424,7 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         if !hasPicture, let held {
             return Snapshot(
                 pixelBuffer: held.pixelBuffer,
+                framebuffer: held.framebuffer,
                 strips: held.strips,
                 stripHeight: Self.stripHeight(held.strips),
                 canvasHeight: held.canvasHeight,
@@ -398,7 +441,8 @@ nonisolated final class DisplayPipeline: @unchecked Sendable {
         }
         let stripHeight = Self.stripHeight(strips)
         return Snapshot(
-            pixelBuffer: isVideo ? videoFrame : framebuffer?.pixelBuffer,
+            pixelBuffer: isVideo ? videoFrame : presented?.pixelBuffer,
+            framebuffer: isVideo ? nil : presented,
             strips: isVideo ? strips : [],
             stripHeight: stripHeight,
             canvasHeight: canvasHeight,

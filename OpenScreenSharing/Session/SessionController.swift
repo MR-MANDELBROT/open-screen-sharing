@@ -2552,8 +2552,13 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
 
     func sessionFramebufferUpdated(_ dirtyRect: CGRect) {
         guard !isDetached else { return }
-        if let picture = pipeline.markDirty() {
-            pictureReady(picture, arrival: CACurrentMediaTime(), hold: 0, decode: 0)
+        let arrival = CACurrentMediaTime()
+        do {
+            if let picture = try pipeline.updateFramebuffer(dirtyRect) {
+                pictureReady(picture, arrival: arrival, hold: 0, decode: 0)
+            }
+        } catch {
+            onMain { $0.drawingFailed(error) }
         }
     }
 
