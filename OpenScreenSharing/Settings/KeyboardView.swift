@@ -40,20 +40,6 @@ struct KeyboardView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .navigationTitle("Keyboard")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button(role: .destructive) {
-                            shortcuts.restoreDefaults()
-                        } label: {
-                            Label("Restore Defaults", systemImage: "eraser.fill")
-                        }
-                        .disabled(!shortcuts.isCustomized)
-                    } label: {
-                        Label("Others", systemImage: "ellipsis.circle")
-                    }
-                }
-            }
             .sheet(item: $editing) { editing in
                 KeyMappingEditor(mapping: editing.mapping, target: editing.target, isNew: editing.isNew)
             }
@@ -119,6 +105,20 @@ struct KeyboardView: View {
         .formStyle(.grouped)
         .unboundedFormWidth()
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button(role: .destructive) {
+                        shortcuts.restoreDefaults()
+                    } label: {
+                        Label("Restore Defaults", systemImage: "eraser.fill")
+                    }
+                    .disabled(!shortcuts.isCustomized)
+                } label: {
+                    Label("Others", systemImage: "ellipsis.circle")
+                }
+            }
+        }
     }
 }
 
