@@ -32,6 +32,9 @@ final class AvailabilityMonitor {
         if servers[address] == .vnc, nearby.hasCurrentService(matching: address, remoteProtocol: .vnc) {
             return .available
         }
+        if servers[address] == .vnc, address.isLocal, nearby.lacksHost(matching: address) {
+            return .unavailable
+        }
         return availability[address]
     }
 
@@ -87,6 +90,9 @@ final class AvailabilityMonitor {
         if nearby.hasCurrentService(matching: address, remoteProtocol: .vnc) {
             return .available
         }
+        if address.isLocal, nearby.lacksHost(matching: address) {
+            return .unavailable
+        }
         if pingedServers.contains(address.serverKey) {
             return await PingProbe.check(address.host)
         }
@@ -108,6 +114,12 @@ final class AvailabilityMonitor {
 }
 
 extension ComputerAddress {
+    fileprivate var isLocal: Bool {
+        if bonjourServiceName != nil { return true }
+        let lowered = host.lowercased()
+        return lowered.hasSuffix(".local") || lowered.hasSuffix(".local.")
+    }
+
     fileprivate var serverKey: String {
         "\(host.lowercased()):\(port)"
     }
@@ -123,6 +135,7 @@ nonisolated enum AvailabilityProbe {
     }
 
     private static let queue = DispatchQueue(label: "io.nekohasekai.screensharing.availability", qos: .utility)
+    private static let connectionTimeout = 15
 
     static func check(_ address: ComputerAddress, remoteProtocol: RemoteProtocol) async -> Answer {
         let attempt = Attempt(address: address, remoteProtocol: remoteProtocol)
@@ -148,10 +161,12 @@ nonisolated enum AvailabilityProbe {
 
         init(address: ComputerAddress, remoteProtocol: RemoteProtocol) {
             self.remoteProtocol = remoteProtocol
+            let tcp = NWProtocolTCP.Options()
+            tcp.connectionTimeout = AvailabilityProbe.connectionTimeout
             connection = NWConnection(
                 host: NWEndpoint.Host(address.host),
                 port: NWEndpoint.Port(integerLiteral: UInt16(clamping: address.port)),
-                using: .tcp
+                using: NWParameters(tls: nil, tcp: tcp)
             )
         }
 

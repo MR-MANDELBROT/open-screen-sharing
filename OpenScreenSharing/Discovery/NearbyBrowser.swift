@@ -232,6 +232,12 @@ final class NearbyBrowser {
         computers.first { Self.matches($0, address) }
     }
 
+    func lacksHost(matching address: ComputerAddress) -> Bool {
+        state == .browsing && currentResults.contains(.vnc)
+            && !computers.contains { $0.remoteProtocol == .vnc && $0.hostName == nil }
+            && host(matching: address) == nil
+    }
+
     private static func matches(_ computer: NearbyComputer, _ address: ComputerAddress) -> Bool {
         let host = normalized(address.host)
         if let hostName = computer.hostName, normalized(hostName) == host { return true }
