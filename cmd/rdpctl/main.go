@@ -3,11 +3,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"image"
 	"log/slog"
+	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -16,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/cmd/internal/ctl"
@@ -43,6 +46,7 @@ func run() error {
 	duration := flag.Duration("duration", 10*time.Second, "receive duration when no actions are given")
 	clipboard := flag.Bool("clipboard", true, "share text clipboard")
 	audio := flag.Bool("audio", true, "play remote audio on this client")
+	microphoneTone := flag.Float64("microphone-tone", 0, "redirect a microphone that records a sine tone of this frequency in Hz")
 	cpuProfile := flag.String("cpu-profile", "", "write a Go CPU profile")
 	audioOutput := flag.String("audio-out", "", "save up to 8 MiB of received PCM audio; format is reported in JSON")
 	interactive := flag.Bool("interactive", false, "read additional actions from standard input")
@@ -58,8 +62,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	h := &handler{start: time.Now()}
-	options := rdp.Options{Address: *address, Username: *user, Password: os.Getenv("RDPCTL_PASSWORD"), Domain: *domain, ClientName: "rdpctl", Width: width, Height: height, DesktopScaleFactor: *desktopScale, Clipboard: *clipboard, Audio: *audio, GraphicsCache: *graphicsCache, DialTimeout: *timeout}
+	h := &handler{start: time.Now(), tone: *microphoneTone}
+	options := rdp.Options{Address: *address, Username: *user, Password: os.Getenv("RDPCTL_PASSWORD"), Domain: *domain, ClientName: "rdpctl", Width: width, Height: height, DesktopScaleFactor: *desktopScale, Clipboard: *clipboard, Audio: *audio, Microphone: *microphoneTone > 0, GraphicsCache: *graphicsCache, DialTimeout: *timeout}
 	if *debug {
 		options.Logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
@@ -124,6 +128,7 @@ func run() error {
 		return err
 	}
 	defer client.Close()
+	h.client.Store(client)
 	h.emit(map[string]any{"event": "connected", "milliseconds": time.Since(h.start).Seconds() * 1000, "info": client.Info()})
 	done := make(chan error, 1)
 	go func() {
@@ -343,6 +348,9 @@ func perform(ctx context.Context, c *rdp.Client, h *handler, action string, done
 }
 
 type handler struct {
+	client                                    atomic.Pointer[rdp.Client]
+	tone                                      float64
+	microphone                                chan struct{}
 	audioFile                                 *os.File
 	audioRecorded                             uint64
 	access                                    sync.Mutex
@@ -414,6 +422,56 @@ func (h *handler) AudioPacketReceived(p []byte, _ uint64) {
 		}
 	}
 	h.access.Unlock()
+}
+
+func (h *handler) MicrophoneOpened(f rdp.AudioFormat) {
+	h.emit(map[string]any{"event": "microphone-open", "format": f})
+	h.access.Lock()
+	defer h.access.Unlock()
+	if h.microphone != nil {
+		close(h.microphone)
+	}
+	stop := make(chan struct{})
+	h.microphone = stop
+	go h.recordTone(f, stop)
+}
+
+func (h *handler) MicrophoneClosed() {
+	h.emit(map[string]any{"event": "microphone-close"})
+	h.access.Lock()
+	defer h.access.Unlock()
+	if h.microphone != nil {
+		close(h.microphone)
+		h.microphone = nil
+	}
+}
+
+func (h *handler) recordTone(f rdp.AudioFormat, stop <-chan struct{}) {
+	const interval = 20 * time.Millisecond
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	frames := f.SampleRate * int(interval/time.Millisecond) / 1000
+	var position int
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+		}
+		client := h.client.Load()
+		if client == nil {
+			continue
+		}
+		pcm := make([]byte, 0, frames*f.Channels*2)
+		for range frames {
+			sample := int16(math.Sin(2*math.Pi*h.tone*float64(position)/float64(f.SampleRate)) * 0.5 * math.MaxInt16)
+			for range f.Channels {
+				pcm = binary.LittleEndian.AppendUint16(pcm, uint16(sample))
+			}
+			position++
+		}
+		client.SendMicrophoneAudio(pcm)
+	}
 }
 
 func (h *handler) stats(c *rdp.Client) {

@@ -136,8 +136,7 @@ nonisolated final class AudioPlayer: @unchecked Sendable {
         guard !started else { return }
         do {
             #if os(iOS)
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
+            try RemoteAudioSession.activate()
             #endif
             try engine.start()
             started = true
@@ -537,3 +536,40 @@ nonisolated final class AudioOutput: @unchecked Sendable {
         }
     }
 }
+
+#if os(iOS)
+nonisolated enum RemoteAudioSession {
+    private static let recorders = LockedState(initialState: 0)
+
+    static func activate() throws {
+        try recorders.withLock { try configure(recording: $0 > 0) }
+    }
+
+    static func beginRecording() throws {
+        try recorders.withLock { recorders in
+            try configure(recording: true)
+            recorders += 1
+        }
+    }
+
+    static func endRecording() {
+        recorders.withLock { recorders in
+            recorders -= 1
+            if recorders == 0 {
+                try? configure(recording: false)
+            }
+        }
+    }
+
+    private static func configure(recording: Bool) throws {
+        let session = AVAudioSession.sharedInstance()
+        if recording {
+            try session.setCategory(
+                .playAndRecord, mode: .default, options: [.mixWithOthers, .defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP])
+        } else {
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        }
+        try session.setActive(true)
+    }
+}
+#endif

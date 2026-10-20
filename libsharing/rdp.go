@@ -37,6 +37,7 @@ func rdpOptions(o *SessionOptions, seen func(fingerprint string)) (rdp.Options, 
 		KeyboardLayout: uint32(o.KeyboardLayout),
 		Clipboard:      o.SharedClipboard,
 		Audio:          o.Audio,
+		Microphone:     o.Microphone,
 		KeepAlive:      o.KeepAlive,
 		DisableUDP:     o.DisableUDP,
 		GraphicsCache:  graphicsCache,
@@ -178,6 +179,19 @@ func (s *Session) SendTouches(frame *TouchFrame) error {
 	return client.SendTouches(frame.touches)
 }
 
+func (s *Session) SendMicrophoneAudio(data []byte) error {
+	connected, err := s.connectedRemote()
+	if err != nil {
+		return err
+	}
+	client, isRDP := connected.(*rdpRemote)
+	if !isRDP {
+		return E.New("the microphone is available only over RDP")
+	}
+	client.SendMicrophoneAudio(data)
+	return nil
+}
+
 type rdpSessionEvents struct {
 	session        *Session
 	audioFrameSize int
@@ -267,4 +281,16 @@ func (e *rdpSessionEvents) AudioPacketReceived(data []byte, timestamp uint64) {
 		e.audioPending = e.audioPending[size:]
 		e.audioTimestamp += int64(e.audioFrames)
 	}
+}
+
+func (e *rdpSessionEvents) MicrophoneOpened(format rdp.AudioFormat) {
+	e.session.handler.OnMicrophone(&AudioFormat{
+		FormatID:   0x6c70636d,
+		SampleRate: int32(format.SampleRate),
+		Channels:   int32(format.Channels),
+	})
+}
+
+func (e *rdpSessionEvents) MicrophoneClosed() {
+	e.session.handler.OnMicrophone(nil)
 }

@@ -44,14 +44,15 @@ const (
 	errorInfoUserDisconnect        = 0xB
 	errorInfoUserLogoff            = 0xC
 
-	staticChannelClipboard = "cliprdr"
-	staticChannelDynamic   = "drdynvc"
-	staticChannelAudio     = "rdpsnd"
-	staticChannelDevice    = "rdpdr"
-	dynamicChannelGraphics = "Microsoft::Windows::RDS::Graphics"
-	dynamicChannelDisplay  = "Microsoft::Windows::RDS::DisplayControl"
-	dynamicChannelTouch    = "Microsoft::Windows::RDS::Input"
-	dynamicChannelAudio    = "AUDIO_PLAYBACK_DVC"
+	staticChannelClipboard   = "cliprdr"
+	staticChannelDynamic     = "drdynvc"
+	staticChannelAudio       = "rdpsnd"
+	staticChannelDevice      = "rdpdr"
+	dynamicChannelGraphics   = "Microsoft::Windows::RDS::Graphics"
+	dynamicChannelDisplay    = "Microsoft::Windows::RDS::DisplayControl"
+	dynamicChannelTouch      = "Microsoft::Windows::RDS::Input"
+	dynamicChannelAudio      = "AUDIO_PLAYBACK_DVC"
+	dynamicChannelMicrophone = "AUDIO_INPUT"
 
 	refreshAreaCount       = 1
 	suppressDisplayUpdates = 0
@@ -81,6 +82,7 @@ type Client struct {
 	touch        *touchChannel
 	audio        *audioChannel
 	dynamicAudio *audioChannel
+	microphone   *microphoneChannel
 
 	processAccess sync.Mutex
 	roundTrip     atomic.Int64
@@ -199,6 +201,7 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 	c.touch = &touchChannel{logger: c.logger, changed: c.refreshInfo}
 	c.audio = &audioChannel{events: events, changed: c.refreshInfo}
 	c.dynamicAudio = &audioChannel{events: events, changed: c.refreshInfo}
+	c.microphone = &microphoneChannel{events: events, logger: c.logger}
 	c.session = &session{
 		mcs:            c.mcs,
 		graphics:       c.graphics,
@@ -228,6 +231,9 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 			&staticChannel{name: staticChannelAudio, options: channelOptionInitialized | channelOptionCompressRDP, handler: c.audio},
 			&staticChannel{name: staticChannelDevice, options: channelOptionInitialized | channelOptionCompressRDP, handler: newDeviceChannel(opts.ClientName)},
 		)
+	}
+	if opts.Microphone {
+		c.dynamic.listeners = append(c.dynamic.listeners, &dynamicListener{name: dynamicChannelMicrophone, handler: c.microphone})
 	}
 	go func() {
 		err := c.writer.Run(c.ctx, c.outbox)

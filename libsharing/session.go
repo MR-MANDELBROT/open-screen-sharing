@@ -44,6 +44,7 @@ type SessionHandler interface {
 	OnVideoAccessUnit(unit *VideoAccessUnit)
 	OnAudioFormat(format *AudioFormat)
 	OnAudioPacket(packet *AudioPacket)
+	OnMicrophone(format *AudioFormat)
 
 	OnMediaStopped(errorCode int32, message string)
 

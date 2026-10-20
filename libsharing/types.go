@@ -122,6 +122,8 @@ type SessionOptions struct {
 
 	Audio bool
 
+	Microphone bool
+
 	LoginType int32
 
 	Quality int32

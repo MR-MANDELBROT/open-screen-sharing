@@ -1248,6 +1248,318 @@
           }
         }
       }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "Privacy - Microphone Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يرسل Screen Sharing صوتك إلى جهاز الكمبيوتر المتصل به."
+          }
+        },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing изпраща гласа Ви към компютъра, с който сте свързани."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing-এর মাধ্যমে আপনার কণ্ঠস্বর সংযুক্ত কম্পিউটারে পাঠানো হয়।"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’app Screen Sharing envia la teva veu a l’ordinador al qual estàs connectat."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplikace Screen Sharing odesílá váš hlas do počítače, ke kterému jste připojeni."
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing sender din stemme til den computer, du har forbindelse til."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing sendet deine Stimme an den Computer, mit dem du verbunden bist."
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Το Screen Sharing στέλνει τη φωνή σας στον υπολογιστή με τον οποίο είστε συνδεδεμένοι."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Screen Sharing sends your voice to the computer you’re connected to."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing envía tu voz al ordenador al que estás conectado."
+          }
+        },
+        "es-419" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing envía tu voz a la computadora a la que estás conectado."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing lähettää äänesi tietokoneeseen, johon olet yhteydessä."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing envoie votre voix à l’ordinateur auquel vous êtes connecté."
+          }
+        },
+        "fr-CA" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’app Screen Sharing envoie votre voix à l’ordinateur auquel vous êtes connecté."
+          }
+        },
+        "gu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing તમારો અવાજ તમે જેની સાથે કનેક્ટ થયેલા છો તે કંપ્યૂટર પર મોકલે છે."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‏Screen Sharing שולח את הקול שלך למחשב שאליו התחברת."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing आपकी आवाज़ उस कंप्यूटर पर भेजता है जिससे आप कनेक्ट हैं।"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing šalje vaš glas na računalo s kojim ste povezani."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Screen Sharing elküldi a hangját arra a számítógépre, amelyhez csatlakozik."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing mengirimkan suara Anda ke komputer yang sedang terhubung."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing invia la tua voce al computer a cui sei connesso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharingは、音声を接続先のコンピュータに送信します。"
+          }
+        },
+        "kk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing дауысыңызды қосылған компьютерге жібереді."
+          }
+        },
+        "kn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing ಆ್ಯಪ್ ನಿಮ್ಮ ಧ್ವನಿಯನ್ನು ನೀವು ಸಂಪರ್ಕಗೊಂಡಿರುವ ಕಂಪ್ಯೂಟರ್‌ಗೆ ಕಳುಹಿಸುತ್ತದೆ."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing은 사용자의 음성을 연결된 컴퓨터로 전송합니다."
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Screen Sharing” siunčia jūsų balsą į kompiuterį, prie kurio esate prisijungę."
+          }
+        },
+        "ml" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing നിങ്ങളുടെ ശബ്ദം നിങ്ങൾ കണക്റ്റ് ചെയ്ത കമ്പ്യൂട്ടറിലേക്ക് അയയ്ക്കുന്നു."
+          }
+        },
+        "mr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing तुमचा आवाज तुम्ही कनेक्ट केलेल्या कॉंप्युटरला पाठवते."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing menghantar suara anda ke komputer yang anda sambungkan."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing sender stemmen din til datamaskinen du er koblet til."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing verstuurt je stem naar de computer waarmee je verbonden bent."
+          }
+        },
+        "or" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing ଆପଣଙ୍କ ସ୍ବର ଆପଣ ସଂଯୁକ୍ତ ଥିବା କମ୍ପ୍ୟୁଟର୍‌କୁ ପଠାଏ।"
+          }
+        },
+        "pa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing ਤੁਹਾਡੀ ਅਵਾਜ਼ ਨੂੰ ਉਸ ਕੰਪਿਊਟਰ 'ਤੇ ਭੇਜਦੀ ਹੈ ਜਿਸ ਨਾਲ ਤੁਸੀਂ ਕਨੈਕਟ ਹੋ।"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplikacja Screen Sharing wysyła Twój głos do komputera, z którym masz połączenie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Screen Sharing envia sua voz para o computador ao qual você está conectado."
+          }
+        },
+        "pt-PT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Screen Sharing envia a sua voz para o computador ao qual está ligado."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplicația Screen Sharing trimite vocea dvs. către computerul la care sunteți conectat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing передает Ваш голос на компьютер, к которому Вы подключены."
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apka Screen Sharing odosiela váš hlas do počítača, ku ktorému ste pripojení."
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplikacija Screen Sharing pošilja vaš glas v računalnik, s katerim ste povezani."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing skickar din röst till datorn du är ansluten till."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing உங்கள் குரலை நீங்கள் இணைந்துள்ள கம்ப்யூட்டருக்கு அனுப்பும்."
+          }
+        },
+        "te" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing మీ వాయిస్‌ను మీరు కనెక్ట్ అయిన కంప్యూటర్‌కు పంపుతుంది."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing จะส่งเสียงของคุณไปยังคอมพิวเตอร์ที่คุณเชื่อมต่ออยู่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing sesinizi bağlı olduğunuz bilgisayara gönderir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Програма Screen Sharing надсилає ваш голос на компʼютер, до якого ви підключені."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "آپ کی آواز Screen Sharing کے ذریعے اس کمپیوٹر کو بھیجی جاتی ہے جس سے آپ منسلک ہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing gửi giọng nói của bạn tới máy tính bạn đang kết nối."
+          }
+        },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing 會將你的聲音傳送到已連接的電腦。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing 会将你的声音发送到已连接的电脑。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing 會將你的聲音傳送到已連線的電腦。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

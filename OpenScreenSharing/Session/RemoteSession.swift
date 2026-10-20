@@ -226,6 +226,7 @@ nonisolated struct SessionConfiguration: Sendable {
     var startsInObserveMode: Bool
     var sharesClipboard: Bool
     var receivesAudio: Bool
+    var sendsAudio: Bool
     var updateRate: Int
     var networkConfiguration = NetworkConfiguration()
     var keepsAlive = false
@@ -369,7 +370,7 @@ nonisolated struct DecodedVideoFrame: @unchecked Sendable {
     var timing: FrameTiming
 }
 
-nonisolated struct AudioFormat: Sendable {
+nonisolated struct AudioFormat: Equatable, Sendable {
     var formatID: AudioFormatID
     var sampleRate: Double
     var channels: UInt32

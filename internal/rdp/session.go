@@ -63,6 +63,7 @@ const (
 	infoRemoteConsoleAudio = 0x00002000
 	infoLogonErrors        = 0x00010000
 	infoMouseHasWheel      = 0x00020000
+	infoAudioCapture       = 0x00200000
 	addressFamilyINET      = 2
 	timeZoneInformationLen = 172
 
@@ -110,8 +111,13 @@ func clientInfo(opts Options) []byte {
 	if opts.Username != "" {
 		flags |= infoAutoLogon
 	}
-	if !opts.Audio {
+	// audiosrv.dll of Windows 11 26200 gives a session with INFO_REMOTECONSOLEAUDIO the local devices
+	// of the remote computer in place of the redirected ones, so it would have no redirected microphone.
+	if !opts.Audio && !opts.Microphone {
 		flags |= infoRemoteConsoleAudio
+	}
+	if opts.Microphone {
+		flags |= infoAudioCapture
 	}
 	b = binary.LittleEndian.AppendUint32(b, flags)
 	fields := [][]byte{utf16le(opts.Domain), utf16le(opts.Username), utf16le(opts.Password), nil, nil}

@@ -95,6 +95,7 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var display: DisplaySelection?
     var usesHDR = false
     var receivesAudio = true
+    var sendsAudio = false
     var windowSize: CGSize?
     var locksPointer = false
     var usesNativeTouch: Bool
@@ -146,6 +147,7 @@ final class SessionController: Identifiable {
     private(set) var hdrEnabled = false
     var displaySupportsHDR = false
     private(set) var receivesAudio = true
+    private(set) var sendsAudio = false
     var scaleMode: ScaleMode = .fit
     var isFullScreen = false
     var isToolbarVisible = false
@@ -246,6 +248,8 @@ final class SessionController: Identifiable {
     @PerceptionIgnored private var hasConnected = false
     @PerceptionIgnored private var cursorAssets: MacCursorAssets?
     @PerceptionIgnored private var cursorAssetsAttempted = false
+    @PerceptionIgnored private var microphoneFormat: AudioFormat?
+    @PerceptionIgnored private var microphone: MicrophoneSender?
     @PerceptionIgnored private var reconnectAttempts = 0
     @PerceptionIgnored private var reconnectTask: Task<Void, Never>?
     @PerceptionIgnored private var chosenDisplay: DisplaySelection?
@@ -398,6 +402,7 @@ final class SessionController: Identifiable {
         chosenDisplay = memory.display
         hdrEnabled = memory.usesHDR && DecoderCapabilities.current.supportsHDR
         receivesAudio = memory.receivesAudio
+        sendsAudio = memory.sendsAudio
         windowSize = memory.windowSize
         isPointerLockOn = memory.locksPointer
         isNativeTouchOn = memory.usesNativeTouch
@@ -412,6 +417,7 @@ final class SessionController: Identifiable {
             display: chosenDisplay,
             usesHDR: hdrEnabled,
             receivesAudio: receivesAudio,
+            sendsAudio: sendsAudio,
             windowSize: windowSize,
             locksPointer: isPointerLockOn,
             usesNativeTouch: isNativeTouchOn
@@ -507,6 +513,7 @@ final class SessionController: Identifiable {
             startsInObserveMode: mode == .observe,
             sharesClipboard: clipboardSharing,
             receivesAudio: receivesAudio,
+            sendsAudio: sendsAudio,
             updateRate: screenRefreshRate,
             networkConfiguration: networkConfiguration,
             keepsAlive: keepsAlive,
@@ -598,6 +605,8 @@ final class SessionController: Identifiable {
         probeTask?.cancel()
         probeTask = nil
         restartsHighPerformanceOnReturn = false
+        microphoneFormat = nil
+        updateMicrophone()
         sink?.detach()
         awaitsResolutionChange = false
         pipeline.holdPicture()
@@ -627,6 +636,7 @@ final class SessionController: Identifiable {
         captureThumbnail()
         releaseAllKeys()
         stopScrollMomentum()
+        updateMicrophone()
         sink?.setSceneInBackground(true)
         #if os(iOS)
         screen?.backgroundStateDidChange()
@@ -645,6 +655,7 @@ final class SessionController: Identifiable {
         sceneInBackground = false
         endBackgroundTask()
         sink?.setSceneInBackground(false)
+        updateMicrophone()
         #if os(iOS)
         screen?.backgroundStateDidChange()
         #endif
@@ -1418,6 +1429,96 @@ final class SessionController: Identifiable {
             return
         }
         session?.setReceivesAudio(receivesAudio)
+    }
+
+    func setSendsAudio(_ sendsAudio: Bool) {
+        Task {
+            if sendsAudio, !(await MicrophoneSender.requestPermission()) {
+                alertMicrophoneDenied()
+                return
+            }
+            guard sendsAudio != self.sendsAudio else { return }
+            self.sendsAudio = sendsAudio
+            rememberState()
+            updateMicrophone()
+            if phase == .connected {
+                reconnectNow()
+            }
+        }
+    }
+
+    fileprivate func handle(microphone format: AudioFormat?) {
+        microphoneFormat = format
+        updateMicrophone()
+    }
+
+    private func updateMicrophone() {
+        guard let format = microphoneFormat, sendsAudio, !sceneInBackground else {
+            microphone?.stop()
+            microphone = nil
+            return
+        }
+        guard microphone?.format != format else { return }
+        microphone?.stop()
+        microphone = nil
+        Task { [self] in
+            let granted = await MicrophoneSender.requestPermission()
+            guard microphone == nil, microphoneFormat == format, sendsAudio, !sceneInBackground else { return }
+            guard granted else {
+                sendsAudio = false
+                rememberState()
+                alertMicrophoneDenied()
+                return
+            }
+            let session = self.session
+            do {
+                let sender = try MicrophoneSender(
+                    format: format,
+                    send: { data in session?.sendMicrophoneAudio(data) },
+                    failed: { [weak self] sender, error in
+                        DispatchQueue.main.async {
+                            guard let self, self.microphone === sender else { return }
+                            sender.stop()
+                            self.microphone = nil
+                            self.alert = AlertState(String(localized: "Can’t Use the Microphone"), error: error)
+                        }
+                    })
+                sender.start()
+                microphone = sender
+            } catch {
+                alert = AlertState(String(localized: "Can’t Use the Microphone"), error: error)
+            }
+        }
+    }
+
+    private func alertMicrophoneDenied() {
+        #if os(iOS)
+        alert = AlertState(
+            title: String(localized: "Can’t Use the Microphone"),
+            message: String(localized: "Microphone access is turned off in Settings."),
+            actions: [
+                AlertState.Action(label: String(localized: "Open Settings"), role: nil) {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                },
+                AlertState.Action(label: String(localized: "OK"), role: .cancel) {},
+            ]
+        )
+        #else
+        alert = AlertState(
+            title: String(localized: "Can’t Use the Microphone"),
+            message: String(localized: "Microphone access is turned off in System Settings."),
+            actions: [
+                AlertState.Action(label: String(localized: "Open System Settings"), role: nil) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                        NSWorkspace.shared.open(url)
+                    }
+                },
+                AlertState.Action(label: String(localized: "OK"), role: .cancel) {},
+            ]
+        )
+        #endif
     }
 
     func setClipboardSharing(_ enabled: Bool) {
@@ -2700,6 +2801,10 @@ nonisolated final class SessionEventSink: @unchecked Sendable {
         }
         lock.unlock()
         previous?.stop()
+    }
+
+    func sessionMicrophoneChanged(_ format: AudioFormat?) {
+        onMain { $0.handle(microphone: format) }
     }
 
     func sessionReceivedAudio(_ unit: AudioAccessUnit) {

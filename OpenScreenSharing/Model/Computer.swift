@@ -31,6 +31,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
     var displayID: Int64 = -1
     var usesHDR = false
     var receivesAudio = true
+    var sendsAudio = false
     var keyboardSources: [String] = []
     var windowWidth: Double = 0
     var windowHeight: Double = 0
@@ -103,6 +104,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
             display: displaySelection,
             usesHDR: usesHDR,
             receivesAudio: receivesAudio,
+            sendsAudio: sendsAudio,
             windowSize: windowWidth > 0 && windowHeight > 0 ? CGSize(width: windowWidth, height: windowHeight) : nil,
             locksPointer: locksPointer,
             usesNativeTouch: usesNativeTouch
@@ -117,6 +119,7 @@ nonisolated struct Computer: Codable, Identifiable, Hashable, FetchableRecord, P
         displaySelection = memory.display
         usesHDR = memory.usesHDR
         receivesAudio = memory.receivesAudio
+        sendsAudio = memory.sendsAudio
         windowWidth = memory.windowSize.map { Double($0.width) } ?? 0
         windowHeight = memory.windowSize.map { Double($0.height) } ?? 0
         locksPointer = memory.locksPointer

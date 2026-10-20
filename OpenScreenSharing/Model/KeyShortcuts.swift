@@ -40,7 +40,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case toolbar
     #endif
     case customizeToolbar
-    case receiveAudio
+    case receiveAudio, sendAudio
     case observe, pointerLock
     #if os(iOS)
     case keyboard
@@ -77,7 +77,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         switch self {
         case .newConnection, .disconnect: .file
         case .syncClipboard, .receiveClipboard, .sendClipboard: .edit
-        case .receiveAudio: .sound
+        case .receiveAudio, .sendAudio: .sound
         case .observe, .pointerLock, .home, .appSwitcher, .lock, .missionControl, .appWindows, .showDesktop, .launchpad:
             .control
         #if os(iOS)
@@ -115,6 +115,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .keyboard: return String(localized: "Show/Hide Keyboard")
         #endif
         case .receiveAudio: return String(localized: "Receive Audio")
+        case .sendAudio: return String(localized: "Send Audio")
         case .observe: return String(localized: "Observe Mode")
         case .pointerLock: return String(localized: "Pointer Lock")
         case .home: return String(localized: SessionCommand.home.title)

@@ -74,6 +74,7 @@ enum AppDatabase {
                 t.add(column: "keepsAlive", .boolean).notNull().defaults(to: false)
                 t.add(column: "disablesUDP", .boolean).notNull().defaults(to: false)
                 t.add(column: "receivesAudio", .boolean).notNull().defaults(to: true)
+                t.add(column: "sendsAudio", .boolean).notNull().defaults(to: false)
             }
             try db.execute(sql: "UPDATE computers SET receivesAudio = remoteAudio = 'fromMac'")
             try db.alter(table: "computers") { t in

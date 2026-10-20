@@ -3,7 +3,7 @@ import SwiftUI
 
 enum SessionCommand: String, CaseIterable, Identifiable {
     case zoomMode, scale, displays, quality, resolution, hdr
-    case audio
+    case audio, sendAudio
     case nativeTouch
     case observe = "control"
     case pointerLock, keyboard
@@ -23,6 +23,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .resolution: "Resolution"
         case .hdr: "High Dynamic Range"
         case .audio: "Receive Audio"
+        case .sendAudio: "Send Audio"
         case .observe: "Observe Mode"
         case .pointerLock: "Pointer Lock"
         case .nativeTouch: "Native Touch"
@@ -45,6 +46,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .resolution: "aspectratio"
         case .hdr: "sun.max"
         case .audio: "speaker.wave.2"
+        case .sendAudio: "mic"
         case .observe: "eye"
         case .pointerLock: "computermouse"
         case .nativeTouch: "hand.tap"
@@ -61,7 +63,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
     var category: SessionCommandCategory {
         switch self {
         case .zoomMode, .scale, .displays, .quality, .resolution, .hdr: .view
-        case .audio: .sound
+        case .audio, .sendAudio: .sound
         case .observe, .pointerLock, .nativeTouch, .keyboard, .missionControl, .appWindows, .showDesktop,
             .launchpad, .home, .appSwitcher, .lock:
             .control
@@ -85,7 +87,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .home, .appSwitcher, .lock: platform == .iOS
         case .displays, .quality, .resolution, .hdr: platform != .iOS
         case .missionControl, .appWindows, .showDesktop, .launchpad: platform == .mac
-        case .zoomMode, .scale, .audio, .observe, .pointerLock, .clipboard, .debugInfo: true
+        case .zoomMode, .scale, .audio, .sendAudio, .observe, .pointerLock, .clipboard, .debugInfo: true
         #if os(iOS)
         case .keyboard: true
         case .nativeTouch: platform == .pc
@@ -105,6 +107,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
         case .scale: return !controller.pictureMatchesWindow
         case .quality: return !controller.usesHighPerformance && offers(.quality)
         case .audio: return controller.usesHighPerformance || capabilities.contains(.audio)
+        case .sendAudio: return controller.route.remoteProtocol == .rdp
         case .displays: return controller.showsDisplayPicker
         case .resolution: return controller.offersResolution
         case .hdr:
@@ -129,7 +132,7 @@ enum SessionCommand: String, CaseIterable, Identifiable {
     func isEnabled(in controller: SessionController) -> Bool {
         let connected = controller.phase == .connected
         switch self {
-        case .zoomMode, .scale, .quality, .audio, .debugInfo: return true
+        case .zoomMode, .scale, .quality, .audio, .sendAudio, .debugInfo: return true
         case .displays, .clipboard: return connected
         case .resolution: return controller.isControlling
         case .hdr: return controller.canUseHDR
@@ -233,6 +236,8 @@ struct SessionCommandView: View {
             toggle(isOn: Binding(get: { controller.hdrEnabled && controller.canUseHDR }, set: { controller.setHDR($0) }))
         case .audio:
             toggle(isOn: Binding(get: { controller.receivesAudio }, set: { controller.setReceivesAudio($0) }))
+        case .sendAudio:
+            toggle(isOn: Binding(get: { controller.sendsAudio }, set: { controller.setSendsAudio($0) }))
         case .observe:
             toggle(isOn: Binding(get: { controller.mode == .observe }, set: { controller.setMode($0 ? .observe : .control) }))
         case .pointerLock:

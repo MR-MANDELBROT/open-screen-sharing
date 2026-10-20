@@ -33,6 +33,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         options.trustedFingerprint = configuration.trustedFingerprint
         options.keyboardLayout = Int32(configuration.keyboardLayout)
         options.audio = configuration.receivesAudio
+        options.microphone = configuration.sendsAudio
         options.host = configuration.address.host
         options.port = Int32(configuration.address.port)
         configuration.credentials.apply(to: options, observes: configuration.startsInObserveMode)
@@ -372,6 +373,10 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             restartingHighPerformance = false
             lock.unlock()
         }
+    }
+
+    func sendMicrophoneAudio(_ data: Data) {
+        try? session?.sendMicrophoneAudio(data)
     }
 
     func requestRefresh() {
@@ -840,19 +845,16 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
 
     func onAudioFormat(_ format: LibsharingAudioFormat?) {
         guard let format else { return }
-        delegate?.sessionAudioFormatChanged(
-            AudioFormat(
-                formatID: AudioFormatID(truncatingIfNeeded: format.formatID),
-                sampleRate: Double(format.sampleRate),
-                channels: UInt32(max(1, format.channels)),
-                framesPerPacket: UInt32(max(1, format.framesPerPacket)),
-                magicCookie: format.magicCookie ?? Data()
-            ))
+        delegate?.sessionAudioFormatChanged(AudioFormat(format))
     }
 
     func onAudioPacket(_ packet: LibsharingAudioPacket?) {
         guard let packet, let data = packet.data else { return }
         delegate?.sessionReceivedAudio(AudioAccessUnit(data: data, timestamp: packet.timestamp, lost: Int(packet.lost)))
+    }
+
+    func onMicrophone(_ format: LibsharingAudioFormat?) {
+        delegate?.sessionMicrophoneChanged(format.map(AudioFormat.init))
     }
 
     func onMediaStopped(_ errorCode: Int32, message: String?) {
@@ -921,6 +923,18 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
 
     func reportMediaFailure(_ failure: MediaFailure) {
         delegate?.sessionVideoStopped(failure: failure)
+    }
+}
+
+nonisolated extension AudioFormat {
+    init(_ format: LibsharingAudioFormat) {
+        self.init(
+            formatID: AudioFormatID(truncatingIfNeeded: format.formatID),
+            sampleRate: Double(format.sampleRate),
+            channels: UInt32(max(1, format.channels)),
+            framesPerPacket: UInt32(max(1, format.framesPerPacket)),
+            magicCookie: format.magicCookie ?? Data()
+        )
     }
 }
 

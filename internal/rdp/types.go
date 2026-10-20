@@ -27,6 +27,7 @@ type Options struct {
 	KeyboardLayout     uint32
 	Clipboard          bool
 	Audio              bool
+	Microphone         bool
 	VerifyCertificate  func(fingerprint string) error
 	KeepAlive          bool
 	DisableUDP         bool
@@ -52,6 +53,8 @@ type Events interface {
 	Bell()
 	AudioFormatChanged(AudioFormat)
 	AudioPacketReceived([]byte, uint64)
+	MicrophoneOpened(AudioFormat)
+	MicrophoneClosed()
 }
 
 type Info struct {

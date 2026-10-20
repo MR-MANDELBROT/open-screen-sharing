@@ -185,39 +185,9 @@ func (c *audioChannel) negotiate(r *reader) error {
 	if r.err != nil {
 		return r.err
 	}
-	if count > r.remaining()/audioFormatMinimum {
-		return E.New("rdp: ", count, " audio formats do not fit in ", r.remaining(), " bytes")
-	}
-	formats := make([]AudioFormat, 0, count)
-	var encoded []byte
-	for range count {
-		tag := r.u16()
-		channels := r.u16()
-		sampleRate := r.u32()
-		bytesPerSecond := r.u32()
-		blockAlign := r.u16()
-		bits := r.u16()
-		r.take(int(r.u16()))
-		if r.err != nil {
-			return r.err
-		}
-		if tag != waveFormatPCM || bits != audioBitsPerSample || (channels != 1 && channels != 2) ||
-			sampleRate < audioMinimumRate || sampleRate > audioMaximumRate ||
-			blockAlign != channels*2 || bytesPerSecond != sampleRate*uint32(blockAlign) {
-			continue
-		}
-		formats = append(formats, AudioFormat{
-			Channels:      int(channels),
-			SampleRate:    int(sampleRate),
-			BitsPerSample: int(bits),
-		})
-		encoded = binary.LittleEndian.AppendUint16(encoded, waveFormatPCM)
-		encoded = binary.LittleEndian.AppendUint16(encoded, channels)
-		encoded = binary.LittleEndian.AppendUint32(encoded, sampleRate)
-		encoded = binary.LittleEndian.AppendUint32(encoded, bytesPerSecond)
-		encoded = binary.LittleEndian.AppendUint16(encoded, blockAlign)
-		encoded = binary.LittleEndian.AppendUint16(encoded, bits)
-		encoded = binary.LittleEndian.AppendUint16(encoded, 0)
+	formats, encoded, err := readPCMFormats(r, count)
+	if err != nil {
+		return err
 	}
 	if r.remaining() != 0 {
 		return E.New("rdp: ", r.remaining(), " bytes after the audio formats")
@@ -231,7 +201,7 @@ func (c *audioChannel) negotiate(r *reader) error {
 	body = binary.LittleEndian.AppendUint16(body, min(version, audioVersion))
 	body = append(body, 0)
 	body = append(body, encoded...)
-	err := c.send(audioPDU(audioFormats, body))
+	err = c.send(audioPDU(audioFormats, body))
 	if err != nil {
 		return err
 	}
@@ -293,6 +263,44 @@ func (c *audioTimestampClock) extend(raw uint32, bits uint, arrival time.Time) u
 	c.bits = bits
 	c.arrival = arrival
 	return c.elapsed
+}
+
+func readPCMFormats(r *reader, count int) ([]AudioFormat, []byte, error) {
+	if count > r.remaining()/audioFormatMinimum {
+		return nil, nil, E.New("rdp: ", count, " audio formats do not fit in ", r.remaining(), " bytes")
+	}
+	var formats []AudioFormat
+	var encoded []byte
+	for range count {
+		tag := r.u16()
+		channels := r.u16()
+		sampleRate := r.u32()
+		bytesPerSecond := r.u32()
+		blockAlign := r.u16()
+		bits := r.u16()
+		r.take(int(r.u16()))
+		if r.err != nil {
+			return nil, nil, r.err
+		}
+		if tag != waveFormatPCM || bits != audioBitsPerSample || (channels != 1 && channels != 2) ||
+			sampleRate < audioMinimumRate || sampleRate > audioMaximumRate ||
+			blockAlign != channels*2 || bytesPerSecond != sampleRate*uint32(blockAlign) {
+			continue
+		}
+		formats = append(formats, AudioFormat{
+			Channels:      int(channels),
+			SampleRate:    int(sampleRate),
+			BitsPerSample: int(bits),
+		})
+		encoded = binary.LittleEndian.AppendUint16(encoded, waveFormatPCM)
+		encoded = binary.LittleEndian.AppendUint16(encoded, channels)
+		encoded = binary.LittleEndian.AppendUint32(encoded, sampleRate)
+		encoded = binary.LittleEndian.AppendUint32(encoded, bytesPerSecond)
+		encoded = binary.LittleEndian.AppendUint16(encoded, blockAlign)
+		encoded = binary.LittleEndian.AppendUint16(encoded, bits)
+		encoded = binary.LittleEndian.AppendUint16(encoded, 0)
+	}
+	return formats, encoded, nil
 }
 
 func audioPDU(kind byte, body []byte) []byte {

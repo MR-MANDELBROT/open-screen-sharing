@@ -201,6 +201,9 @@ private struct SoundCommandItems: View {
             Toggle("Receive Audio", isOn: Binding(get: { session?.receivesAudio ?? false }, set: { session?.setReceivesAudio($0) }))
                 .modifier(ActionShortcut(action: .receiveAudio))
                 .disabled(session.map { !SessionCommand.audio.isOffered(by: $0) } ?? true)
+            Toggle("Send Audio", isOn: Binding(get: { session?.sendsAudio ?? false }, set: { session?.setSendsAudio($0) }))
+                .modifier(ActionShortcut(action: .sendAudio))
+                .disabled(session.map { !SessionCommand.sendAudio.isOffered(by: $0) } ?? true)
         }
     }
 }
