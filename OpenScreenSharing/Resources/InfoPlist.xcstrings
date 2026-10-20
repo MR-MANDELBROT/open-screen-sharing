@@ -293,6 +293,12 @@
             "value" : "Screen Sharing"
           }
         },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -300,12 +306,6 @@
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Screen Sharing"
-          }
-        },
-        "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Screen Sharing"
@@ -605,6 +605,12 @@
             "value" : "Screen Sharing"
           }
         },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -612,12 +618,6 @@
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Screen Sharing"
-          }
-        },
-        "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Screen Sharing"
@@ -917,6 +917,12 @@
             "value" : "Screen Sharing tìm và kết nối với các máy Mac trên mạng cục bộ của bạn."
           }
         },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing 會尋找並連線到本地網絡上的 Mac。"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -927,12 +933,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Screen Sharing 會尋找並連線到區域網路上的 Mac。"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Screen Sharing 會尋找並連線到本地網絡上的 Mac。"
           }
         }
       }
@@ -1229,6 +1229,12 @@
             "value" : "Screen Sharing chỉ lấy vị trí gần đúng của bạn để tiếp tục chia sẻ màn hình của thiết bị này khi bạn sử dụng các ứng dụng khác hoặc khi thiết bị bị khóa. Ứng dụng không lưu giữ vị trí của bạn và không gửi vị trí đi bất kỳ đâu."
           }
         },
+        "zh-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Sharing 取得你的大約位置，僅用於在你使用其他 App 或裝置鎖定時繼續共享此裝置的螢幕。它不會保留你的位置，也不會將位置傳送到任何地方。"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
@@ -1236,12 +1242,6 @@
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Screen Sharing 取得你的大約位置，僅用於在你使用其他 App 或裝置鎖定時繼續共享此裝置的螢幕。它不會保留你的位置，也不會將位置傳送到任何地方。"
-          }
-        },
-        "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Screen Sharing 取得你的大約位置，僅用於在你使用其他 App 或裝置鎖定時繼續共享此裝置的螢幕。它不會保留你的位置，也不會將位置傳送到任何地方。"

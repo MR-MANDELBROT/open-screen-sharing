@@ -85,3 +85,4 @@ notarize_macos_pkg:
 
 fmt:
 	gofumpt -l -w cmd libsharing internal
+	go run ./cmd/internal/format_xcstrings $$(find OpenScreenSharing -name '*.xcstrings')
