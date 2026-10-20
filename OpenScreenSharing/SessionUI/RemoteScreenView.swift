@@ -37,6 +37,7 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
     private unowned let controller: SessionController
     private var presenter: ScreenPresenter!
     private let keyInput = KeyInputProxy()
+    let pressIndicator = PressIndicatorView()
     private let systemInput = KeyInputProxy(systemInput: true)
     private var systemInputReturnsToKeyboard = false
     private var dictationPress: UIPress?
@@ -75,6 +76,7 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
             keyboardTracker.heightAnchor.constraint(equalToConstant: 1),
             keyboardTracker.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
         ])
+        addSubview(pressIndicator)
         isAccessibilityElement = true
         accessibilityLabel = String(localized: "Screen of \(controller.title)")
         accessibilityTraits = .allowsDirectInteraction
@@ -145,6 +147,10 @@ final class RemoteScreenUIView: UIView, RemoteScreen {
     func drawnCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> CursorShape? {
         guard !input.showsCursorAsPointer(shape, visible: visible, scale: scale), !controller.hidesPointerForTouch else { return nil }
         return input.localPointer(for: shape, scale: scale) ?? shape
+    }
+
+    func cursorDidRender(in rect: CGRect?) {
+        pressIndicator.center = rect.map { CGPoint(x: $0.midX, y: $0.midY) } ?? viewPoint(for: controller.pointerPosition)
     }
 
     func backgroundStateDidChange() {

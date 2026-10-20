@@ -175,12 +175,42 @@ enum PointerShape {
             path.append(slash)
             return (.system, [(.bottomRight, .path(path))])
         case .resize(let directions):
-            let positions: [(StandardCursor.ResizeDirections, UIPointerAccessory.Position)] = [
-                (.up, .top), (.down, .bottom), (.left, .left), (.right, .right),
-                (.upLeft, .topLeft), (.upRight, .topRight), (.downLeft, .bottomLeft), (.downRight, .bottomRight),
+            let axes: [(directions: StandardCursor.ResizeDirections, angle: CGFloat)] = [
+                ([.left, .right], 0), ([.up, .down], .pi / 2), ([.upLeft, .downRight], .pi / 4), ([.upRight, .downLeft], -.pi / 4),
             ]
-            return (.system, positions.filter { directions.contains($0.0) }.map { ($0.1, .arrow) })
+            let angles = axes.filter { !directions.isDisjoint(with: $0.directions) }.map(\.angle)
+            guard angles.count == 1 else {
+                let positions: [(StandardCursor.ResizeDirections, UIPointerAccessory.Position)] = [
+                    (.up, .top), (.down, .bottom), (.left, .left), (.right, .right),
+                    (.upLeft, .topLeft), (.upRight, .topRight), (.downLeft, .bottomLeft), (.downRight, .bottomRight),
+                ]
+                return (.system, positions.filter { directions.contains($0.0) }.map { ($0.1, .arrow) })
+            }
+            return (.path(resizeArrows(angle: angles[0])), [])
         }
+    }
+
+    // SpringBoard draws the window resize pointer as its whole shape, without accessories, with constrainedAxes 0: two
+    // triangles with corners rounded by 2 at (∓3, ±8) and (∓19.894736842105264, 0), always both, turned to 0 or ±π / 2
+    // for an edge and to ±π / 4 or ±3π / 4 for a corner. It then moves the shape off the pointer along that turn by
+    // (inner 5 − outer 12.5) / 2 for an edge or (1 − √2) × the window corner radius for a corner, from the hovered edge
+    // and window it knows (SpringBoard 4637.1.14, iPadOS 27.2 24B5110a, UUID DC16B497-8B4A-323B-BA45-84E3A4DC5307,
+    // -[SBAppSwitcherPageView styleForRegion:forView:] 0x226b8900c..0x226b89028,
+    // +[SBEdgeResizeSystemPointerInteractionHelper fancyResizePointerShapeHoveringOverEdge:innerLengthOfInteractionRegion:outerLengthOfInteractionRegion:cornerRadii:]
+    // 0x227128c30..0x227128e98, -[SBAppSwitcherSettings setDefaultValues] 0x22713a41c..0x22713a430).
+    private static func resizeArrows(angle: CGFloat) -> UIBezierPath {
+        let path = CGMutablePath()
+        let transform = CGAffineTransform(rotationAngle: angle)
+        for side: CGFloat in [-1, 1] {
+            let base = 3 * side
+            let tip = 19.894736842105264 * side
+            path.move(to: CGPoint(x: base, y: 0), transform: transform)
+            path.addArc(tangent1End: CGPoint(x: base, y: 8), tangent2End: CGPoint(x: tip, y: 0), radius: 2, transform: transform)
+            path.addArc(tangent1End: CGPoint(x: tip, y: 0), tangent2End: CGPoint(x: base, y: -8), radius: 2, transform: transform)
+            path.addArc(tangent1End: CGPoint(x: base, y: -8), tangent2End: CGPoint(x: base, y: 8), radius: 2, transform: transform)
+            path.closeSubpath()
+        }
+        return UIBezierPath(cgPath: path)
     }
 
     // pointeruid's system arrow, moved so the hotspot is the origin (pointeruid 172, iPadOS 27.2 24B5110a,

@@ -469,6 +469,9 @@ protocol RemoteScreen: AnyObject {
     var displayScale: CGFloat { get }
     var isOccluded: Bool { get }
     func drawnCursor(_ shape: CursorShape?, visible: Bool, scale: CGFloat) -> CursorShape?
+    #if os(iOS)
+    func cursorDidRender(in rect: CGRect?)
+    #endif
 }
 
 final class ScreenPresenter {
@@ -648,6 +651,9 @@ final class ScreenPresenter {
                     width: CGFloat(cursor.image.width) / cursor.scale * cursorScale,
                     height: CGFloat(cursor.image.height) / cursor.scale * cursorScale))
         }
+        #if os(iOS)
+        screen.cursorDidRender(in: cursorRect)
+        #endif
         return renderer.render(
             ScreenRenderer.Frame(
                 pixelBuffer: snapshot.pixelBuffer,

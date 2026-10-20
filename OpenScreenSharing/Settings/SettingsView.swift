@@ -42,17 +42,13 @@ struct SettingsView: View {
 }
 
 private struct ControlSettingsView: View {
-    #if os(iOS)
-    @Perception.Bindable private var settings = AppSettings.shared
-    #else
     private let settings = AppSettings.shared
-    #endif
     private let themes = CursorThemeStore.shared
 
     var body: some View {
         WithPerceptionTracking {
             Form {
-                Section("Custom") {
+                Section {
                     NavigationLink {
                         CursorStyleView()
                     } label: {
@@ -67,17 +63,6 @@ private struct ControlSettingsView: View {
                         }
                     }
                 }
-                #if os(iOS)
-                Section {
-                    Toggle(isOn: $settings.usesTraditionalPressGesture) {
-                        Label("Traditional Press Gesture", systemImage: "hand.tap")
-                    }
-                } header: {
-                    Text("Behavior")
-                } footer: {
-                    Text("When controlling the pointer by touch, double-tap quickly and hold instead of pressing for a while to hold down the left button and drag.")
-                }
-                #endif
             }
             #if os(macOS)
             .formStyle(.grouped)

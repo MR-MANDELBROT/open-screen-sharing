@@ -44,6 +44,9 @@ struct HomeView: View {
     @State private var actions = HomeActions()
     @State private var isWatchingConnections = false
     @State private var linkLookup: LinkLookup?
+    #if os(iOS)
+    @State private var tutorials = SessionTutorial.unseen
+    #endif
     #if os(iOS) && (DEBUG || SIDELOAD)
     private let server = ServerController.shared
     #endif
@@ -74,6 +77,13 @@ struct HomeView: View {
                 }
             }
             #if os(iOS)
+            .overlay {
+                if !tutorials.isEmpty {
+                    SessionTutorialView(pages: tutorials) {
+                        tutorials = []
+                    }
+                }
+            }
             .fullScreenCover(item: $activeSession) { controller in
                 SessionView(controller: controller, hasOwnWindow: false) {
                     activeSession = nil

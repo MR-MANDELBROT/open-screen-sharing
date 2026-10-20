@@ -8,7 +8,6 @@ final class AppSettings {
     private enum Key {
         static let showsDebugInfo = "showsDebugInfo"
         static let cursorStyle = "cursorStyle"
-        static let usesTraditionalPressGesture = "usesTraditionalPressGesture"
         static let computerLayout = "computerLayout"
         static let computerOrder = "computerOrder"
         static let seenTutorials = "seenTutorials"
@@ -20,10 +19,6 @@ final class AppSettings {
 
     var cursorStyle: CursorStyle {
         didSet { store.set(cursorStyle, for: Key.cursorStyle) }
-    }
-
-    var usesTraditionalPressGesture: Bool {
-        didSet { store.set(usesTraditionalPressGesture, for: Key.usesTraditionalPressGesture) }
     }
 
     var computerLayout: ComputerLayout {
@@ -43,7 +38,6 @@ final class AppSettings {
     init() {
         showsDebugInfo = store.value(Bool.self, for: Key.showsDebugInfo) ?? false
         cursorStyle = store.value(CursorStyle.self, for: Key.cursorStyle) ?? .system
-        usesTraditionalPressGesture = store.value(Bool.self, for: Key.usesTraditionalPressGesture) ?? false
         computerLayout = store.value(ComputerLayout.self, for: Key.computerLayout) ?? .grid
         computerOrder = store.value([UUID].self, for: Key.computerOrder) ?? []
         seenTutorials = store.value(Set<SessionTutorial>.self, for: Key.seenTutorials) ?? []

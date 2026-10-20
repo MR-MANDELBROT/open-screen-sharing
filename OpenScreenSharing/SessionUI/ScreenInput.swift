@@ -7,8 +7,8 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private static let tapSlop: CGFloat = 10
     private static let tapDuration: TimeInterval = 0.35
     private static let multiClickInterval: TimeInterval = 0.5
-    private static let pressHold: TimeInterval = 0.5
-    private static let tapDragWindow: TimeInterval = 0.3
+    private static let pressHold: TimeInterval = 0.3
+    private static let pressIndicatorDelay: TimeInterval = 0.15
     private static let mouseCountsPerPoint: CGFloat = 2
     private static let touchMargin: CGFloat = 24
     private static let doubleTapDistance: CGFloat = 40
@@ -28,9 +28,12 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
     private var rotationGesture: UIRotationGestureRecognizer!
 
     private var fingers: Set<UITouch> = []
-    private var finger: Finger?
+    private var finger: Finger? {
+        didSet {
+            if finger == nil { view.pressIndicator.dismiss() }
+        }
+    }
     private var holdTask: Task<Void, Never>?
-    private var tapRelease: (task: Task<Void, Never>, location: CGPoint)?
     private var fingersTouchDirectly = false
     private var touchFinger: UITouch?
     private var touchPressed = false
@@ -355,7 +358,6 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         var last: CGPoint
         var phase = Phase.pending
         var travel: CGFloat = 0
-        var continuesTap = false
         private var samples: [(point: CGPoint, time: TimeInterval)]
 
         init(touch: UITouch, location: CGPoint, pointer: CGPoint) {
@@ -392,25 +394,14 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
             touchBegan(touch)
             return
         }
-        let pendingRelease = tapRelease
-        pendingRelease?.task.cancel()
-        tapRelease = nil
         guard fingers.count == 1 else {
             if let finger { end(finger, liftedAt: nil) }
-            if pendingRelease != nil { controller.release(.primary) }
             return
         }
         let next = Finger(touch: touch, location: touch.location(in: view), pointer: controller.pointerPosition)
         finger = next
-        if let pendingRelease {
-            if controller.isControlling, hypot(next.start.x - pendingRelease.location.x, next.start.y - pendingRelease.location.y) <= Self.doubleTapDistance {
-                next.phase = .dragging
-                next.continuesTap = true
-                return
-            }
-            controller.release(.primary)
-        }
-        guard controller.isControlling, !AppSettings.shared.usesTraditionalPressGesture else { return }
+        guard controller.isControlling else { return }
+        view.pressIndicator.beginHold(delay: Self.pressIndicatorDelay, duration: Self.pressHold - Self.pressIndicatorDelay)
         holdTask = Task { [weak self] in
             try? await Task.sleep(seconds: Self.pressHold)
             guard !Task.isCancelled, let self, self.finger === next, next.phase == .pending else { return }
@@ -429,6 +420,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         finger.record(location, at: touch.timestamp)
         if finger.phase == .pending, finger.travel > Self.tapSlop {
             finger.phase = .pointing
+            view.pressIndicator.dismiss()
         }
         let velocity = finger.velocity(at: touch.timestamp)
         movePointer(by: delta, speed: hypot(velocity.x, velocity.y))
@@ -453,28 +445,11 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         case .pending:
             guard let time, finger.isTap(endedAt: time), controller.isControlling else { break }
             controller.movePointer(to: finger.startPointer)
-            guard AppSettings.shared.usesTraditionalPressGesture else {
-                controller.click(.primary)
-                break
-            }
-            controller.press(.primary)
-            let task = Task { [weak self] in
-                try? await Task.sleep(seconds: Self.tapDragWindow)
-                guard !Task.isCancelled, let self else { return }
-                self.tapRelease = nil
-                self.controller.release(.primary)
-            }
-            tapRelease = (task, finger.start)
+            controller.click(.primary)
         case .pointing:
             break
         case .dragging:
-            guard finger.continuesTap, let time, finger.isTap(endedAt: time) else {
-                controller.release(.primary)
-                break
-            }
-            controller.movePointer(to: finger.startPointer)
             controller.release(.primary)
-            controller.click(.primary)
         }
     }
 
@@ -483,6 +458,7 @@ final class ScreenInput: NSObject, UIGestureRecognizerDelegate, UIPointerInterac
         holdTask = nil
         finger.phase = .dragging
         controller.press(.primary)
+        view.pressIndicator.press()
         if #available(iOS 17.5, *) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred(at: finger.last)
         } else {

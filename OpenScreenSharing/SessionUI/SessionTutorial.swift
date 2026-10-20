@@ -6,6 +6,20 @@ enum SessionTutorial: String, CaseIterable, Codable, Identifiable {
     case dictation
 
     var id: Self { self }
+
+    #if os(iOS)
+    static var unseen: [SessionTutorial] {
+        guard Demo.current == nil else { return [] }
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        return allCases.filter { tutorial in
+            guard !AppSettings.shared.seenTutorials.contains(tutorial) else { return false }
+            switch tutorial {
+            case .pressToDrag: return true
+            case .pointerLock, .dictation: return isPad
+            }
+        }
+    }
+    #endif
 }
 
 #if os(iOS)
@@ -81,9 +95,9 @@ struct SessionTutorialView: View {
         VStack(alignment: .leading, spacing: 8) {
             switch page {
             case .pressToDrag:
-                Text("Press and Hold to Drag")
+                Text("Press Gesture")
                     .font(.title2.bold())
-                Text("Touch and hold anywhere on the screen until the pointer presses down, then move your finger to drag windows or select text.")
+                Text("Touch and hold anywhere on the screen for a while to simulate a press.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             case .pointerLock:
@@ -138,32 +152,39 @@ private enum TutorialPalette {
         Color(red: 0x28 / 255, green: 0xC8 / 255, blue: 0x40 / 255),
     ]
 
-    static func drawPointer(_ context: inout GraphicsContext, at center: CGPoint, radius: CGFloat, pressed: CGFloat) {
+    static func drawPointer(_ context: inout GraphicsContext, at center: CGPoint, radius: CGFloat) {
         let circle = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
-        context.fill(circle, with: .color(Color(white: 0.28).opacity(0.62 + 0.2 * pressed)))
+        context.fill(circle, with: .color(Color(white: 0.28).opacity(0.62)))
         context.stroke(circle, with: .color(.white.opacity(0.55)), lineWidth: 0.8)
     }
 }
 
 private struct PressToDragIllustration: View {
+    private static let size = CGSize(width: 310, height: 210)
     private static let period = 5.2
     private static let windowOrigin = CGPoint(x: 34, y: 44)
     private static let fingerOrigin = CGPoint(x: 196, y: 148)
     private static let travel = CGPoint(x: 84, y: 8)
     private static let pointerOffset = CGPoint(x: 72, y: 10)
-    private static let captions: [(start: Double, text: LocalizedStringKey)] = [
-        (0, "Touch and Hold Anywhere"), (0.65, "Hold Still…"), (1.15, "Pointer Pressed"), (1.45, "Move to Drag"),
-        (3.1, "Lift to Drop"), (4.6, "Touch and Hold Anywhere"),
-    ]
+    private static let pointerScale: CGFloat = 3
+    private static let pointerHotspot = PointerShape.mask(for: .arrow, beamLength: 0, scale: pointerScale)?.hotspot ?? .zero
+    private static let pointerImages = [false, true].map { increasesContrast in
+        PointerShape.preview(
+            for: .arrow, backdrop: SIMD3(0.89, 0.89, 0.91), material: CursorMaterial(isDarkInterface: false, increasesContrast: increasesContrast),
+            scale: pointerScale)
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @State private var start = Date()
 
     var body: some View {
         TimelineView(.animation(minimumInterval: nil, paused: reduceMotion)) { timeline in
             let time = reduceMotion ? 2.2 : timeline.date.timeIntervalSince(start).truncatingRemainder(dividingBy: Self.period)
             Canvas { context, size in
-                draw(in: &context, size: size, at: time)
+                let scale = size.width / Self.size.width
+                context.scaleBy(x: scale, y: scale)
+                draw(in: &context, size: Self.size, at: time)
             }
         }
     }
@@ -172,11 +193,9 @@ private struct PressToDragIllustration: View {
         func progress(_ from: Double, _ to: Double) -> CGFloat { CGFloat(min(1, max(0, (t - from) / (to - from)))) }
         func eased(_ x: CGFloat) -> CGFloat { x < 0.5 ? 4 * x * x * x : 1 - pow(-2 * x + 2, 3) / 2 }
 
-        let appear = progress(0.5, 0.65)
-        let hold = progress(0.65, 1.15)
         let move = eased(progress(1.45, 2.75))
         let lift = progress(3.1, 3.3)
-        let press = progress(1.15, 1.25) - progress(3.1, 3.2)
+        let press = progress(0.8, 0.9) - progress(3.1, 3.2)
         let reset = t >= 4.6
         let fade = reset ? progress(4.6, 4.9) : 1 - progress(4.3, 4.6)
         let offset =
@@ -211,52 +230,52 @@ private struct PressToDragIllustration: View {
             }
         }
 
-        var pointerContext = context
-        pointerContext.opacity = fade
-        TutorialPalette.drawPointer(
-            &pointerContext, at: CGPoint(x: window.x + Self.pointerOffset.x, y: window.y + Self.pointerOffset.y),
-            radius: 7 * (1 - 0.15 * press), pressed: press)
-
-        if t >= 0.5, t < 3.3 {
-            var finger = context
-            finger.opacity = min(appear, 1 - lift)
-            let scale = t < 1 ? 1.25 - 0.25 * appear : 1 + 0.2 * lift
-            let center = CGPoint(x: Self.fingerOrigin.x + offset.x, y: Self.fingerOrigin.y + offset.y)
-            func circle(_ radius: CGFloat) -> Path {
-                Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
-            }
-            finger.stroke(circle(24 * scale), with: .color(.white.opacity(0.25)), lineWidth: 3.5)
-            if hold > 0 {
-                var ring = Path()
-                ring.addArc(
-                    center: center, radius: 24 * scale, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * Double(hold)),
-                    clockwise: false)
-                finger.stroke(ring, with: .color(.accentColor), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
-            }
-            if t >= 1.15, t < 1.5 {
-                let pulse = progress(1.15, 1.5)
-                finger.stroke(circle(24 + 10 * pulse), with: .color(.accentColor.opacity(1 - pulse)), lineWidth: 2)
-            }
-            finger.fill(circle(17 * scale), with: .color(.white.opacity(0.35 * (1 - press))))
-            finger.fill(circle(17 * scale), with: .color(.accentColor.opacity(0.6 * press)))
-            finger.stroke(circle(17 * scale), with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+        let pointer = CGPoint(x: window.x + Self.pointerOffset.x, y: window.y + Self.pointerOffset.y)
+        var pointerCenter = pointer
+        if let image = Self.pointerImages[colorSchemeContrast == .increased ? 1 : 0] {
+            let rect = CGRect(
+                x: pointer.x - Self.pointerHotspot.x, y: pointer.y - Self.pointerHotspot.y,
+                width: CGFloat(image.width) / Self.pointerScale, height: CGFloat(image.height) / Self.pointerScale)
+            pointerCenter = CGPoint(x: rect.midX, y: rect.midY)
+            var pointerContext = context
+            pointerContext.opacity = fade
+            pointerContext.draw(Image(decorative: image, scale: Self.pointerScale), in: rect)
         }
 
-        let index = Self.captions.lastIndex { t >= $0.start } ?? 0
-        let caption = Self.captions[index]
-        var alpha = index == 0 ? 1 : min(1, (t - caption.start) / 0.15)
-        if t >= 4.3, t < 4.6 { alpha *= Double(1 - progress(4.3, 4.6)) }
-        var captionContext = context
-        captionContext.opacity = alpha
-        let text = captionContext.resolve(Text(caption.text).font(.system(size: 12.5, weight: .medium)).foregroundColor(.white))
-        let textSize = text.measure(in: size)
-        let center = CGPoint(x: size.width / 2, y: 191)
-        captionContext.fill(
-            Path(
-                roundedRect: CGRect(x: center.x - textSize.width / 2 - 13, y: center.y - 11, width: textSize.width + 26, height: 22),
-                cornerRadius: 11),
-            with: .color(.black.opacity(0.45)))
-        captionContext.draw(text, at: center)
+        func circle(_ center: CGPoint, _ radius: CGFloat) -> Path {
+            Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+        }
+        func drawIndicator(opacity: CGFloat, hold: CGFloat, pulse: CGFloat?) {
+            var indicator = context
+            indicator.opacity = opacity
+            indicator.fill(circle(pointerCenter, 20), with: .color(.white.opacity(0.2 * press)))
+            indicator.stroke(circle(pointerCenter, 20), with: .color(.black.opacity(0.3)), lineWidth: 3)
+            if let pulse {
+                indicator.stroke(circle(pointerCenter, 20 * (1 + 0.4 * pulse)), with: .color(.white.opacity(1 - pulse)), lineWidth: 2)
+            }
+            var ring = Path()
+            ring.addArc(
+                center: pointerCenter, radius: 20, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * Double(hold)), clockwise: false)
+            indicator.addFilter(.shadow(color: .black.opacity(0.4), radius: 2))
+            indicator.stroke(ring, with: .color(.white), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+        }
+        func drawFinger(opacity: CGFloat, scale: CGFloat) {
+            let center = CGPoint(x: Self.fingerOrigin.x + offset.x, y: Self.fingerOrigin.y + offset.y)
+            var finger = context
+            finger.opacity = opacity
+            finger.fill(circle(center, 17 * scale), with: .color(.white.opacity(0.35)))
+            finger.stroke(circle(center, 17 * scale), with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+        }
+
+        if t >= 0.5, t < 3.3 {
+            let appear = progress(0.5, 0.65)
+            drawFinger(opacity: min(appear, 1 - lift), scale: t < 1 ? 1.25 - 0.25 * appear : 1 + 0.2 * lift)
+        }
+        if t >= 0.65, t < 3.3 {
+            drawIndicator(
+                opacity: min(progress(0.65, 0.7), 1 - lift), hold: progress(0.65, 0.8),
+                pulse: t >= 0.8 && t < 1.15 ? progress(0.8, 1.15) : nil)
+        }
     }
 }
 
@@ -400,7 +419,7 @@ private struct PointerLockIllustration: View {
                 context.fill(
                     Path(roundedRect: CGRect(x: 37.5 + CGFloat(i) * 12, y: 80, width: 9, height: 7.5), cornerRadius: 2), with: .color(color))
             }
-            TutorialPalette.drawPointer(&context, at: CGPoint(x: 66, y: 81), radius: 4.5, pressed: 0)
+            TutorialPalette.drawPointer(&context, at: CGPoint(x: 66, y: 81), radius: 4.5)
         } else {
             let dock = Path(roundedRect: CGRect(x: 22, y: 64, width: 88, height: 21), cornerRadius: 7, style: .continuous)
             context.fill(dock, with: .color(Color(white: 0.95).opacity(0.72)))
@@ -410,7 +429,7 @@ private struct PointerLockIllustration: View {
                     Path(roundedRect: CGRect(x: 27 + CGFloat(i) * 16.5, y: 67.5, width: 12.5, height: 12.5), cornerRadius: 3.2, style: .continuous),
                     with: .color(color))
             }
-            TutorialPalette.drawPointer(&context, at: CGPoint(x: 70, y: 76), radius: 5, pressed: 0)
+            TutorialPalette.drawPointer(&context, at: CGPoint(x: 70, y: 76), radius: 5)
         }
     }
 }

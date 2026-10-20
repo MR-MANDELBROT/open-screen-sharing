@@ -14117,310 +14117,6 @@
         }
       }
     },
-    "Behavior" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "السلوك"
-          }
-        },
-        "bg" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Поведение"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "আচরণ"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportament"
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chování"
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adfærd"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verhalten"
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Συμπεριφορά"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportamiento"
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportamiento"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toiminta"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportement"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportement"
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "વર્તન"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "התנהגות"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "व्यवहार"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ponašanje"
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Működés"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perilaku"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportamento"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動作"
-          }
-        },
-        "kk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Әрекет"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ವರ್ತನೆ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "동작"
-          }
-        },
-        "lt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elgsena"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "പ്രവർത്തനരീതി"
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "वर्तन"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tingkah Laku"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Atferd"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gedrag"
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ଆଚରଣ"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਵਿਹਾਰ"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zachowanie"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportamento"
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportamento"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comportament"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Поведение"
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Správanie"
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delovanje"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beteende"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "நடத்தை"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ప్రవర్తన"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "การทำงาน"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Davranış"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Поведінка"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "رویہ"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hành vi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "行为"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "行為"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "行為"
-          }
-        }
-      }
-    },
     "Cache" : {
       "localizations" : {
         "ar" : {
@@ -47370,310 +47066,6 @@
         }
       }
     },
-    "Hold Still…" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "لا تحرّك إصبعك…"
-          }
-        },
-        "bg" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не мърдайте…"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "স্থির রাখুন…"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No el moguis…"
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nehýbejte prstem…"
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hold stille…"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht bewegen …"
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Μην κινείτε το δάχτυλο…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No muevas el dedo…"
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No muevas el dedo…"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pidä paikallaan…"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ne bougez plus…"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ne bougez plus…"
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "સ્થિર રાખો…"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "לא להזיז את האצבע…"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "स्थिर रखें…"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ne pomičite prst…"
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ne mozdítsa az ujját…"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tahan Tanpa Bergerak…"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Non muovere il dito…"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "指を動かさないで…"
-          }
-        },
-        "kk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Саусақты қозғалтпаңыз…"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ಬೆರಳನ್ನು ಅಲುಗಾಡಿಸಬೇಡಿ…"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "그대로 유지…"
-          }
-        },
-        "lt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nejudinkite piršto…"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "വിരൽ അനക്കാതെ പിടിക്കുക…"
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "बोट स्थिर ठेवा…"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Jangan Gerakkan Jari…"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hold fingeren i ro…"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beweeg je vinger niet…"
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ଆଙ୍ଗୁଠି ସ୍ଥିର ରଖନ୍ତୁ…"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਉਂਗਲ ਸਥਿਰ ਰੱਖੋ…"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nie ruszaj palcem…"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não Mova o Dedo…"
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não mova o dedo…"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nu mișcați degetul…"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не двигайте пальцем…"
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nehýbte prstom…"
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ne premikajte prsta …"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Håll fingret stilla…"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "விரலை அசைக்காமல் வைத்திருக்கவும்…"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "వేలిని కదలకుండా ఉంచండి…"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ค้างนิ้วไว้นิ่งๆ…"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Parmağınızı Hareket Ettirmeyin…"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не рухайте пальцем…"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "انگلی ساکن رکھیں…"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Giữ yên ngón tay…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保持不动…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保持不動…"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保持不動…"
-          }
-        }
-      }
-    },
     "Home" : {
       "localizations" : {
         "ar" : {
@@ -56490,310 +55882,6 @@
         }
       }
     },
-    "Lift to Drop" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ارفع إصبعك للإفلات"
-          }
-        },
-        "bg" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Вдигнете, за да пуснете"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ছেড়ে দিতে আঙুল তুলুন"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aixeca per deixar anar"
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zvednutím pusťte"
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Løft for at slippe"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zum Ablegen loslassen"
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Σηκώστε για απόθεση"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Levanta para soltar"
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Levanta para soltar"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pudota nostamalla"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relâchez pour déposer"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relâchez pour déposer"
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "મૂકવા માટે આંગળી ઉઠાવો"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "להרים כדי לשחרר"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "छोड़ने के लिए उंगली उठाएँ"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Podignite za ispuštanje"
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Emelje fel az elengedéshez"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Angkat untuk Melepas"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Solleva per rilasciare"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "指を離してドロップ"
-          }
-        },
-        "kk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Тастау үшін саусақты көтеріңіз"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ಬಿಡಲು ಬೆರಳನ್ನು ಎತ್ತಿ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "손가락을 떼서 놓기"
-          }
-        },
-        "lt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pakelkite, kad numestumėte"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ഇടാൻ വിരൽ ഉയർത്തുക"
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सोडण्यासाठी बोट उचला"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Angkat untuk Lepaskan"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Løft for å slippe"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Til op om neer te zetten"
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ଛାଡ଼ିବା ପାଇଁ ଆଙ୍ଗୁଠି ଉଠାନ୍ତୁ"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਛੱਡਣ ਲਈ ਉਂਗਲ ਚੁੱਕੋ"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unieś, aby upuścić"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Levante para Soltar"
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Levante para largar"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ridicați pentru a plasa"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Поднимите палец, чтобы отпустить"
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zdvihnutím pustite"
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dvignite za spust"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lyft för att släppa"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "விட விரலை உயர்த்தவும்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "వదలడానికి వేలిని ఎత్తండి"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ยกนิ้วเพื่อวาง"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bırakmak İçin Kaldırın"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Підніміть палець, щоб відпустити"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "چھوڑنے کے لیے انگلی اٹھائیں"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nhấc ngón tay để thả"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "松开手指放下"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放開手指放下"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "鬆開手指放下"
-          }
-        }
-      }
-    },
     "List" : {
       "localizations" : {
         "ar" : {
@@ -61958,310 +61046,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下移"
-          }
-        }
-      }
-    },
-    "Move to Drag" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "حرّك للسحب"
-          }
-        },
-        "bg" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Местете за плъзгане"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "টেনে আনতে সরান"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mou per arrossegar"
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Táhněte pohybem prstu"
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flyt for at trække"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zum Ziehen bewegen"
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Μετακινήστε για μεταφορά"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mueve para arrastrar"
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mueve para arrastrar"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vedä liikuttamalla"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Déplacez pour faire glisser"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Déplacez pour faire glisser"
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ખેંચવા માટે ખસેડો"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "להזיז כדי לגרור"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ड्रैग करने के लिए खिसकाएँ"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pomaknite za povlačenje"
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mozgassa a húzáshoz"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gerakkan untuk Menyeret"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Muovi per trascinare"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動かしてドラッグ"
-          }
-        },
-        "kk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сүйреу үшін жылжытыңыз"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ಎಳೆಯಲು ಸರಿಸಿ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "움직여서 드래그"
-          }
-        },
-        "lt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Judinkite, kad vilktumėte"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "വലിച്ചിടാൻ നീക്കുക"
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ड्रॅग करण्यासाठी हलवा"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gerakkan untuk Seret"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flytt for å dra"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beweeg om te slepen"
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ଟାଣିବା ପାଇଁ ଘୁଞ୍ଚାନ୍ତୁ"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਘਸੀਟਣ ਲਈ ਹਿਲਾਓ"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Przesuń, aby przeciągnąć"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mova para Arrastar"
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mova para arrastar"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mișcați pentru a trage"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Двигайте, чтобы перетащить"
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Potiahnite pohybom prsta"
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Premaknite za vlečenje"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flytta för att dra"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "இழுக்க நகர்த்தவும்"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "లాగడానికి కదిలించండి"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "เลื่อนเพื่อลาก"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sürüklemek İçin Hareket Ettirin"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Рухайте, щоб перетягнути"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "گھسیٹنے کے لیے ہلائیں"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Di chuyển để kéo"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移动手指拖动"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移動手指拖移"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移動手指拖移"
           }
         }
       }
@@ -77488,310 +76272,6 @@
         }
       }
     },
-    "Pointer Pressed" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "تم الضغط على المؤشر"
-          }
-        },
-        "bg" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Показалецът е натиснат"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "পয়েন্টার চাপা হয়েছে"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Punter premut"
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ukazatel stisknut"
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Markøren er trykket ned"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zeiger gedrückt"
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ο δείκτης πατήθηκε"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Puntero pulsado"
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Puntero presionado"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Osoitin painettu"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pointeur enfoncé"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pointeur enfoncé"
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "પૉઇંટર દબાયું"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "המצביע נלחץ"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "पॉइंटर दबा"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pokazivač pritisnut"
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mutató lenyomva"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Penunjuk Ditekan"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Puntatore premuto"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ポインタが押されました"
-          }
-        },
-        "kk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Меңзер басылды"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ಪಾಯಿಂಟರ್ ಒತ್ತಲಾಗಿದೆ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "포인터 눌림"
-          }
-        },
-        "lt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Žymeklis paspaustas"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "പോയിന്റർ അമർത്തി"
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "पॉइंटर दाबला"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Penuding Ditekan"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pekeren er trykket ned"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aanwijzer ingedrukt"
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ପଏଣ୍ଟର୍ ଦବିଗଲା"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਪੁਆਇੰਟਰ ਦੱਬਿਆ ਗਿਆ"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wskaźnik wciśnięty"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cursor Pressionado"
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cursor premido"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cursor apăsat"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Указатель нажат"
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kurzor stlačený"
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kazalnik pritisnjen"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pekaren nedtryckt"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "பாயிண்டர் அழுத்தப்பட்டது"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "పాయింటర్ నొక్కబడింది"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "กดตัวชี้แล้ว"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İmleç Basıldı"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Вказівник натиснуто"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "پوائنٹر دب گیا"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Đã nhấn con trỏ"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "指针已按下"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "指標已按下"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "指標已按下"
-          }
-        }
-      }
-    },
     "Port" : {
       "localizations" : {
         "ar" : {
@@ -78704,306 +77184,306 @@
         }
       }
     },
-    "Press and Hold to Drag" : {
+    "Press Gesture" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "اضغط مطولًا للسحب"
+            "value" : "إيماءة الضغط"
           }
         },
         "bg" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Натиснете и задръжте за плъзгане"
+            "value" : "Жест за натискане"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "টেনে আনতে চেপে ধরে রাখুন"
+            "value" : "প্রেস জেসচার"
           }
         },
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantén premut per arrossegar"
+            "value" : "Gest de pressió"
           }
         },
         "cs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Podržte a přetáhněte"
+            "value" : "Gesto stisknutí"
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hold nede for at trække"
+            "value" : "Trykbevægelse"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zum Ziehen gedrückt halten"
+            "value" : "Drückgeste"
           }
         },
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Πατήστε παρατεταμένα για μεταφορά"
+            "value" : "Χειρονομία πατήματος"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantén pulsado para arrastrar"
+            "value" : "Gesto de pulsación"
           }
         },
         "es-419" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantén presionado para arrastrar"
+            "value" : "Gesto de presión"
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vedä painamalla pitkään"
+            "value" : "Painalluseele"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Maintenir pour faire glisser"
+            "value" : "Geste d’appui"
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Maintenir pour faire glisser"
+            "value" : "Geste d’appui"
           }
         },
         "gu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ખેંચવા માટે દબાવીને પકડી રાખો"
+            "value" : "પ્રેસ જેસ્ચર"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "לחיצה ממושכת לגרירה"
+            "value" : "מחוות לחיצה"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ड्रैग करने के लिए दबाकर रखें"
+            "value" : "प्रेस जेस्चर"
           }
         },
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zadržite za povlačenje"
+            "value" : "Gesta pritiska"
           }
         },
         "hu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Húzás nyomva tartással"
+            "value" : "Lenyomási kézmozdulat"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tekan dan Tahan untuk Menyeret"
+            "value" : "Gerakan Tekan"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tieni premuto per trascinare"
+            "value" : "Gesto di pressione"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "長押ししてドラッグ"
+            "value" : "押下ジェスチャ"
           }
         },
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сүйреу үшін басып тұрыңыз"
+            "value" : "Басу қимылы"
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ಎಳೆಯಲು ಒತ್ತಿ ಹಿಡಿಯಿರಿ"
+            "value" : "ಒತ್ತುವ ಸನ್ನೆ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "길게 눌러서 드래그하기"
+            "value" : "누르기 제스처"
           }
         },
         "lt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Paspauskite ir laikykite, kad vilktumėte"
+            "value" : "Paspaudimo gestas"
           }
         },
         "ml" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "വലിച്ചിടാൻ അമർത്തിപ്പിടിക്കുക"
+            "value" : "അമർത്തൽ ജെസ്ചർ"
           }
         },
         "mr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ड्रॅग करण्यासाठी दाबून धरा"
+            "value" : "प्रेस जेश्चर"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tekan dan Tahan untuk Seret"
+            "value" : "Gerak Isyarat Tekan"
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hold inne for å dra"
+            "value" : "Trykkbevegelse"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Houd ingedrukt om te slepen"
+            "value" : "Drukgebaar"
           }
         },
         "or" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ଟାଣିବା ପାଇଁ ଦବାଇ ଧରନ୍ତୁ"
+            "value" : "ପ୍ରେସ୍ ଜେଶ୍ଚର୍"
           }
         },
         "pa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ਘਸੀਟਣ ਲਈ ਦਬਾ ਕੇ ਰੱਖੋ"
+            "value" : "ਦਬਾਉਣ ਦਾ ਇਸ਼ਾਰਾ"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Przytrzymaj, aby przeciągnąć"
+            "value" : "Gest naciśnięcia"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantenha Pressionado para Arrastar"
+            "value" : "Gesto de Pressionar"
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantenha premido para arrastar"
+            "value" : "Gesto de premir"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Țineți apăsat pentru a trage"
+            "value" : "Gest de apăsare"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удерживайте, чтобы перетащить"
+            "value" : "Жест нажатия"
           }
         },
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Podržte a potiahnite"
+            "value" : "Gesto stlačenia"
           }
         },
         "sl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pridržite za vlečenje"
+            "value" : "Kretnja pritiska"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Håll ned för att dra"
+            "value" : "Tryckgest"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "இழுக்க அழுத்திப் பிடிக்கவும்"
+            "value" : "அழுத்தல் சைகை"
           }
         },
         "te" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "లాగడానికి నొక్కి పట్టుకోండి"
+            "value" : "నొక్కే సంజ్ఞ"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แตะค้างไว้เพื่อลาก"
+            "value" : "ท่าทางการกด"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sürüklemek İçin Basılı Tutun"
+            "value" : "Basma Hareketi"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Утримуйте, щоб перетягнути"
+            "value" : "Жест натискання"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "گھسیٹنے کے لیے دبا کر رکھیں"
+            "value" : "دبانے کا اشارہ"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chạm và giữ để kéo"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按住拖动"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按住拖移"
+            "value" : "Cử chỉ nhấn"
           }
         },
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按住拖移"
+            "value" : "按下手勢"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按下手势"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按下手勢"
           }
         }
       }
@@ -106998,914 +105478,306 @@
         }
       }
     },
-    "Touch and Hold Anywhere" : {
+    "Touch and hold anywhere on the screen for a while to simulate a press." : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "المس مطولًا أي مكان"
+            "value" : "المس مطولًا أي مكان على الشاشة لفترة لمحاكاة الضغط."
           }
         },
         "bg" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Задръжте където и да е"
+            "value" : "Задръжте където и да е на екрана за известно време, за да симулирате натискане."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "যেকোনো জায়গায় স্পর্শ করে ধরে রাখুন"
+            "value" : "প্রেস অনুকরণ করতে স্ক্রিনের যেকোনো জায়গায় কিছুক্ষণ স্পর্শ করে ধরে রাখুন।"
           }
         },
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantén premut a qualsevol lloc"
+            "value" : "Mantén premut qualsevol lloc de la pantalla una estona per simular una pressió."
           }
         },
         "cs" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Podržte kdekoli"
+            "value" : "Stisknutí nasimulujete tak, že chvíli podržíte prst kdekoli na obrazovce."
           }
         },
         "da" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hold nede et vilkårligt sted"
+            "value" : "Hold nede et vilkårligt sted på skærmen et stykke tid for at simulere et tryk."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Irgendwo gedrückt halten"
+            "value" : "Halte eine beliebige Stelle auf dem Bildschirm eine Weile gedrückt, um ein Drücken zu simulieren."
           }
         },
         "el" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Αγγίξτε παρατεταμένα οπουδήποτε"
+            "value" : "Αγγίξτε παρατεταμένα οπουδήποτε στην οθόνη για λίγο για να προσομοιώσετε ένα πάτημα."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantén pulsado en cualquier punto"
+            "value" : "Mantén pulsado cualquier punto de la pantalla un momento para simular una pulsación."
           }
         },
         "es-419" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantén presionado en cualquier parte"
+            "value" : "Mantén presionado en cualquier parte de la pantalla por un momento para simular una presión."
           }
         },
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Paina pitkään missä tahansa"
+            "value" : "Simuloi painallus painamalla mitä tahansa näytön kohtaa jonkin aikaa."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Maintenez n’importe où"
+            "value" : "Maintenez le doigt appuyé n’importe où sur l’écran pendant un moment pour simuler un appui."
           }
         },
         "fr-CA" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Maintenez n’importe où"
+            "value" : "Maintenez le doigt appuyé n’importe où sur l’écran pendant un moment pour simuler un appui."
           }
         },
         "gu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ગમે ત્યાં ટચ કરીને પકડી રાખો"
+            "value" : "પ્રેસનું અનુકરણ કરવા માટે સ્ક્રીન પર ગમે ત્યાં થોડી વાર ટચ કરીને પકડી રાખો."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "לגעת ולהחזיק בכל מקום"
+            "value" : "יש לגעת ולהחזיק בכל מקום על המסך למשך זמן מה כדי לדמות לחיצה."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "कहीं भी छूकर रखें"
+            "value" : "प्रेस का अनुकरण करने के लिए स्क्रीन पर कहीं भी कुछ देर छूकर रखें।"
           }
         },
         "hr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zadržite bilo gdje"
+            "value" : "Zadržite bilo gdje na zaslonu neko vrijeme kako biste simulirali pritisak."
           }
         },
         "hu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tartsa nyomva bárhol"
+            "value" : "A lenyomás szimulálásához tartsa nyomva egy ideig a képernyő bármely pontját."
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sentuh dan Tahan di Mana Saja"
+            "value" : "Sentuh dan tahan di mana saja pada layar beberapa saat untuk menyimulasikan tekanan."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tieni premuto ovunque"
+            "value" : "Tieni premuto un punto qualsiasi dello schermo per un po’ per simulare una pressione."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "任意の場所を長押し"
+            "value" : "画面の任意の場所をしばらく長押しして押下をシミュレートします。"
           }
         },
         "kk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Кез келген жерді басып тұрыңыз"
+            "value" : "Басуды имитациялау үшін экранның кез келген жерін біраз уақыт басып тұрыңыз."
           }
         },
         "kn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ಎಲ್ಲಿಯಾದರೂ ಸ್ಪರ್ಶಿಸಿ ಹಿಡಿಯಿರಿ"
+            "value" : "ಒತ್ತುವಿಕೆಯನ್ನು ಅನುಕರಿಸಲು ಪರದೆಯ ಮೇಲೆ ಎಲ್ಲಿಯಾದರೂ ಸ್ವಲ್ಪ ಹೊತ್ತು ಸ್ಪರ್ಶಿಸಿ ಹಿಡಿಯಿರಿ."
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "아무 곳이나 길게 터치"
+            "value" : "화면의 아무 곳이나 잠시 길게 터치하여 누르기를 시뮬레이션합니다."
           }
         },
         "lt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Palieskite ir laikykite bet kur"
+            "value" : "Palieskite bet kurią ekrano vietą ir kurį laiką palaikykite, kad imituotumėte paspaudimą."
           }
         },
         "ml" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "എവിടെയെങ്കിലും സ്‌പർശിച്ച് പിടിക്കുക"
+            "value" : "അമർത്തൽ അനുകരിക്കാൻ സ്‌ക്രീനിൽ എവിടെയെങ്കിലും കുറച്ചുനേരം സ്‌പർശിച്ച് പിടിക്കുക."
           }
         },
         "mr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "कुठेही स्पर्श करून धरा"
+            "value" : "प्रेसचे अनुकरण करण्यासाठी स्क्रीनवर कुठेही काही वेळ स्पर्श करून धरा."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sentuh dan Tahan di Mana-mana"
+            "value" : "Sentuh dan tahan di mana-mana pada skrin seketika untuk menyimulasikan tekanan."
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hold inne hvor som helst"
+            "value" : "Hold inne hvor som helst på skjermen en stund for å simulere et trykk."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Houd ergens ingedrukt"
+            "value" : "Houd een willekeurige plek op het scherm even ingedrukt om een druk te simuleren."
           }
         },
         "or" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ଯେକୌଣସି ସ୍ଥାନରେ ଛୁଇଁ ଧରନ୍ତୁ"
+            "value" : "ପ୍ରେସ୍ ଅନୁକରଣ କରିବା ପାଇଁ ସ୍କ୍ରିନର ଯେକୌଣସି ସ୍ଥାନରେ କିଛି ସମୟ ଛୁଇଁ ଧରି ରଖନ୍ତୁ।"
           }
         },
         "pa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ਕਿਤੇ ਵੀ ਛੂਹ ਕੇ ਰੱਖੋ"
+            "value" : "ਦਬਾਉਣ ਦੀ ਨਕਲ ਕਰਨ ਲਈ ਸਕ੍ਰੀਨ ’ਤੇ ਕਿਤੇ ਵੀ ਕੁਝ ਦੇਰ ਛੂਹ ਕੇ ਰੱਖੋ।"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Przytrzymaj w dowolnym miejscu"
+            "value" : "Przytrzymaj dowolne miejsce na ekranie przez chwilę, aby zasymulować naciśnięcie."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantenha Pressionado em Qualquer Lugar"
+            "value" : "Toque e mantenha pressionado em qualquer lugar da tela por um momento para simular um pressionamento."
           }
         },
         "pt-PT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mantenha premido em qualquer ponto"
+            "value" : "Mantenha premido em qualquer ponto do ecrã durante algum tempo para simular uma pressão."
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Țineți apăsat oriunde"
+            "value" : "Țineți apăsat oriunde pe ecran un timp pentru a simula o apăsare."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удерживайте в любом месте"
+            "value" : "Чтобы имитировать нажатие, коснитесь любого места экрана и удерживайте некоторое время."
           }
         },
         "sk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Podržte kdekoľvek"
+            "value" : "Stlačenie nasimulujete tak, že chvíľu podržíte prst kdekoľvek na obrazovke."
           }
         },
         "sl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pridržite kjer koli"
+            "value" : "Nekaj časa pridržite kjer koli na zaslonu, da simulirate pritisk."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Håll ned var som helst"
+            "value" : "Håll ned var som helst på skärmen en stund för att simulera ett tryck."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "எங்கு வேண்டுமானாலும் தொட்டுப் பிடிக்கவும்"
+            "value" : "அழுத்தலை உருவகப்படுத்த திரையில் எங்கு வேண்டுமானாலும் சிறிது நேரம் தொட்டுப் பிடிக்கவும்."
           }
         },
         "te" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ఎక్కడైనా తాకి పట్టుకోండి"
+            "value" : "నొక్కడాన్ని అనుకరించడానికి స్క్రీన్‌పై ఎక్కడైనా కొంతసేపు తాకి పట్టుకోండి."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แตะค้างไว้ที่ใดก็ได้"
+            "value" : "แตะค้างไว้ที่ใดก็ได้บนหน้าจอสักพักเพื่อจำลองการกด"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Herhangi Bir Yere Basılı Tutun"
+            "value" : "Basmayı taklit etmek için ekranda herhangi bir yere bir süre basılı tutun."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Утримуйте в будь-якому місці"
+            "value" : "Щоб імітувати натискання, торкніться будь-якого місця екрана й утримуйте деякий час."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "کہیں بھی چھو کر رکھیں"
+            "value" : "دبانے کی نقل کے لیے اسکرین پر کہیں بھی کچھ دیر چھو کر رکھیں۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chạm và giữ ở bất kỳ đâu"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按住屏幕任意位置"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按住螢幕任意位置"
+            "value" : "Chạm và giữ ở bất kỳ đâu trên màn hình một lúc để mô phỏng thao tác nhấn."
           }
         },
         "zh-HK" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按住螢幕任何位置"
-          }
-        }
-      }
-    },
-    "Touch and hold anywhere on the screen until the pointer presses down, then move your finger to drag windows or select text." : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "المس مطولًا أي مكان على الشاشة حتى يُضغط المؤشر، ثم حرّك إصبعك لسحب النوافذ أو تحديد النص."
-          }
-        },
-        "bg" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Докоснете и задръжте където и да е на екрана, докато показалецът не се натисне, след което местете пръста си, за да плъзгате прозорци или да избирате текст."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "স্ক্রিনের যেকোনো জায়গায় স্পর্শ করে ধরে রাখুন যতক্ষণ না পয়েন্টার চাপা হয়, তারপর উইন্ডো টেনে আনতে বা টেক্সট বেছে নিতে আঙুল সরান।"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantén el dit premut en qualsevol lloc de la pantalla fins que el punter quedi premut i, després, mou el dit per arrossegar finestres o seleccionar text."
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Podržte prst kdekoli na obrazovce, dokud se ukazatel nestiskne, a potom pohybem prstu přetahujte okna nebo vybírejte text."
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hold fingeren nede et vilkårligt sted på skærmen, indtil markøren trykkes ned, og flyt derefter fingeren for at trække vinduer eller vælge tekst."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Halte den Finger an einer beliebigen Stelle des Bildschirms, bis der Zeiger gedrückt wird, und bewege ihn dann, um Fenster zu ziehen oder Text auszuwählen."
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Αγγίξτε παρατεταμένα οπουδήποτε στην οθόνη μέχρι να πατηθεί ο δείκτης και, στη συνέχεια, μετακινήστε το δάχτυλό σας για να μεταφέρετε παράθυρα ή να επιλέξετε κείμενο."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantén el dedo en cualquier punto de la pantalla hasta que el puntero quede pulsado y, después, muévelo para arrastrar ventanas o seleccionar texto."
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantén el dedo en cualquier parte de la pantalla hasta que el puntero quede presionado y, después, muévelo para arrastrar ventanas o seleccionar texto."
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pidä sormea missä tahansa näytöllä, kunnes osoitin painuu alas, ja liikuta sitten sormea vetääksesi ikkunoita tai valitaksesi tekstiä."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Maintenez le doigt n’importe où sur l’écran jusqu’à ce que le pointeur s’enfonce, puis déplacez-le pour faire glisser des fenêtres ou sélectionner du texte."
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Maintenez le doigt n’importe où sur l’écran jusqu’à ce que le pointeur s’enfonce, puis déplacez-le pour faire glisser des fenêtres ou sélectionner du texte."
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "પૉઇંટર દબાય ત્યાં સુધી સ્ક્રીન પર ગમે ત્યાં ટચ કરીને પકડી રાખો, પછી વિન્ડો ખેંચવા અથવા ટેક્સ્ટ પસંદ કરવા માટે તમારી આંગળી ખસેડો."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "יש לגעת ולהחזיק בכל מקום במסך עד שהמצביע נלחץ, ואז להזיז את האצבע כדי לגרור חלונות או לבחור טקסט."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "स्क्रीन पर कहीं भी तब तक छूकर रखें जब तक पॉइंटर दब न जाए, फिर विंडो ड्रैग करने या टेक्स्ट चुनने के लिए अपनी उंगली खिसकाएँ।"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zadržite prst bilo gdje na zaslonu dok se pokazivač ne pritisne, a zatim pomičite prst kako biste povlačili prozore ili odabrali tekst."
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tartsa az ujját a képernyő bármely pontján, amíg a mutató le nem nyomódik, majd mozgassa az ujját az ablakok húzásához vagy a szöveg kijelöléséhez."
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sentuh dan tahan di mana saja pada layar hingga penunjuk tertekan, lalu gerakkan jari Anda untuk menyeret jendela atau memilih teks."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tieni il dito premuto in un punto qualsiasi dello schermo finché il puntatore non viene premuto, quindi muovi il dito per trascinare finestre o selezionare testo."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ポインタが押されるまで画面の任意の場所を長押しし、そのまま指を動かすとウインドウをドラッグしたりテキストを選択したりできます。"
-          }
-        },
-        "kk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Меңзер басылғанша экранның кез келген жерін басып тұрыңыз, содан кейін терезелерді сүйреу немесе мәтінді таңдау үшін саусағыңызды жылжытыңыз."
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ಪಾಯಿಂಟರ್ ಒತ್ತಲ್ಪಡುವವರೆಗೆ ಸ್ಕ್ರೀನ್‌ನ ಯಾವುದೇ ಸ್ಥಳದಲ್ಲಿ ಸ್ಪರ್ಶಿಸಿ ಹಿಡಿಯಿರಿ, ನಂತರ ವಿಂಡೋಗಳನ್ನು ಎಳೆಯಲು ಅಥವಾ ಪಠ್ಯವನ್ನು ಆಯ್ಕೆ ಮಾಡಲು ನಿಮ್ಮ ಬೆರಳನ್ನು ಸರಿಸಿ."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "포인터가 눌릴 때까지 화면의 아무 곳이나 길게 터치한 다음, 손가락을 움직여 윈도우를 드래그하거나 텍스트를 선택하십시오."
-          }
-        },
-        "lt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Palieskite ir laikykite bet kurioje ekrano vietoje, kol žymeklis bus paspaustas, tada judinkite pirštą, kad vilktumėte langus arba pažymėtumėte tekstą."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "പോയിന്റർ അമരുന്നത് വരെ സ്ക്രീനിൽ എവിടെയെങ്കിലും സ്‌പർശിച്ച് പിടിക്കുക, തുടർന്ന് വിൻഡോകൾ വലിച്ചിടാനോ ടെക്‌സ്‌റ്റ് തിരഞ്ഞെടുക്കാനോ വിരൽ നീക്കുക."
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "पॉइंटर दाबला जाईपर्यंत स्क्रीनवर कुठेही स्पर्श करून धरा, नंतर विंडो ड्रॅग करण्यासाठी किंवा मजकूर निवडण्यासाठी बोट हलवा."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sentuh dan tahan di mana-mana pada skrin sehingga penuding ditekan, kemudian gerakkan jari anda untuk menyeret tetingkap atau memilih teks."
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hold fingeren inne hvor som helst på skjermen til pekeren trykkes ned, og flytt deretter fingeren for å dra vinduer eller markere tekst."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Houd je vinger ergens op het scherm totdat de aanwijzer wordt ingedrukt en beweeg je vinger daarna om vensters te slepen of tekst te selecteren."
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ପଏଣ୍ଟର୍ ଦବିବା ପର୍ଯ୍ୟନ୍ତ ସ୍କ୍ରିନ୍‌ର ଯେକୌଣସି ସ୍ଥାନରେ ଛୁଇଁ ଧରି ରଖନ୍ତୁ, ତାପରେ ୱିଣ୍ଡୋ ଟାଣିବା କିମ୍ବା ଟେକ୍ସଟ୍ ବାଛିବା ପାଇଁ ଆପଣଙ୍କ ଆଙ୍ଗୁଠି ଘୁଞ୍ଚାନ୍ତୁ।"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਜਦੋਂ ਤੱਕ ਪੁਆਇੰਟਰ ਦੱਬਿਆ ਨਾ ਜਾਵੇ, ਸਕ੍ਰੀਨ ’ਤੇ ਕਿਤੇ ਵੀ ਛੂਹ ਕੇ ਰੱਖੋ, ਫਿਰ ਵਿੰਡੋਆਂ ਨੂੰ ਘਸੀਟਣ ਜਾਂ ਟੈਕਸਟ ਚੁਣਨ ਲਈ ਆਪਣੀ ਉਂਗਲ ਹਿਲਾਓ।"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Przytrzymaj palec w dowolnym miejscu ekranu, aż wskaźnik zostanie wciśnięty, a następnie przesuwaj palec, aby przeciągać okna lub zaznaczać tekst."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toque e mantenha o dedo em qualquer lugar da tela até que o cursor seja pressionado e, em seguida, mova o dedo para arrastar janelas ou selecionar texto."
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mantenha o dedo em qualquer ponto do ecrã até o cursor ser premido e, em seguida, mova o dedo para arrastar janelas ou selecionar texto."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Atingeți și mențineți oriunde pe ecran până când cursorul este apăsat, apoi mișcați degetul pentru a trage ferestre sau a selecta text."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Коснитесь любого места на экране и удерживайте палец, пока указатель не будет нажат, затем двигайте палец, чтобы перетаскивать окна или выделять текст."
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Podržte prst kdekoľvek na obrazovke, kým sa kurzor nestlačí, a potom pohybom prsta presúvajte okná alebo vyberajte text."
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pridržite prst kjer koli na zaslonu, dokler se kazalnik ne pritisne, nato pa premikajte prst, da vlečete okna ali izberete besedilo."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Håll fingret var som helst på skärmen tills pekaren trycks ned och flytta sedan fingret för att dra fönster eller markera text."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "பாயிண்டர் அழுத்தப்படும் வரை திரையில் எங்கு வேண்டுமானாலும் தொட்டுப் பிடிக்கவும், பின்னர் சாளரங்களை இழுக்க அல்லது உரையைத் தேர்ந்தெடுக்க உங்கள் விரலை நகர்த்தவும்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "పాయింటర్ నొక్కబడే వరకు స్క్రీన్‌పై ఎక్కడైనా తాకి పట్టుకోండి, ఆపై విండోలను లాగడానికి లేదా టెక్స్ట్‌ను ఎంచుకోవడానికి మీ వేలిని కదిలించండి."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "แตะค้างไว้ที่ใดก็ได้บนหน้าจอจนกว่าตัวชี้จะถูกกด แล้วเลื่อนนิ้วเพื่อลากหน้าต่างหรือเลือกข้อความ"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İmleç basılı hâle gelene kadar ekranın herhangi bir yerine dokunup basılı tutun, ardından pencereleri sürüklemek veya metin seçmek için parmağınızı hareket ettirin."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Торкніться будь-якого місця на екрані й утримуйте палець, доки вказівник не буде натиснуто, а потім рухайте пальцем, щоб перетягувати вікна або виділяти текст."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "اسکرین پر کہیں بھی چھو کر رکھیں جب تک پوائنٹر دب نہ جائے، پھر ونڈوز گھسیٹنے یا ٹیکسٹ منتخب کرنے کے لیے اپنی انگلی ہلائیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chạm và giữ ở bất kỳ đâu trên màn hình cho đến khi con trỏ được nhấn xuống, sau đó di chuyển ngón tay để kéo cửa sổ hoặc chọn văn bản."
+            "value" : "在螢幕任何位置按住一段時間模擬按下。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在屏幕任意位置按住手指，等指针按下后再移动，就能拖动窗口或选择文字。"
+            "value" : "在屏幕任意位置按住一段时间模拟按下。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在螢幕上任意位置按住手指，等指標按下後再移動，就能拖移視窗或選取文字。"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在螢幕上任何位置按住手指，等指標按下後再移動，就能拖移視窗或選取文字。"
-          }
-        }
-      }
-    },
-    "Traditional Press Gesture" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "إيماءة الضغط التقليدية"
-          }
-        },
-        "bg" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Традиционен жест за натискане"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "প্রথাগত প্রেস জেসচার"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gest de pressió tradicional"
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tradiční gesto stisknutí"
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traditionel trykbevægelse"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Klassische Drückgeste"
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Παραδοσιακή χειρονομία πατήματος"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gesto de pulsación tradicional"
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gesto de presión tradicional"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perinteinen painalluseele"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Geste d’appui traditionnel"
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Geste d’appui traditionnel"
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "પરંપરાગત પ્રેસ જેસ્ચર"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "מחוות לחיצה מסורתית"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "पारंपरिक प्रेस जेस्चर"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tradicionalna gesta pritiska"
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hagyományos lenyomási kézmozdulat"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gerakan Tekan Tradisional"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gesto di pressione tradizionale"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "従来の押下ジェスチャ"
-          }
-        },
-        "kk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Дәстүрлі басу қимылы"
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ಸಾಂಪ್ರದಾಯಿಕ ಒತ್ತುವ ಸನ್ನೆ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "기존 누르기 제스처"
-          }
-        },
-        "lt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tradicinis paspaudimo gestas"
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "പരമ്പരാഗത അമർത്തൽ ജെസ്ചർ"
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "पारंपरिक प्रेस जेश्चर"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gerak Isyarat Tekan Tradisional"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tradisjonell trykkbevegelse"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traditioneel drukgebaar"
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ପାରମ୍ପରିକ ପ୍ରେସ୍ ଜେଶ୍ଚର୍"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਰਵਾਇਤੀ ਦਬਾਉਣ ਦਾ ਇਸ਼ਾਰਾ"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tradycyjny gest naciśnięcia"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gesto de Pressionar Tradicional"
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gesto de premir tradicional"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gest tradițional de apăsare"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Традиционный жест нажатия"
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tradičné gesto stlačenia"
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tradicionalna kretnja pritiska"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traditionell tryckgest"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "பாரம்பரிய அழுத்தல் சைகை"
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "సాంప్రదాయ నొక్కే సంజ్ఞ"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ท่าทางการกดแบบดั้งเดิม"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Geleneksel Basma Hareketi"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Традиційний жест натискання"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "روایتی دبانے کا اشارہ"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cử chỉ nhấn truyền thống"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "传统按下手势"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "傳統按下手勢"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "傳統按下手勢"
+            "value" : "在螢幕任意位置按住一段時間模擬按下。"
           }
         }
       }
@@ -114594,310 +112466,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在等待 VPN"
-          }
-        }
-      }
-    },
-    "When controlling the pointer by touch, double-tap quickly and hold instead of pressing for a while to hold down the left button and drag." : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عند التحكم في المؤشر باللمس، اضغط مرتين بسرعة مع الاستمرار بدلاً من الضغط لفترة لإبقاء الزر الأيسر مضغوطًا والسحب."
-          }
-        },
-        "bg" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "При управление на показалеца с докосване докоснете бързо два пъти и задръжте вместо продължително натискане, за да задържите левия бутон и да плъзгате."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "টাচ দিয়ে পয়েন্টার নিয়ন্ত্রণ করার সময় কিছুক্ষণ চেপে রাখার বদলে দ্রুত দুবার ট্যাপ করে ধরে রাখুন, যাতে বাঁ বোতাম চেপে ধরে ড্র্যাগ করা যায়।"
-          }
-        },
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quan controlis el punter amb tocs, toca dues vegades ràpidament i mantén premut en lloc de prémer una estona per mantenir premut el botó esquerre i arrossegar."
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Při ovládání ukazatele dotykem rychle dvakrát klepněte a podržte místo delšího stisknutí, abyste podrželi levé tlačítko a táhli."
-          }
-        },
-        "da" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Når du styrer markøren med berøring, skal du hurtigt trykke to gange og holde i stedet for at trykke et stykke tid for at holde venstre knap nede og trække."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beim Steuern des Zeigers per Touch schnell doppeltippen und halten statt eine Weile zu drücken, um die linke Taste gedrückt zu halten und zu ziehen."
-          }
-        },
-        "el" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Όταν ελέγχετε τον δείκτη με αφή, αγγίξτε γρήγορα δύο φορές και κρατήστε αντί να πατάτε για λίγο, για να κρατήσετε πατημένο το αριστερό κουμπί και να σύρετε."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Al controlar el puntero con toques, toca dos veces rápidamente y mantén en lugar de mantener pulsado un rato para mantener pulsado el botón izquierdo y arrastrar."
-          }
-        },
-        "es-419" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Al controlar el puntero con toques, toca dos veces rápidamente y mantén presionado en lugar de presionar un rato para mantener presionado el botón izquierdo y arrastrar."
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kun ohjaat osoitinta kosketuksella, napauta nopeasti kahdesti ja pidä painettuna pitkän painalluksen sijaan, niin vasen painike pysyy painettuna ja voit vetää."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lorsque vous contrôlez le pointeur au toucher, touchez deux fois rapidement et maintenez au lieu d’appuyer un moment pour maintenir le bouton gauche enfoncé et faire glisser."
-          }
-        },
-        "fr-CA" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lorsque vous contrôlez le pointeur au toucher, touchez deux fois rapidement et maintenez au lieu d’appuyer un moment pour maintenir le bouton gauche enfoncé et faire glisser."
-          }
-        },
-        "gu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ટચથી પોઇન્ટર નિયંત્રિત કરતી વખતે, થોડી વાર દબાવવાને બદલે ઝડપથી બે વાર ટૅપ કરીને દબાવી રાખો, જેથી ડાબું બટન દબાવીને ડ્રેગ કરી શકાય."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "בעת שליטה בסמן במגע, יש להקיש פעמיים במהירות ולהחזיק במקום ללחוץ לזמן מה, כדי להחזיק את הכפתור השמאלי ולגרור."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "टच से पॉइंटर नियंत्रित करते समय, कुछ देर दबाने के बजाय जल्दी से दो बार टैप करके दबाए रखें, ताकि बायाँ बटन दबाकर ड्रैग कर सकें।"
-          }
-        },
-        "hr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pri upravljanju pokazivačem dodirom brzo dvaput dodirnite i zadržite umjesto duljeg pritiska kako biste zadržali lijevu tipku i povlačili."
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ha érintéssel vezérli a mutatót, gyorsan koppintson duplán és tartsa lenyomva hosszabb nyomás helyett a bal gomb lenyomva tartásához és húzáshoz."
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saat mengontrol penunjuk dengan sentuhan, ketuk dua kali dengan cepat lalu tahan alih-alih menekan beberapa saat untuk menahan tombol kiri dan menyeret."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quando controlli il puntatore al tocco, tocca due volte rapidamente e tieni premuto invece di premere a lungo per tenere premuto il tasto sinistro e trascinare."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "タッチでポインタを操作するとき、しばらく押し続ける代わりに素早くダブルタップしてそのまま押さえると、左ボタンを押したままドラッグできます。"
-          }
-        },
-        "kk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Меңзерді жанасу арқылы басқарғанда, сол жақ түймені басып тұрып сүйреу үшін біраз уақыт басудың орнына жылдам екі рет түртіп, ұстап тұрыңыз."
-          }
-        },
-        "kn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ಟಚ್ ಮೂಲಕ ಪಾಯಿಂಟರ್ ನಿಯಂತ್ರಿಸುವಾಗ, ಸ್ವಲ್ಪ ಹೊತ್ತು ಒತ್ತುವ ಬದಲು ವೇಗವಾಗಿ ಎರಡು ಬಾರಿ ಟ್ಯಾಪ್ ಮಾಡಿ ಹಿಡಿದುಕೊಳ್ಳಿ, ಆಗ ಎಡ ಬಟನ್ ಒತ್ತಿ ಹಿಡಿದು ಡ್ರ್ಯಾಗ್ ಮಾಡಬಹುದು."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "터치로 포인터를 제어할 때 잠시 누르고 있는 대신 빠르게 두 번 탭한 후 누르고 있으면 왼쪽 버튼을 누른 채 드래그합니다."
-          }
-        },
-        "lt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Valdydami žymeklį lietimu, greitai bakstelėkite du kartus ir palaikykite vietoj ilgesnio paspaudimo, kad laikytumėte nuspaustą kairįjį mygtuką ir vilktumėte."
-          }
-        },
-        "ml" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ടച്ച് ഉപയോഗിച്ച് പോയിന്റർ നിയന്ത്രിക്കുമ്പോൾ, കുറച്ചുനേരം അമർത്തുന്നതിന് പകരം വേഗത്തിൽ രണ്ടുതവണ ടാപ്പ് ചെയ്ത് പിടിക്കുക; ഇടത് ബട്ടൺ അമർത്തിപ്പിടിച്ച് ഡ്രാഗ് ചെയ്യാം."
-          }
-        },
-        "mr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "टचने पॉइंटर नियंत्रित करताना, काही वेळ दाबण्याऐवजी पटकन दोनदा टॅप करून दाबून ठेवा, म्हणजे डावे बटण दाबून ड्रॅग करता येईल."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Semasa mengawal penuding dengan sentuhan, ketik dua kali dengan pantas dan tahan dan bukannya menekan seketika untuk menahan butang kiri dan menyeret."
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Når du styrer pekeren med berøring, trykker du raskt to ganger og holder i stedet for å trykke en stund for å holde venstre knapp nede og dra."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tik bij het bedienen van de aanwijzer met aanraking snel twee keer en houd vast in plaats van even te drukken om de linkerknop ingedrukt te houden en te slepen."
-          }
-        },
-        "or" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ଟଚ୍ ଦ୍ୱାରା ପଏଣ୍ଟର୍ ନିୟନ୍ତ୍ରଣ କରିବା ସମୟରେ, କିଛି ସମୟ ଦବାଇବା ପରିବର୍ତ୍ତେ ଶୀଘ୍ର ଦୁଇଥର ଟାପ୍ କରି ଧରି ରଖନ୍ତୁ, ଯାହାଦ୍ୱାରା ବାମ ବଟନ୍ ଦବାଇ ଡ୍ରାଗ୍ କରିହେବ।"
-          }
-        },
-        "pa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ਟੱਚ ਨਾਲ ਪੁਆਇੰਟਰ ਨੂੰ ਕੰਟਰੋਲ ਕਰਦੇ ਸਮੇਂ, ਕੁਝ ਦੇਰ ਦਬਾਉਣ ਦੀ ਬਜਾਏ ਤੇਜ਼ੀ ਨਾਲ ਦੋ ਵਾਰ ਟੈਪ ਕਰਕੇ ਦਬਾਈ ਰੱਖੋ, ਤਾਂ ਜੋ ਖੱਬਾ ਬਟਨ ਦਬਾ ਕੇ ਡ੍ਰੈਗ ਕਰ ਸਕੋ।"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Podczas sterowania wskaźnikiem dotykiem stuknij dwukrotnie szybko i przytrzymaj zamiast naciskać przez chwilę, aby przytrzymać lewy przycisk i przeciągać."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ao controlar o ponteiro pelo toque, toque duas vezes rapidamente e mantenha pressionado em vez de pressionar por um tempo para manter o botão esquerdo pressionado e arrastar."
-          }
-        },
-        "pt-PT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ao controlar o ponteiro por toque, toque duas vezes rapidamente e mantenha premido em vez de premir durante algum tempo para manter o botão esquerdo premido e arrastar."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Când controlezi cursorul prin atingere, atinge rapid de două ori și menține în loc să apeși un timp, pentru a ține apăsat butonul stâng și a trage."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "При управлении указателем касанием быстро коснитесь дважды и удерживайте вместо долгого нажатия, чтобы зажать левую кнопку и перетаскивать."
-          }
-        },
-        "sk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pri ovládaní ukazovateľa dotykom rýchlo dvakrát ťuknite a podržte namiesto dlhšieho stlačenia, aby ste podržali ľavé tlačidlo a ťahali."
-          }
-        },
-        "sl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pri upravljanju kazalca z dotikom hitro dvakrat tapnite in pridržite, namesto da bi nekaj časa pritiskali, da pridržite levi gumb in vlečete."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "När du styr pekaren med touch trycker du snabbt två gånger och håller kvar i stället för att trycka en stund för att hålla ned vänster knapp och dra."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "தொடுதல் மூலம் பாயிண்டரைக் கட்டுப்படுத்தும்போது, சிறிது நேரம் அழுத்துவதற்குப் பதிலாக விரைவாக இருமுறை தட்டிப் பிடித்திருங்கள்; இடது பட்டனை அழுத்தியபடி இழுக்கலாம்."
-          }
-        },
-        "te" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "టచ్‌తో పాయింటర్‌ను నియంత్రిస్తున్నప్పుడు, కొంతసేపు నొక్కే బదులు వేగంగా రెండుసార్లు నొక్కి పట్టుకోండి, అప్పుడు ఎడమ బటన్‌ను నొక్కి పట్టి లాగవచ్చు."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "เมื่อควบคุมตัวชี้ด้วยการสัมผัส ให้แตะสองครั้งอย่างรวดเร็วแล้วกดค้างไว้แทนการกดค้างสักพัก เพื่อกดปุ่มซ้ายค้างไว้และลาก"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dokunarak işaretçiyi denetlerken bir süre basılı tutmak yerine hızlıca iki kez dokunup basılı tutarak sol düğmeyi basılı tutun ve sürükleyin."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Під час керування вказівником дотиком швидко торкніться двічі й утримуйте замість тривалого натискання, щоб затиснути ліву кнопку й перетягувати."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ٹچ سے پوائنٹر کنٹرول کرتے وقت، کچھ دیر دبانے کے بجائے تیزی سے دو بار ٹیپ کر کے دبائے رکھیں تاکہ بایاں بٹن دبا کر گھسیٹ سکیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Khi điều khiển con trỏ bằng cảm ứng, chạm nhanh hai lần và giữ thay vì nhấn một lúc để giữ nút trái và kéo."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用触摸控制光标时，使用快速双击按住而不是按下一段时间来模拟按下左键拖动。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用觸控控制游標時，使用快速點兩下並按住而非按住一段時間來模擬按下左鍵拖移。"
-          }
-        },
-        "zh-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用觸控控制游標時，使用快速點兩下並按住而非按住一段時間來模擬按下左鍵拖移。"
           }
         }
       }
