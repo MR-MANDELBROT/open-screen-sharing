@@ -100,6 +100,18 @@ nonisolated struct SessionMemory: Equatable, Sendable {
     var usesNativeTouch = true
 }
 
+private struct KeyboardSourceRequest {
+    enum Step {
+        case toggling
+        case selecting
+        case leaving
+        case returning
+    }
+
+    let id: String
+    var step: Step
+}
+
 @Perceptible
 final class SessionController: Identifiable {
     let route: SessionRoute
@@ -192,9 +204,13 @@ final class SessionController: Identifiable {
     @PerceptionIgnored private var capsLockEngaged = false
     @PerceptionIgnored private var capsLockPressedAt: TimeInterval?
     @PerceptionIgnored private var capsLockActsOnPress = false
+    @PerceptionIgnored private var keyboardSourceRequest: KeyboardSourceRequest?
     #if os(macOS)
     @PerceptionIgnored private var inferredModifierKeys = Set<Int>()
     #endif
+    @PerceptionIgnored private var previousKeyboardSource: String?
+    @PerceptionIgnored private var queuedKeyboardSource: MacInputSource?
+    @PerceptionIgnored private var keyboardSourceTimeout: Task<Void, Never>?
     @PerceptionIgnored private var keyboardType = MacKeyboardType.ansi
     @PerceptionIgnored private(set) var pointerPosition = CGPoint.zero
     @PerceptionIgnored private var pictureSize = CGSize.zero
@@ -935,9 +951,28 @@ final class SessionController: Identifiable {
     }
 
     fileprivate func handle(keyboardSource source: String?, secureInput: Bool) {
+        let current = keyboardSourceID
+        if let current, let source, source != current {
+            previousKeyboardSource = current
+        }
         keyboardSourceID = source
         self.secureInput = secureInput
         rememberKeyboardSource(source)
+        guard let source, let request = keyboardSourceRequest else { return }
+        switch request.step {
+        case .toggling where source == request.id:
+            advanceKeyboardSource(request.id, to: nil)
+        case .toggling where source != current:
+            advanceKeyboardSource(request.id, to: .selecting)
+        case .selecting where source == request.id:
+            advanceKeyboardSource(request.id, to: .leaving)
+        case .leaving where source != request.id:
+            advanceKeyboardSource(request.id, to: .returning)
+        case .returning where source == request.id:
+            advanceKeyboardSource(request.id, to: nil)
+        default:
+            break
+        }
     }
 
     fileprivate func handle(event: SessionEvent) {
@@ -2234,8 +2269,46 @@ final class SessionController: Identifiable {
     }
 
     func selectKeyboardSource(_ source: MacInputSource) {
-        guard isControlling, !secureInput, source.id != keyboardSourceID else { return }
-        session?.selectKeyboardSource(source.id)
+        guard isControlling, !secureInput else { return }
+        guard keyboardSourceRequest == nil else {
+            queuedKeyboardSource = source
+            return
+        }
+        guard source.id != keyboardSourceID else { return }
+        advanceKeyboardSource(source.id, to: previousKeyboardSource == nil || previousKeyboardSource == source.id ? .toggling : .selecting)
+    }
+
+    private func advanceKeyboardSource(_ id: String, to step: KeyboardSourceRequest.Step?) {
+        keyboardSourceTimeout?.cancel()
+        guard let step else {
+            keyboardSourceRequest = nil
+            if let queued = queuedKeyboardSource {
+                queuedKeyboardSource = nil
+                selectKeyboardSource(queued)
+            }
+            return
+        }
+        if step == .selecting {
+            session?.selectKeyboardSource(id)
+        } else {
+            sendChord(.previousInputSource)
+        }
+        keyboardSourceRequest = KeyboardSourceRequest(id: id, step: step)
+        keyboardSourceTimeout = Task { [weak self] in
+            try? await Task.sleep(seconds: 0.5)
+            guard !Task.isCancelled, let self else { return }
+            switch step {
+            case .toggling:
+                self.advanceKeyboardSource(id, to: .selecting)
+            case .selecting:
+                self.advanceKeyboardSource(id, to: .leaving)
+            case .leaving:
+                self.advanceKeyboardSource(id, to: nil)
+            case .returning:
+                self.sendChord(.previousInputSource)
+                self.advanceKeyboardSource(id, to: nil)
+            }
+        }
     }
 
     #if os(macOS)
