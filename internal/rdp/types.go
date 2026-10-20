@@ -29,6 +29,7 @@ type Options struct {
 	Audio              bool
 	VerifyCertificate  func(fingerprint string) error
 	KeepAlive          bool
+	DisableUDP         bool
 	GraphicsCache      string
 	DialTimeout        time.Duration
 	Logger             *slog.Logger

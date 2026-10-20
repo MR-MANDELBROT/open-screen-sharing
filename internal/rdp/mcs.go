@@ -203,7 +203,9 @@ func clientUserData(opts Options, protocol uint32, channels []*staticChannel) []
 	data = append(data, lengthBlock(userDataClientSecurity, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, encryptionMethodNone), encryptionMethodNone))...)
 	data = append(data, lengthBlock(userDataClientNetwork, network)...)
 	data = append(data, lengthBlock(userDataClientMessage, binary.LittleEndian.AppendUint32(nil, 0))...)
-	data = append(data, lengthBlock(userDataClientMultitransport, binary.LittleEndian.AppendUint32(nil, multitransportReliableUDP|multitransportSoftSync))...)
+	if !opts.DisableUDP {
+		data = append(data, lengthBlock(userDataClientMultitransport, binary.LittleEndian.AppendUint32(nil, multitransportReliableUDP|multitransportSoftSync))...)
+	}
 	b := perLength(slices.Clone(t124ObjectIdentifier), len(data)+len(gccConferenceCreateRequest)+2)
 	b = append(b, gccConferenceCreateRequest...)
 	b = perLength(b, len(data))

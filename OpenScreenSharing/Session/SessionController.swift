@@ -460,9 +460,11 @@ final class SessionController: Identifiable {
     private func connect(with credentials: SessionCredentials) {
         self.credentials = credentials
         var keepsAlive = false
+        var disablesUDP = false
         if let computerID, let computer = store.computer(computerID) {
             networkConfiguration = computer.networkConfiguration
             keepsAlive = computer.keepsAlive
+            disablesUDP = computer.disablesUDP
         }
         hdrEnabled = hdrEnabled && networkSupportsHDR
         highPerformanceStartPending = usesHighPerformance
@@ -483,7 +485,8 @@ final class SessionController: Identifiable {
             receivesAudio: receivesAudio,
             updateRate: screenRefreshRate,
             networkConfiguration: networkConfiguration,
-            keepsAlive: keepsAlive
+            keepsAlive: keepsAlive,
+            disablesUDP: disablesUDP
         )
         let sink = SessionEventSink(controller: self, pipeline: pipeline)
         let session = LibsharingRemoteSession(configuration: configuration, delegate: sink)

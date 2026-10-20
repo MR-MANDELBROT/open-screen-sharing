@@ -229,6 +229,7 @@ nonisolated struct SessionConfiguration: Sendable {
     var updateRate: Int
     var networkConfiguration = NetworkConfiguration()
     var keepsAlive = false
+    var disablesUDP = false
 }
 
 nonisolated struct SessionInfo: Equatable, Sendable {

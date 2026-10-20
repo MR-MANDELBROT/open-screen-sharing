@@ -38,6 +38,7 @@ func rdpOptions(o *SessionOptions, seen func(fingerprint string)) (rdp.Options, 
 		Clipboard:      o.SharedClipboard,
 		Audio:          o.Audio,
 		KeepAlive:      o.KeepAlive,
+		DisableUDP:     o.DisableUDP,
 		GraphicsCache:  graphicsCache,
 		VerifyCertificate: func(fingerprint string) error {
 			seen(fingerprint)

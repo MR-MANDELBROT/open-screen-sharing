@@ -19,6 +19,7 @@ struct ComputerEditor: View {
     @State private var choice: ServerChoice
     @State private var networkConfiguration: NetworkConfiguration
     @State private var keepsAlive: Bool
+    @State private var disablesUDP: Bool
     @State private var problem: Problem?
     @State private var alert: AlertState?
     @FocusState private var focusedField: Field?
@@ -46,6 +47,7 @@ struct ComputerEditor: View {
         _choice = State(initialValue: ServerChoice(computer))
         _networkConfiguration = State(initialValue: computer.networkConfiguration)
         _keepsAlive = State(initialValue: computer.keepsAlive)
+        _disablesUDP = State(initialValue: computer.disablesUDP)
     }
 
     private var trimmedUsername: String {
@@ -160,6 +162,7 @@ struct ComputerEditor: View {
                 }
                 if choice == .rdp {
                     Section {
+                        Toggle("Disable UDP", isOn: $disablesUDP)
                         Toggle("Keep Alive", isOn: $keepsAlive)
                     } header: {
                         Text("Connection")
@@ -222,6 +225,7 @@ struct ComputerEditor: View {
                 computer.remoteProtocol = choice.remoteProtocol
                 computer.usesHighPerformance = choice.usesHighPerformance
                 computer.keepsAlive = keepsAlive
+                computer.disablesUDP = disablesUDP
             }
         } catch {
             alert = AlertState(String(localized: "Couldn’t Save “\(name)”"), error: error)

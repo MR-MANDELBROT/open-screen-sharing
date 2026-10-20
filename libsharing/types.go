@@ -142,6 +142,8 @@ type SessionOptions struct {
 
 	KeepAlive bool
 
+	DisableUDP bool
+
 	CacheDirectory string
 }
 
