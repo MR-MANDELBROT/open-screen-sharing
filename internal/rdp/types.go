@@ -29,6 +29,7 @@ type Options struct {
 	Audio              bool
 	VerifyCertificate  func(fingerprint string) error
 	KeepAlive          bool
+	GraphicsCache      string
 	DialTimeout        time.Duration
 	Logger             *slog.Logger
 }
@@ -85,6 +86,8 @@ type Statistics struct {
 	BytesWritten uint64
 	Frames       uint64
 	Encoding     string
+	RoundTrip    time.Duration
+	UDP          bool
 }
 
 const (

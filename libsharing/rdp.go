@@ -2,10 +2,13 @@ package libsharing
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"image"
 	"log/slog"
 	"math"
 	"net"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -20,8 +23,14 @@ func rdpOptions(o *SessionOptions, seen func(fingerprint string)) (rdp.Options, 
 		return rdp.Options{}, E.New("RDP signs in only with an account, not login type ", o.LoginType)
 	}
 	trusted := o.TrustedFingerprint
+	address := net.JoinHostPort(o.Host, strconv.Itoa(int(o.Port)))
+	var graphicsCache string
+	if o.CacheDirectory != "" {
+		name := sha256.Sum256([]byte(address))
+		graphicsCache = filepath.Join(o.CacheDirectory, "RDP", hex.EncodeToString(name[:8])+".gfxcache")
+	}
 	return rdp.Options{
-		Address:        net.JoinHostPort(o.Host, strconv.Itoa(int(o.Port))),
+		Address:        address,
 		Username:       o.Username,
 		Password:       o.Password,
 		ClientName:     o.ClientName,
@@ -29,6 +38,7 @@ func rdpOptions(o *SessionOptions, seen func(fingerprint string)) (rdp.Options, 
 		Clipboard:      o.SharedClipboard,
 		Audio:          o.Audio,
 		KeepAlive:      o.KeepAlive,
+		GraphicsCache:  graphicsCache,
 		VerifyCertificate: func(fingerprint string) error {
 			seen(fingerprint)
 			if trusted != "" && !strings.EqualFold(fingerprint, trusted) {
@@ -112,6 +122,7 @@ func (r *rdpRemote) statistics(statistics *Statistics) {
 	clientStatistics := r.Statistics()
 	statistics.Encoding = clientStatistics.Encoding
 	statistics.ReceivedBytes = int64(clientStatistics.BytesRead)
+	statistics.RoundTripMilliseconds = float64(clientStatistics.RoundTrip.Microseconds()) / 1000
 }
 
 func (r *rdpRemote) setVisible(visible bool) error {

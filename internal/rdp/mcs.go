@@ -42,11 +42,15 @@ const (
 
 	gccConferenceCreateResponse = 0x14
 
-	userDataClientCore     = 0xc001
-	userDataClientSecurity = 0xc002
-	userDataClientNetwork  = 0xc003
-	userDataServerSecurity = 0x0c02
-	userDataServerNetwork  = 0x0c03
+	userDataClientCore           = 0xc001
+	userDataClientSecurity       = 0xc002
+	userDataClientNetwork        = 0xc003
+	userDataClientMessage        = 0xc006
+	userDataClientMultitransport = 0xc00a
+	userDataServerSecurity       = 0x0c02
+	userDataServerNetwork        = 0x0c03
+	userDataServerMessage        = 0x0c04
+	userDataServerMultitransport = 0x0c08
 
 	rdpVersion5Plus              = 0x00080004
 	colorDepth8                  = 0xca01
@@ -60,8 +64,9 @@ const (
 	earlySupportErrorInfo        = 0x0001
 	earlyWant32BPP               = 0x0002
 	earlyValidConnectionType     = 0x0020
+	earlySupportNetcharDetect    = 0x0080
 	earlySupportDynamicGFX       = 0x0100
-	connectionTypeLAN            = 6
+	connectionTypeAutodetect     = 7
 	deviceScaleFactor            = 100
 	clientNameLength             = 32
 	imeFileNameLength            = 64
@@ -85,12 +90,14 @@ var (
 )
 
 type mcsLayer struct {
-	transport *transport
-	outbox    *outbox.Outbox
-	userID    uint16
-	global    uint16
-	joined    []uint16
-	fragments map[uint16][]byte
+	transport      *transport
+	outbox         *outbox.Outbox
+	userID         uint16
+	global         uint16
+	message        uint16
+	multitransport uint32
+	joined         []uint16
+	fragments      map[uint16][]byte
 }
 
 func berValue(tag []byte, value []byte) []byte {
@@ -175,9 +182,9 @@ func clientUserData(opts Options, channels []*staticChannel) []byte {
 	core = binary.LittleEndian.AppendUint32(core, 0)
 	core = binary.LittleEndian.AppendUint16(core, highColorDepth24)
 	core = binary.LittleEndian.AppendUint16(core, supportedColorDepthsAll)
-	core = binary.LittleEndian.AppendUint16(core, earlySupportErrorInfo|earlyWant32BPP|earlyValidConnectionType|earlySupportDynamicGFX)
+	core = binary.LittleEndian.AppendUint16(core, earlySupportErrorInfo|earlyWant32BPP|earlyValidConnectionType|earlySupportNetcharDetect|earlySupportDynamicGFX)
 	core = zeros(core, clientDigitalProductIDLength)
-	core = append(core, connectionTypeLAN, 0)
+	core = append(core, connectionTypeAutodetect, 0)
 	core = binary.LittleEndian.AppendUint32(core, protocolHybrid)
 	core = binary.LittleEndian.AppendUint32(core, 0)
 	core = binary.LittleEndian.AppendUint32(core, 0)
@@ -194,6 +201,8 @@ func clientUserData(opts Options, channels []*staticChannel) []byte {
 	data := lengthBlock(userDataClientCore, core)
 	data = append(data, lengthBlock(userDataClientSecurity, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, encryptionMethodNone), encryptionMethodNone))...)
 	data = append(data, lengthBlock(userDataClientNetwork, network)...)
+	data = append(data, lengthBlock(userDataClientMessage, binary.LittleEndian.AppendUint32(nil, 0))...)
+	data = append(data, lengthBlock(userDataClientMultitransport, binary.LittleEndian.AppendUint32(nil, multitransportReliableUDP|multitransportSoftSync))...)
 	b := perLength(slices.Clone(t124ObjectIdentifier), len(data)+len(gccConferenceCreateRequest)+2)
 	b = append(b, gccConferenceCreateRequest...)
 	b = perLength(b, len(data))
@@ -344,6 +353,10 @@ func (m *mcsLayer) parseConnectResponse(packet []byte, channels []*staticChannel
 				m.joined = append(m.joined, id)
 			}
 			foundNetwork = true
+		case userDataServerMessage:
+			m.message = data.u16()
+		case userDataServerMultitransport:
+			m.multitransport = data.u32()
 		}
 		if data.err != nil {
 			return data.err
@@ -354,6 +367,12 @@ func (m *mcsLayer) parseConnectResponse(packet []byte, channels []*staticChannel
 	}
 	if !foundNetwork || m.global == 0 {
 		return E.New("rdp: missing server channel allocation")
+	}
+	if m.message != 0 {
+		if m.message == m.global || slices.Contains(m.joined, m.message) {
+			return E.New("rdp: invalid message channel ID ", m.message)
+		}
+		m.joined = append(m.joined, m.message)
 	}
 	return nil
 }

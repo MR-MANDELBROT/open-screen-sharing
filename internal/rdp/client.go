@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/bgra"
@@ -50,6 +51,7 @@ const (
 	dynamicChannelGraphics = "Microsoft::Windows::RDS::Graphics"
 	dynamicChannelDisplay  = "Microsoft::Windows::RDS::DisplayControl"
 	dynamicChannelTouch    = "Microsoft::Windows::RDS::Input"
+	dynamicChannelAudio    = "AUDIO_PLAYBACK_DVC"
 
 	refreshAreaCount       = 1
 	suppressDisplayUpdates = 0
@@ -57,24 +59,37 @@ const (
 )
 
 type Client struct {
-	events     Events
-	logger     *slog.Logger
-	transport  *transport
-	outbox     *outbox.Outbox
-	writer     *outbox.Writer
-	writerDone chan struct{}
-	writeErr   error
-	ctx        context.Context
-	cancel     context.CancelCauseFunc
-	mcs        *mcsLayer
-	session    *session
-	channels   *channelRegistry
-	graphics   *graphics
-	input      *inputQueue
-	clipboard  *clipboardChannel
-	display    *displayChannel
-	touch      *touchChannel
-	audio      *audioChannel
+	events       Events
+	logger       *slog.Logger
+	address      string
+	transport    *transport
+	outbox       *outbox.Outbox
+	writer       *outbox.Writer
+	writerDone   chan struct{}
+	writeErr     error
+	ctx          context.Context
+	cancel       context.CancelCauseFunc
+	mcs          *mcsLayer
+	autodetect   *autodetect
+	session      *session
+	channels     *channelRegistry
+	dynamic      *drdynvc
+	graphics     *graphics
+	input        *inputQueue
+	clipboard    *clipboardChannel
+	display      *displayChannel
+	touch        *touchChannel
+	audio        *audioChannel
+	dynamicAudio *audioChannel
+
+	processAccess sync.Mutex
+	roundTrip     atomic.Int64
+	tunnel        atomic.Pointer[tunnel]
+	tunnels       sync.WaitGroup
+
+	// mstscax.dll of Windows 11 26200 counts only auto-detect PDUs and static virtual channel data
+	// toward the bandwidth byteCount over TCP.
+	received uint64
 
 	infoAccess sync.Mutex
 	reported   Info
@@ -86,6 +101,7 @@ type Client struct {
 	lifecycle sync.Mutex
 	running   bool
 	closed    bool
+	tunnelErr error
 }
 
 func normalizeOptions(opts Options) (Options, error) {
@@ -159,22 +175,30 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 		return nil, err
 	}
 	lifetime, cancelLifetime := context.WithCancelCause(context.Background())
+	t.startReceiver(lifetime)
 	c := &Client{
 		ctx:        lifetime,
 		cancel:     cancelLifetime,
 		events:     events,
 		logger:     opts.Logger,
+		address:    opts.Address,
 		transport:  t,
 		outbox:     outbox.New(),
 		writer:     outbox.NewWriter(t.conn),
 		writerDone: make(chan struct{}),
 	}
 	c.mcs = &mcsLayer{transport: t, outbox: c.outbox, fragments: make(map[uint16][]byte)}
+	c.autodetect = &autodetect{logger: c.logger, roundTrip: &c.roundTrip, respond: func(response []byte) error {
+		b := binary.LittleEndian.AppendUint16(nil, securityAutodetectResponse)
+		b = binary.LittleEndian.AppendUint16(b, 0)
+		return c.mcs.send(c.mcs.message, append(b, response...))
+	}}
 	c.graphics = newGraphics(events, c.logger, opts.Width, opts.Height, c)
 	c.clipboard = &clipboardChannel{events: events, changed: c.refreshInfo, shared: opts.Clipboard}
 	c.display = &displayChannel{logger: c.logger, changed: c.refreshInfo, width: opts.Width, height: opts.Height, scale: opts.DesktopScaleFactor, sentScale: opts.DesktopScaleFactor}
 	c.touch = &touchChannel{logger: c.logger, changed: c.refreshInfo}
 	c.audio = &audioChannel{events: events, changed: c.refreshInfo}
+	c.dynamicAudio = &audioChannel{events: events, changed: c.refreshInfo}
 	c.session = &session{
 		mcs:            c.mcs,
 		graphics:       c.graphics,
@@ -187,19 +211,22 @@ func Dial(ctx context.Context, opts Options, events Events) (*Client, error) {
 	}
 	c.input = newInputQueue(c.session.sendInput, c.writerDone, c.logger, opts.KeepAlive)
 	c.session.input = c.input
-	dynamic := &drdynvc{logger: c.logger, listeners: []*dynamicListener{
-		{name: dynamicChannelGraphics, handler: &rdpgfx{g: c.graphics}, required: true},
+	c.dynamic = &drdynvc{logger: c.logger, switched: make(chan struct{}), listeners: []*dynamicListener{
+		{name: dynamicChannelGraphics, handler: &rdpgfx{g: c.graphics, cachePath: opts.GraphicsCache}, required: true},
 		{name: dynamicChannelDisplay, handler: c.display},
 		{name: dynamicChannelTouch, handler: c.touch},
 	}}
-	c.channels = &channelRegistry{mcs: c.mcs, logger: c.logger, channels: []*staticChannel{
-		{name: staticChannelClipboard, options: channelOptionInitialized | channelOptionShowProtocol, handler: c.clipboard},
-		{name: staticChannelDynamic, options: channelOptionInitialized, handler: dynamic},
+	// rdpserverbase.dll of Windows 11 26200 compresses graphics updates and static channel data with
+	// one shared compressor, so both go through one decompressor in arrival order.
+	c.channels = &channelRegistry{mcs: c.mcs, logger: c.logger, decompressor: c.graphics.bulk, channels: []*staticChannel{
+		{name: staticChannelClipboard, options: channelOptionInitialized | channelOptionCompressRDP | channelOptionShowProtocol, handler: c.clipboard},
+		{name: staticChannelDynamic, options: channelOptionInitialized, handler: c.dynamic},
 	}}
 	if opts.Audio {
+		c.dynamic.listeners = append(c.dynamic.listeners, &dynamicListener{name: dynamicChannelAudio, handler: c.dynamicAudio})
 		c.channels.channels = append(c.channels.channels,
-			&staticChannel{name: staticChannelAudio, options: channelOptionInitialized, handler: c.audio},
-			&staticChannel{name: staticChannelDevice, options: channelOptionInitialized, handler: newDeviceChannel(opts.ClientName)},
+			&staticChannel{name: staticChannelAudio, options: channelOptionInitialized | channelOptionCompressRDP, handler: c.audio},
+			&staticChannel{name: staticChannelDevice, options: channelOptionInitialized | channelOptionCompressRDP, handler: newDeviceChannel(opts.ClientName)},
 		)
 	}
 	go func() {
@@ -257,6 +284,8 @@ func (c *Client) readOne() error {
 	if err != nil {
 		return err
 	}
+	c.processAccess.Lock()
+	defer c.processAccess.Unlock()
 	if fastPath {
 		if header&fastPathEncryptionMask != 0 {
 			return E.New("rdp: encrypted fast-path packet in TLS session")
@@ -267,9 +296,26 @@ func (c *Client) readOne() error {
 	if err != nil || data == nil {
 		return err
 	}
-	if channel == c.mcs.global {
+	switch channel {
+	case c.mcs.global:
 		return c.session.receive(data)
+	case c.mcs.message:
+		r := &reader{data: data}
+		flags := r.u16()
+		r.take(2)
+		switch {
+		case r.err != nil:
+			return E.Cause(r.err, "rdp: parse message channel PDU")
+		case flags&securityTransportRequest != 0:
+			return c.receiveMultitransport(r)
+		case flags&securityAutodetectRequest != 0:
+			c.received += uint64(r.remaining())
+			return c.autodetect.receive(r, c.transport.arrival(), c.received)
+		}
+		c.logger.Debug("ignore message channel PDU", "flags", flags)
+		return nil
 	}
+	c.received += uint64(len(data))
 	return c.channels.receive(channel, data)
 }
 
@@ -301,12 +347,16 @@ func (c *Client) Run() error {
 func (c *Client) result(err error) error {
 	c.lifecycle.Lock()
 	closed := c.closed
+	tunnelErr := c.tunnelErr
 	c.lifecycle.Unlock()
 	if c.writeErr != nil && !errors.Is(c.writeErr, net.ErrClosed) {
 		return c.writeErr
 	}
 	if closed {
 		return nil
+	}
+	if tunnelErr != nil {
+		return tunnelErr
 	}
 	if !E.IsClosed(err) && !errors.Is(err, errDisconnected) {
 		return err
@@ -374,6 +424,7 @@ func (c *Client) abort(err error) {
 }
 
 func (c *Client) cleanup() {
+	c.tunnels.Wait()
 	c.channels.close()
 	c.graphics.close()
 }
@@ -398,7 +449,7 @@ func (c *Client) Info() Info {
 		LoggedOn:  c.session.loggedOn.Load(),
 		Clipboard: c.clipboard.enabled(),
 		Resize:    c.display.enabled(),
-		Audio:     c.audio.available.Load(),
+		Audio:     c.audio.available.Load() || c.dynamicAudio.available.Load(),
 		Unicode:   c.session.inputFlags.Load()&inputFlagUnicode != 0,
 		Touch:     c.touch.enabled(),
 	}
@@ -421,12 +472,22 @@ func (c *Client) refreshInfo() {
 }
 
 func (c *Client) Statistics() Statistics {
-	return Statistics{
+	statistics := Statistics{
 		BytesRead:    c.transport.read.Load(),
 		BytesWritten: c.transport.written + c.writer.Written(),
 		Frames:       c.graphics.frames.Load(),
 		Encoding:     encodingNames[c.graphics.encoding.Load()],
+		RoundTrip:    time.Duration(c.roundTrip.Load()),
 	}
+	if t := c.tunnel.Load(); t != nil {
+		statistics.BytesRead += t.read.Load()
+		statistics.BytesWritten += t.written.Load()
+		statistics.UDP = true
+		if statistics.RoundTrip == 0 {
+			statistics.RoundTrip = t.udp.RoundTrip()
+		}
+	}
+	return statistics
 }
 
 func (c *Client) desktopArea() []byte {

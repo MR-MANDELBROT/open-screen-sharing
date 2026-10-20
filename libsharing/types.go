@@ -141,6 +141,8 @@ type SessionOptions struct {
 	UpdateRate int32
 
 	KeepAlive bool
+
+	CacheDirectory string
 }
 
 func NewSessionOptions() *SessionOptions {

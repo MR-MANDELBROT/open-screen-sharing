@@ -2,14 +2,17 @@ package rdp
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
 	"io"
 	"net"
+	"slices"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -24,6 +27,8 @@ const (
 	x224Request         = 0xE0
 	x224Confirm         = 0xD0
 	maximumPacket       = 1 << 20
+	receiveBuffer       = 64 << 10
+	receiveQueue        = 16
 
 	fastPathActionMask     = 0x03
 	fastPathEncryptionMask = 0xc0
@@ -31,16 +36,100 @@ const (
 )
 
 type transport struct {
-	tcp     net.Conn
-	conn    net.Conn
-	reader  *bufio.Reader
-	buffer  []byte
-	written uint64
-	read    atomic.Uint64
+	tcp         net.Conn
+	conn        net.Conn
+	certificate *x509.Certificate
+	reader      *bufio.Reader
+	receiver    *receiver
+	buffer      []byte
+	written     uint64
+	read        atomic.Uint64
+}
+
+type arrival struct {
+	data []byte
+	at   time.Time
+}
+
+type arrivalMark struct {
+	end uint64
+	at  time.Time
+}
+
+type receiver struct {
+	arrivals  chan arrival
+	free      chan []byte
+	err       error
+	current   []byte
+	unread    []byte
+	delivered uint64
+	marks     []arrivalMark
 }
 
 func newTransport(conn net.Conn) *transport {
-	return &transport{tcp: conn, conn: conn, reader: bufio.NewReaderSize(conn, 64<<10), buffer: make([]byte, 0, 64<<10)}
+	return &transport{tcp: conn, conn: conn, reader: bufio.NewReaderSize(conn, receiveBuffer), buffer: make([]byte, 0, receiveBuffer)}
+}
+
+func (t *transport) startReceiver(ctx context.Context) {
+	t.receiver = &receiver{arrivals: make(chan arrival, receiveQueue), free: make(chan []byte, receiveQueue+1)}
+	go t.receiver.run(ctx, t.conn)
+	t.reader.Reset(t.receiver)
+}
+
+func (t *transport) arrival() time.Time {
+	r := t.receiver
+	consumed := r.delivered - uint64(len(r.unread)) - uint64(t.reader.Buffered())
+	r.marks = r.marks[slices.IndexFunc(r.marks, func(mark arrivalMark) bool { return mark.end >= consumed }):]
+	return r.marks[0].at
+}
+
+func (r *receiver) run(ctx context.Context, conn net.Conn) {
+	defer close(r.arrivals)
+	for {
+		var buffer []byte
+		select {
+		case buffer = <-r.free:
+		default:
+			buffer = make([]byte, receiveBuffer)
+		}
+		n, err := conn.Read(buffer)
+		if n > 0 {
+			select {
+			case r.arrivals <- arrival{data: buffer[:n], at: time.Now()}:
+			case <-ctx.Done():
+				r.err = net.ErrClosed
+				return
+			}
+		}
+		if err != nil {
+			r.err = err
+			return
+		}
+	}
+}
+
+func (r *receiver) Read(p []byte) (int, error) {
+	if len(r.unread) == 0 {
+		if r.current != nil {
+			select {
+			case r.free <- r.current[:cap(r.current)]:
+			default:
+			}
+			r.current = nil
+		}
+		next, ok := <-r.arrivals
+		if !ok {
+			return 0, r.err
+		}
+		r.current, r.unread = next.data, next.data
+		r.delivered += uint64(len(next.data))
+		unconsumed := uint64(len(next.data) + receiveBuffer)
+		r.marks = slices.DeleteFunc(r.marks, func(mark arrivalMark) bool { return mark.end+unconsumed <= r.delivered })
+		r.marks = append(r.marks, arrivalMark{end: r.delivered, at: next.at})
+	}
+	n := copy(p, r.unread)
+	r.unread = r.unread[n:]
+	return n, nil
 }
 
 func (t *transport) upgrade(config *tls.Config) (*x509.Certificate, error) {
@@ -53,8 +142,9 @@ func (t *transport) upgrade(config *tls.Config) (*x509.Certificate, error) {
 		return nil, E.Cause(err, "rdp: perform TLS handshake")
 	}
 	t.conn = conn
+	t.certificate = conn.ConnectionState().PeerCertificates[0]
 	t.reader.Reset(conn)
-	return conn.ConnectionState().PeerCertificates[0], nil
+	return t.certificate, nil
 }
 
 func (t *transport) write(packet []byte) error {

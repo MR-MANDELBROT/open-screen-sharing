@@ -60,7 +60,7 @@ const (
 	gfxARGB            = 0x21
 	gfxMaxSurfaces     = 64
 	gfxMaxCacheBytes   = 100 << 20
-	gfxMaxCacheEntries = 4096
+	gfxMaxCacheEntries = 25600
 )
 
 const (
@@ -93,17 +93,15 @@ func (b *gfxBudget) release(bytes int) {
 	b.used -= bytes
 }
 
-type gfxCacheEntry struct {
-	image  *bgra.Image
-	format byte
-}
-
 type rdpgfx struct {
 	g             *graphics
 	send          func([]byte) error
 	zgfx          *zgfx.Decompressor
 	surfaces      map[uint16]*gfxSurface
-	cache         map[uint16]gfxCacheEntry
+	cache         map[uint16]*gfxCacheEntry
+	cachePath     string
+	cacheChanged  bool
+	imports       *gfxCacheImport
 	memory        gfxBudget
 	cacheMemory   gfxBudget
 	clear         *clear.Decoder
@@ -118,7 +116,7 @@ func (p *rdpgfx) OnOpen(send func([]byte) error) error {
 	p.send = send
 	p.zgfx = zgfx.NewDecompressor()
 	p.surfaces = make(map[uint16]*gfxSurface)
-	p.cache = make(map[uint16]gfxCacheEntry)
+	p.cache = make(map[uint16]*gfxCacheEntry)
 	p.memory = gfxBudget{limit: gfxMemoryLimit(int(p.g.width.Load()), int(p.g.height.Load()))}
 	p.cacheMemory = gfxBudget{limit: gfxMaxCacheBytes}
 	return p.send(gfxPacket(gfxCapsAdvertise, gfxCapabilities()))
@@ -132,9 +130,11 @@ func gfxCapabilities() []byte {
 	avc := h264.Available()
 	b := binary.LittleEndian.AppendUint16(nil, uint16(len(gfxCapsVersions)))
 	for _, version := range gfxCapsVersions {
-		flags := uint32(gfxCapsSmallCache)
+		var flags uint32
 		if version == gfxCapsVersion81 && avc {
-			flags |= gfxCapsAVC420Enabled
+			// rdpbase.dll of Windows 11 26200 treats a version 8.1 set that enables AVC420 without
+			// SMALL_CACHE or THINCLIENT as invalid, and the server skips it.
+			flags |= gfxCapsSmallCache | gfxCapsAVC420Enabled
 		}
 		if version >= gfxCapsVersion10 && !avc {
 			flags |= gfxCapsAVCDisabled
@@ -150,13 +150,17 @@ func gfxCapabilities() []byte {
 }
 
 func (p *rdpgfx) OnClose() {
+	p.saveCache()
+	if p.imports != nil {
+		p.imports.close()
+	}
 	for _, s := range p.surfaces {
 		s.close()
 	}
 	if p.inFrame {
 		p.g.endFrame()
 	}
-	*p = rdpgfx{g: p.g}
+	*p = rdpgfx{g: p.g, cachePath: p.cachePath}
 }
 
 func gfxPacket(command uint16, body []byte) []byte {
@@ -211,6 +215,7 @@ func (p *rdpgfx) process(command uint16, r *reader) error {
 		if len(body) != gfxCapsDataSize {
 			return E.New("invalid capability length ", length)
 		}
+		return p.offerCache()
 	case gfxResetGraphics:
 		width, height, count := int(r.u32()), int(r.u32()), int(r.u32())
 		if r.err != nil {
@@ -312,10 +317,8 @@ func (p *rdpgfx) process(command uint16, r *reader) error {
 		if r.err != nil {
 			return r.err
 		}
-		if cached, found := p.cache[slot]; found {
-			p.cacheMemory.release(len(cached.image.Pix))
-			delete(p.cache, slot)
-		}
+		p.evictCache(slot)
+		p.cacheChanged = true
 	case gfxStartFrame:
 		r.take(4)
 		frameID := r.u32()
@@ -344,10 +347,7 @@ func (p *rdpgfx) process(command uint16, r *reader) error {
 		ack = binary.LittleEndian.AppendUint32(ack, p.framesDecoded)
 		return p.send(gfxPacket(gfxFrameAcknowledge, ack))
 	case gfxCacheImportReply:
-		count := int(r.u16())
-		if count != 0 {
-			return E.New("unsolicited cache import reply with ", count, " entries")
-		}
+		return p.importCache(r)
 	default:
 		return E.New("unsupported command")
 	}
@@ -469,7 +469,7 @@ func (p *rdpgfx) surfaceToSurface(r *reader) error {
 
 func (p *rdpgfx) surfaceToCache(r *reader) error {
 	id := r.u16()
-	r.take(8)
+	key := r.u64()
 	slot := r.u16()
 	rect := gfxReadRect(r)
 	if r.err != nil {
@@ -482,18 +482,10 @@ func (p *rdpgfx) surfaceToCache(r *reader) error {
 	if rect.Empty() || !rect.In(s.image.Bounds()) || slot == 0 || slot > gfxMaxCacheEntries {
 		return E.New("invalid cache source rectangle ", rect, " or slot ", slot)
 	}
-	if previous, found := p.cache[slot]; found {
-		p.cacheMemory.release(len(previous.image.Pix))
-		delete(p.cache, slot)
-	}
-	err = p.cacheMemory.reserve(rect.Dx() * rect.Dy() * gfxBytesPerPixel)
-	if err != nil {
-		return err
-	}
 	cached := bgra.New(rect.Dx(), rect.Dy())
 	cached.Copy(image.Point{}, s.image, rect)
-	p.cache[slot] = gfxCacheEntry{image: cached, format: s.format}
-	return nil
+	p.cacheChanged = true
+	return p.storeCache(slot, &gfxCacheEntry{image: cached, format: s.format, key: key, used: p.frame})
 }
 
 func (p *rdpgfx) cacheToSurface(r *reader) error {
@@ -512,6 +504,7 @@ func (p *rdpgfx) cacheToSurface(r *reader) error {
 	if err != nil {
 		return err
 	}
+	cached.used = p.frame
 	for range count {
 		p.blit(s, image.Pt(int(r.u16()), int(r.u16())), cached.image, cached.format, cached.image.Bounds())
 	}

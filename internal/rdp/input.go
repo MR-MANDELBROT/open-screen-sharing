@@ -38,12 +38,27 @@ const (
 	wheelUnitsPerPixel         = 6
 
 	inputFlagUnicode     = 0x0010
+	inputFlagFastPath2   = 0x0020
 	inputFlagMouseHWheel = 0x0100
 
 	inputEventLength    = 12
 	inputHeaderLength   = 4
 	maximumInputEvents  = 256
 	maximumPendingInput = 16384
+
+	fastPathInputScancode   = 0
+	fastPathInputMouse      = 1
+	fastPathInputSync       = 3
+	fastPathInputUnicode    = 4
+	fastPathInputCodeShift  = 5
+	fastPathInputFlagsMask  = 0x1f
+	fastPathInputRelease    = 0x01
+	fastPathInputExtended   = 0x02
+	fastPathInputExtended1  = 0x04
+	fastPathInputCountShift = 2
+	fastPathInputCountLimit = 15
+	maximumFastPathEvents   = 255
+
 	// Windows 11 26100 replaces Unicode input events that reach an application before it has read the
 	// previous one with the newest character; Notepad still lost characters at 10 ms and none at 15 ms.
 	typingInterval = 20 * time.Millisecond
@@ -148,6 +163,47 @@ func encodeInputEvents(events []inputEvent) []byte {
 		binary.LittleEndian.PutUint16(wire[10:], event.b)
 	}
 	return payload
+}
+
+func encodeFastPathInput(events []inputEvent) []byte {
+	var body []byte
+	if len(events) > fastPathInputCountLimit {
+		body = append(body, byte(len(events)))
+	}
+	for _, event := range events {
+		var flags byte
+		if event.flags&keyRelease != 0 {
+			flags |= fastPathInputRelease
+		}
+		switch event.kind {
+		case inputSynchronize:
+			body = append(body, fastPathInputSync<<fastPathInputCodeShift|byte(event.a)&fastPathInputFlagsMask)
+		case inputScancode:
+			if event.flags&keyExtended != 0 {
+				flags |= fastPathInputExtended
+			}
+			if event.flags&keyExtended1 != 0 {
+				flags |= fastPathInputExtended1
+			}
+			body = append(body, fastPathInputScancode<<fastPathInputCodeShift|flags, byte(event.a))
+		case inputUnicode:
+			body = binary.LittleEndian.AppendUint16(append(body, fastPathInputUnicode<<fastPathInputCodeShift|flags), event.a)
+		case inputMouse:
+			body = append(body, fastPathInputMouse<<fastPathInputCodeShift)
+			body = binary.LittleEndian.AppendUint16(body, event.flags)
+			body = binary.LittleEndian.AppendUint16(body, event.a)
+			body = binary.LittleEndian.AppendUint16(body, event.b)
+		}
+	}
+	var header byte
+	if len(events) <= fastPathInputCountLimit {
+		header = byte(len(events)) << fastPathInputCountShift
+	}
+	if length := len(body) + 2; length < fastPathLengthLong {
+		return append([]byte{header, byte(length)}, body...)
+	}
+	length := len(body) + 3
+	return append([]byte{header, fastPathLengthLong | byte(length>>8), byte(length)}, body...)
 }
 
 func scancodeEvent(code uint16, down bool) inputEvent {

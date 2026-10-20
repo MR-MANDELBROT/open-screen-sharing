@@ -50,7 +50,7 @@ const (
 	inputFlagScancodes = 0x0001
 
 	glyphCapabilityLength       = 48
-	virtualChannelNoCompress    = 0
+	virtualChannelCompressSC    = 1
 	soundBeeps                  = 1
 	fontSupportList             = 1
 	controlPriorityNever        = 2
@@ -110,7 +110,7 @@ func (s *session) capabilities() (uint16, []byte) {
 	}
 	add(capabilityBitmapCacheRev2, zeros(cache, bitmapCacheUnusedCells))
 	add(capabilityPointer, uint16s(1, pointerCacheSize, pointerCacheSize))
-	input := uint16s(inputFlagScancodes|inputFlagUnicode|inputFlagMouseHWheel, 0)
+	input := uint16s(inputFlagScancodes|inputFlagFastPath2|inputFlagUnicode|inputFlagMouseHWheel, 0)
 	input = binary.LittleEndian.AppendUint32(input, s.keyboardLayout)
 	input = binary.LittleEndian.AppendUint32(input, keyboardTypeEnhanced)
 	input = binary.LittleEndian.AppendUint32(input, 0)
@@ -118,7 +118,7 @@ func (s *session) capabilities() (uint16, []byte) {
 	add(capabilityInput, zeros(input, imeFileNameLength))
 	add(capabilityBrush, binary.LittleEndian.AppendUint32(nil, 0))
 	add(capabilityGlyphCache, make([]byte, glyphCapabilityLength))
-	add(capabilityVirtualChannel, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, virtualChannelNoCompress), channelChunkLength))
+	add(capabilityVirtualChannel, binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint32(nil, virtualChannelCompressSC), channelChunkLength))
 	add(capabilitySound, uint16s(soundBeeps, 0))
 	add(capabilityShare, uint16s(0, 0))
 	add(capabilityFont, uint16s(fontSupportList, 0))

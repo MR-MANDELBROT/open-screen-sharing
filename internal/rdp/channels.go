@@ -6,12 +6,15 @@ import (
 	"log/slog"
 	"sync/atomic"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/rdp/codec/bulk"
+
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
 	channelOptionInitialized  = 0x80000000
+	channelOptionCompressRDP  = 0x00800000
 	channelOptionShowProtocol = 0x00200000
 
 	channelFlagFirst        = 0x00000001
@@ -19,6 +22,7 @@ const (
 	channelFlagShowProtocol = 0x00000010
 	channelFlagSuspend      = 0x00000020
 	channelFlagResume       = 0x00000040
+	channelCompressionShift = 16
 
 	channelChunkLength = 1600
 	maxChannelMessage  = 64 << 20
@@ -48,9 +52,10 @@ type staticChannel struct {
 }
 
 type channelRegistry struct {
-	mcs      *mcsLayer
-	logger   *slog.Logger
-	channels []*staticChannel
+	mcs          *mcsLayer
+	logger       *slog.Logger
+	channels     []*staticChannel
+	decompressor *bulk.Decompressor
 }
 
 func (r *channelRegistry) open() {
@@ -105,7 +110,14 @@ func (r *channelRegistry) receive(id uint16, payload []byte) error {
 		return cr.err
 	}
 	data := cr.rest()
-	if flags&(channelFlagSuspend|channelFlagResume) != 0 || channel.closed.Load() {
+	if flags&(channelFlagSuspend|channelFlagResume) != 0 {
+		return nil
+	}
+	data, err := r.decompressor.Decompress(data, byte(flags>>channelCompressionShift))
+	if err != nil {
+		return E.Cause(err, "rdp: decompress virtual channel ", channel.name)
+	}
+	if channel.closed.Load() {
 		return nil
 	}
 	message, err := channel.reassemble(flags, total, data)

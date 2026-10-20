@@ -63,6 +63,14 @@ func (r *reader) u32() uint32 {
 	return binary.LittleEndian.Uint32(b)
 }
 
+func (r *reader) u64() uint64 {
+	b := r.take(8)
+	if b == nil {
+		return 0
+	}
+	return binary.LittleEndian.Uint64(b)
+}
+
 func (r *reader) rest() []byte {
 	b := r.data
 	r.data = nil

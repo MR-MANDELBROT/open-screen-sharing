@@ -48,6 +48,7 @@ func run() error {
 	interactive := flag.Bool("interactive", false, "read additional actions from standard input")
 	checkLogin := flag.Bool("check-login", false, "verify TLS and NLA without opening a desktop")
 	debug := flag.Bool("debug", false, "log protocol details to standard error")
+	graphicsCache := flag.String("graphics-cache", "", "file that keeps cached graphics between connections")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: rdpctl [flags] [wait:DURATION | png:FILE | move:X,Y | click:X,Y[,left|right|middle] | scroll:X,Y,DY[,DX] | touch:began|moved|ended|cancelled,ID,X,Y | shared-clipboard:on|off | keysym:KEYSYM[,down|up] | mackey|mackeydown|mackeyup:CODE[,iso[,KEYSYM]] | pause | type:TEXT | paste:TEXT | clipboard-set:TEXT | clipboard-get | resize:WxH[,SCALE] | suppress:on|off | refresh | stats ...]")
 		flag.PrintDefaults()
@@ -58,7 +59,7 @@ func run() error {
 		return err
 	}
 	h := &handler{start: time.Now()}
-	options := rdp.Options{Address: *address, Username: *user, Password: os.Getenv("RDPCTL_PASSWORD"), Domain: *domain, ClientName: "rdpctl", Width: width, Height: height, DesktopScaleFactor: *desktopScale, Clipboard: *clipboard, Audio: *audio, DialTimeout: *timeout}
+	options := rdp.Options{Address: *address, Username: *user, Password: os.Getenv("RDPCTL_PASSWORD"), Domain: *domain, ClientName: "rdpctl", Width: width, Height: height, DesktopScaleFactor: *desktopScale, Clipboard: *clipboard, Audio: *audio, GraphicsCache: *graphicsCache, DialTimeout: *timeout}
 	if *debug {
 		options.Logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}

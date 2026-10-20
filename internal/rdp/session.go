@@ -66,6 +66,9 @@ const (
 	addressFamilyINET      = 2
 	timeZoneInformationLen = 172
 
+	perfEnableFontSmoothing      = 0x00000080
+	perfEnableDesktopComposition = 0x00000100
+
 	sessionInfoLogon         = 0
 	sessionInfoLogonLong     = 1
 	sessionInfoPlainNotify   = 2
@@ -127,7 +130,7 @@ func clientInfo(opts Options) []byte {
 	}
 	b = zeros(b, timeZoneInformationLen)
 	b = binary.LittleEndian.AppendUint32(b, 0)
-	b = binary.LittleEndian.AppendUint32(b, 0)
+	b = binary.LittleEndian.AppendUint32(b, perfEnableFontSmoothing|perfEnableDesktopComposition)
 	return binary.LittleEndian.AppendUint16(b, 0)
 }
 
@@ -159,8 +162,15 @@ func (s *session) sendInput(events []inputEvent, motion bool) error {
 	if !s.active.Load() {
 		return nil
 	}
+	fastPath := s.inputFlags.Load()&inputFlagFastPath2 != 0
 	var packets []byte
 	for len(events) > 0 {
+		if fastPath {
+			count := min(len(events), maximumFastPathEvents)
+			packets = append(packets, encodeFastPathInput(events[:count])...)
+			events = events[count:]
+			continue
+		}
 		count := min(len(events), maximumInputEvents)
 		packet, err := s.dataPacket(pduInput, encodeInputEvents(events[:count]))
 		if err != nil {
