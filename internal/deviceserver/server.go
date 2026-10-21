@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice"
@@ -71,7 +70,6 @@ type Observer interface {
 	ViewerConnected(session *rfb.ServerSession)
 	ViewerDisconnected(session *rfb.ServerSession, err error)
 	StreamingChanged(active bool)
-	AutoUnlockFailed(err error, inputStarted bool)
 }
 
 type Options struct {
@@ -125,9 +123,8 @@ type Server struct {
 	display       displayGeometry
 	videoProblem  error
 
-	listener           net.Listener
-	relisted           bool
-	autoUnlockDisabled atomic.Bool
+	listener net.Listener
+	relisted bool
 }
 
 type attachment struct {
@@ -217,10 +214,6 @@ func (s *Server) Retry() {
 
 func (s *Server) Sessions() []*rfb.ServerSession {
 	return s.rfb.Sessions()
-}
-
-func (s *Server) DisableAutoUnlock() {
-	s.autoUnlockDisabled.Store(true)
 }
 
 func (s *Server) Close() error {

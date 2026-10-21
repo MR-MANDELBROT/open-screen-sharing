@@ -9,6 +9,7 @@ import (
 
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/accessibility"
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/hid"
+	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -59,8 +60,6 @@ func validateAutoUnlock(options Options) error {
 	return nil
 }
 
-var errUnlockInterrupted = E.New("the viewer disconnected before automatic unlocking finished")
-
 type deviceUnlockTarget struct {
 	worker          *inputWorker
 	device          *attachment
@@ -70,23 +69,14 @@ type deviceUnlockTarget struct {
 	touchesError    error
 }
 
-func (t *deviceUnlockTarget) unlock(ctx context.Context) (consumed bool, inputStarted bool, err error) {
+func (t *deviceUnlockTarget) unlock(ctx context.Context) (consumed bool, err error) {
 	options := t.worker.server.options
 	locked, err := t.locked(ctx)
 	if err != nil || !locked {
-		return false, false, err
+		return false, err
 	}
 	if err = t.prepare(ctx); err != nil {
-		return true, false, err
-	}
-	press := func(stroke asciiKeystroke) bool {
-		locked, err = t.locked(ctx)
-		if err != nil || !locked {
-			return false
-		}
-		inputStarted = true
-		err = t.key(ctx, stroke)
-		return err == nil
+		return true, err
 	}
 	clearLength := maxPasscodeLength
 	if options.AutoUnlockPasscodeType == PasscodePIN {
@@ -94,42 +84,39 @@ func (t *deviceUnlockTarget) unlock(ctx context.Context) (consumed bool, inputSt
 	}
 	locked, err = t.clear(ctx, clearLength)
 	if err != nil || !locked {
-		return true, false, err
+		return true, err
 	}
 	ready, err := t.ready(ctx)
 	if err != nil {
-		return true, false, err
+		return true, err
 	}
 	if !ready {
-		return true, false, E.New("the lock-screen passcode field lost keyboard focus")
+		return true, E.New("the lock-screen passcode field lost keyboard focus")
 	}
-	for index := range len(options.AutoUnlockPasscode) {
-		if !press(asciiKeystrokes[options.AutoUnlockPasscode[index]]) {
-			return true, inputStarted, err
-		}
-	}
+	strokes := common.Map([]byte(options.AutoUnlockPasscode), func(character byte) asciiKeystroke {
+		return asciiKeystrokes[character]
+	})
 	if options.AutoUnlockPasscodeType != PasscodePIN {
-		if !press(asciiKeystroke{usage: usageReturn}) {
-			return true, inputStarted, err
+		strokes = append(strokes, asciiKeystroke{usage: usageReturn})
+	}
+	for _, stroke := range strokes {
+		if locked, err = t.locked(ctx); err != nil || !locked {
+			return true, err
+		}
+		if err = t.key(ctx, stroke); err != nil {
+			return true, err
 		}
 	}
 	for {
-		locked, err = t.locked(ctx)
-		if err != nil || !locked {
-			return true, inputStarted, err
+		if locked, err = t.locked(ctx); err != nil || !locked {
+			return true, err
 		}
 	}
 }
 
 func (t *deviceUnlockTarget) locked(ctx context.Context) (bool, error) {
-	if t.worker.server.autoUnlockDisabled.Load() {
-		return false, nil
-	}
 	if err := ctx.Err(); err != nil {
 		return false, err
-	}
-	if len(t.worker.server.rfb.Sessions()) == 0 {
-		return false, errUnlockInterrupted
 	}
 	w := t.worker
 	for {
@@ -495,20 +482,26 @@ func (t *deviceUnlockTarget) key(ctx context.Context, stroke asciiKeystroke) err
 	return nil
 }
 
-func (w *inputWorker) checkUnlock(ctx context.Context, a *attachment) bool {
-	if w.server.options.AutoUnlockPasscode == "" || w.server.autoUnlockDisabled.Load() {
+func (w *inputWorker) checkUnlock(a *attachment) bool {
+	if len(w.server.rfb.Sessions()) == 0 {
+		w.unlockPending = false
 		return false
 	}
+	buttons := &w.server.buttons.access
+	buttons.Lock()
+	defer buttons.Unlock()
 	started := time.Now()
 	target := &deviceUnlockTarget{worker: w, device: a}
-	consumed, inputStarted, err := target.unlock(ctx)
+	consumed, err := target.unlock(a.ctx)
 	if consumed || err != nil {
-		if ctx.Err() == nil {
-			err = E.Append(err, w.client.ReleaseAll(ctx), func(err error) error {
-				return E.Cause(err, "release input after automatic unlocking")
-			})
+		released := a.ctx.Err() == nil
+		if released {
+			if releaseErr := w.client.ReleaseAll(a.ctx); releaseErr != nil {
+				w.logger.Warn("release input after automatic unlocking", "error", releaseErr)
+				released = false
+			}
 		}
-		if err != nil || ctx.Err() != nil {
+		if err != nil || !released {
 			w.closeClient()
 		} else {
 			w.resetState()
@@ -528,17 +521,15 @@ func (w *inputWorker) checkUnlock(ctx context.Context, a *attachment) bool {
 		}
 	}
 	if consumed {
-		w.logger.Info("automatic unlock finished", "elapsed", time.Since(started), "input_started", inputStarted, "error", err)
+		w.logger.Info("automatic unlock finished", "elapsed", time.Since(started), "error", err)
 	}
-	if err == nil {
-		return consumed
-	}
-	if inputStarted {
-		w.server.autoUnlockDisabled.Store(true)
-	} else if E.IsMulti(err, errUnlockInterrupted, context.Canceled) {
+	if err != nil && a.ctx.Err() != nil {
 		return true
 	}
-	w.logger.Warn("automatic unlocking failed", "input_started", inputStarted, "error", err)
-	w.server.notify(func(observer Observer) { observer.AutoUnlockFailed(err, inputStarted) })
-	return true
+	w.unlockPending = false
+	if err != nil {
+		w.logger.Warn("automatic unlocking failed", "error", err)
+		return true
+	}
+	return consumed
 }

@@ -299,10 +299,6 @@ func (o *logObserver) ViewerDisconnected(*rfb.ServerSession, error) {}
 
 func (o *logObserver) StreamingChanged(bool) {}
 
-func (o *logObserver) AutoUnlockFailed(err error, inputStarted bool) {
-	o.logger.Warn("automatic unlocking failed", "input_started", inputStarted, "error", err)
-}
-
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "shareserve:", err)
 	os.Exit(1)

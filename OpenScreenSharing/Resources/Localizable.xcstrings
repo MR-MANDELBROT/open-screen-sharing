@@ -8015,28 +8015,6 @@
         }
       }
     },
-    "Automatic unlock was turned off. Stop sharing and check the device passcode before trying again." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatic unlock was turned off. Stop sharing and check the device passcode before trying again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自动解锁已关闭。请先停止共享，检查设备锁屏密码，再重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動解鎖已關閉。請先停止共享，檢查裝置鎖定畫面密碼，再重試。"
-          }
-        }
-      }
-    },
     "Available" : {
       "localizations" : {
         "ar" : {

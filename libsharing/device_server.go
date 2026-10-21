@@ -53,7 +53,6 @@ type DeviceServerHandler interface {
 	OnStateChanged(state int32, errorCode int32, message string)
 	OnViewerConnected(viewerID int64)
 	OnViewerDisconnected(viewerID int64)
-	OnAutoUnlockFailed(message string, inputStarted bool)
 	BacklightState() int32
 }
 
@@ -196,10 +195,6 @@ func (s *DeviceServer) SetRemotePairingPort(port int32) {
 	}
 }
 
-func (s *DeviceServer) DisableAutoUnlock() {
-	s.server.DisableAutoUnlock()
-}
-
 func (s *DeviceServer) setPairingPort(port int32) bool {
 	if port == 0 {
 		port = defaultRemotePairingPort
@@ -248,10 +243,6 @@ func (o *deviceObserver) ViewerDisconnected(session *rfb.ServerSession, err erro
 }
 
 func (o *deviceObserver) StreamingChanged(active bool) {}
-
-func (o *deviceObserver) AutoUnlockFailed(err error, inputStarted bool) {
-	o.handler.OnAutoUnlockFailed(err.Error(), inputStarted)
-}
 
 func stateCode(state deviceserver.State) int32 {
 	switch state {
