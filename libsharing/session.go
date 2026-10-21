@@ -112,7 +112,7 @@ type remote interface {
 	SetVirtualDisplay(width, height int, density float64, maximumWidth, maximumHeight int) error
 	RequestRefresh() error
 
-	SendPointer(x, y int, buttons uint8) error
+	SendPointer(x, y int, buttons uint8, clickCount int) error
 	SendScroll(x, y int, deltaX, deltaY float64) error
 	SendKey(keysym uint32, down bool) error
 	SendKeyCode(keyCode uint16, keyboardType int32, keysym uint32, down bool) error
@@ -497,12 +497,12 @@ func rfbClient(connected remote) (*rfb.Client, error) {
 	return client.Client, nil
 }
 
-func (s *Session) SendPointer(x int32, y int32, buttons int32) error {
+func (s *Session) SendPointer(x int32, y int32, buttons int32, clickCount int32) error {
 	client, err := s.connectedRemote()
 	if err != nil {
 		return err
 	}
-	return client.SendPointer(int(x), int(y), uint8(buttons))
+	return client.SendPointer(int(x), int(y), uint8(buttons), int(clickCount))
 }
 
 func (s *Session) SendScroll(x int32, y int32, deltaX float64, deltaY float64) error {

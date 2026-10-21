@@ -60,7 +60,7 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 				if len(numbers) > 2 {
 					buttons = uint8(numbers[2])
 				}
-				err = client.SendPointer(numbers[0], numbers[1], buttons)
+				err = client.SendPointer(numbers[0], numbers[1], buttons, 1)
 			}
 		case "click":
 			var numbers []int
@@ -70,9 +70,9 @@ func runScript(ctx context.Context, client *rfb.Client, h *handler, actions []st
 				if len(numbers) > 2 {
 					buttons = uint8(numbers[2])
 				}
-				err = client.SendPointer(numbers[0], numbers[1], buttons)
+				err = client.SendPointer(numbers[0], numbers[1], buttons, 1)
 				if err == nil {
-					err = client.SendPointer(numbers[0], numbers[1], 0)
+					err = client.SendPointer(numbers[0], numbers[1], 0, 1)
 				}
 			}
 		case "scroll":

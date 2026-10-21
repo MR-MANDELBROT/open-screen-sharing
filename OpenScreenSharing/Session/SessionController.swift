@@ -226,6 +226,8 @@ final class SessionController: Identifiable {
     @PerceptionIgnored private var pictureSize = CGSize.zero
     @PerceptionIgnored private var pictureTurns = PictureTurns.none
     @PerceptionIgnored private(set) var pointerButtons: PointerButtons = []
+    @PerceptionIgnored private var clickCount = 0
+    @PerceptionIgnored private var lastPress: (buttons: PointerButtons, position: CGPoint, time: TimeInterval)?
     @PerceptionIgnored private var pointerModifiers: Set<ModifierKey> = []
     @PerceptionIgnored private var nativeTouchIDs: Set<Int64> = []
     @PerceptionIgnored private var lastPointerMoveTime: TimeInterval = 0
@@ -1821,10 +1823,24 @@ final class SessionController: Identifiable {
     private func sendPointer(buttons: PointerButtons) {
         guard !holdsPointer else { return }
         let point = serverPoint(pointerPosition)
-        session?.sendPointer(x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)), buttons: buttons)
+        session?.sendPointer(x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down)), buttons: buttons, clickCount: clickCount)
     }
 
-    func press(_ button: PointerButtons) {
+    private static let multiClickInterval: TimeInterval = 0.5
+    private static let multiClickDistance: CGFloat = 4
+
+    func press(_ button: PointerButtons, clickCount count: Int? = nil) {
+        let now = CACurrentMediaTime()
+        if let count {
+            clickCount = count
+        } else if let lastPress, lastPress.buttons == button, now - lastPress.time <= Self.multiClickInterval,
+            hypot(pointerPosition.x - lastPress.position.x, pointerPosition.y - lastPress.position.y) <= Self.multiClickDistance
+        {
+            clickCount += 1
+        } else {
+            clickCount = 1
+        }
+        lastPress = (button, pointerPosition, now)
         beginPointerInput()
         setButtons(pointerButtons.union(button))
     }

@@ -135,6 +135,10 @@ func (r *rdpRemote) SetVirtualDisplay(width, height int, density float64, _, _ i
 	return r.SetDisplay(rdpLayout(width, height, density))
 }
 
+func (r *rdpRemote) SendPointer(x, y int, buttons uint8, _ int) error {
+	return r.Client.SendPointer(x, y, buttons)
+}
+
 func (r *rdpRemote) SendKeyCode(keyCode uint16, keyboardType int32, keysym uint32, down bool) error {
 	return r.Client.SendKeyCode(keyCode, keyboardType == KeyboardISO, keysym, down)
 }

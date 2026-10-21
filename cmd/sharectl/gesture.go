@@ -19,10 +19,10 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 		if err != nil {
 			return true, err
 		}
-		for range 2 {
-			err = client.SendPointer(numbers[0], numbers[1], rfb.ButtonLeft)
+		for clickCount := 1; clickCount <= 2; clickCount++ {
+			err = client.SendPointer(numbers[0], numbers[1], rfb.ButtonLeft, clickCount)
 			if err == nil {
-				err = client.SendPointer(numbers[0], numbers[1], 0)
+				err = client.SendPointer(numbers[0], numbers[1], 0, clickCount)
 			}
 			if err != nil {
 				return true, err
@@ -106,19 +106,19 @@ func runGestureAction(client *rfb.Client, verb, argument string, wait func(time.
 
 func drag(client *rfb.Client, numbers []int, wait func(time.Duration) error) error {
 	const steps = 20
-	err := client.SendPointer(numbers[0], numbers[1], rfb.ButtonLeft)
+	err := client.SendPointer(numbers[0], numbers[1], rfb.ButtonLeft, 1)
 	for i := 1; i <= steps && err == nil; i++ {
 		err = wait(gestureStep)
 		if err == nil {
 			x := numbers[0] + (numbers[2]-numbers[0])*i/steps
 			y := numbers[1] + (numbers[3]-numbers[1])*i/steps
-			err = client.SendPointer(x, y, rfb.ButtonLeft)
+			err = client.SendPointer(x, y, rfb.ButtonLeft, 1)
 		}
 	}
 	if err != nil {
 		return err
 	}
-	return client.SendPointer(numbers[2], numbers[3], 0)
+	return client.SendPointer(numbers[2], numbers[3], 0, 1)
 }
 
 func runAmountGesture(send func(x, y int, amount float64, phase rfb.GesturePhase) error, x, y, steps int, amount float64, wait func(time.Duration) error) error {

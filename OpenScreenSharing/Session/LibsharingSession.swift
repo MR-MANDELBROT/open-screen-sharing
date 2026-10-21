@@ -101,12 +101,12 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
         try? session?.answerPrompt(prompt.id, answer: answer)
     }
 
-    func sendPointer(x: Int, y: Int, buttons: PointerButtons) {
+    func sendPointer(x: Int, y: Int, buttons: PointerButtons, clickCount: Int) {
         var mask: Int32 = 0
         if buttons.contains(.primary) { mask |= LibsharingButtonLeft }
         if buttons.contains(.middle) { mask |= LibsharingButtonMiddle }
         if buttons.contains(.secondary) { mask |= LibsharingButtonRight }
-        try? session?.sendPointer(Int32(x), y: Int32(y), buttons: mask)
+        try? session?.sendPointer(Int32(x), y: Int32(y), buttons: mask, clickCount: Int32(clickCount))
     }
 
     func sendScroll(x: Int, y: Int, deltaX: Double, deltaY: Double) {
