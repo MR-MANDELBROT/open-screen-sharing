@@ -118,6 +118,8 @@ type SessionOptions struct {
 
 	TrustedFingerprint string
 
+	AllowUnverifiedLogin bool
+
 	KeyboardLayout int32
 
 	Audio bool

@@ -89,7 +89,8 @@ func main() {
 	dumpEncodings := flag.String("dump-encodings", "", "comma-separated encodings to dump (default all)")
 	session := flag.String("session", "cancel", "answer to session selection: console, own or cancel")
 	name := flag.String("name", "sharectl", "name shown to the Mac's user for permission requests")
-	allowUnverified := flag.Bool("allow-unverified", false, "allow account logins that send the password to an unverified server (types 30, and 33 without 36)")
+	allowUnverified := flag.Bool("allow-unverified", false, "allow the account login that does not verify the server (type 30)")
+	fingerprint := flag.String("fingerprint", "", "expected SHA-256 fingerprint of the server key for type 33 without 36; any key is accepted and reported when empty")
 	probe := flag.Bool("probe", false, "print the offered security types and exit without logging in")
 	verbose := flag.Bool("v", false, "debug logging")
 	flag.Usage = func() {
@@ -115,6 +116,13 @@ func main() {
 		Logger:           logger,
 
 		AllowUnverifiedLogin: *allowUnverified,
+		VerifyServerKey: func(actual string) error {
+			logger.Info("server key", "fingerprint", actual)
+			if *fingerprint != "" && !strings.EqualFold(*fingerprint, actual) {
+				return rfb.ErrServerKeyChanged
+			}
+			return nil
+		},
 	}
 	err := parseOptions(&options, *security, *dialect, *quality, *mode)
 	if err != nil {

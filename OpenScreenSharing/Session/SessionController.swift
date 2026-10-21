@@ -273,6 +273,7 @@ final class SessionController: Identifiable {
     @PerceptionIgnored private var server: ServerAuthentication?
     @PerceptionIgnored private var probeTask: Task<Void, Never>?
     @PerceptionIgnored private var trustedFingerprint = ""
+    @PerceptionIgnored private var allowsUnverifiedLogin = false
     @PerceptionIgnored private var passwordUpdate = PasswordUpdate.keep
     @PerceptionIgnored private var usedSavedPassword = false
     @PerceptionIgnored private var device: DeviceInfo?
@@ -508,6 +509,7 @@ final class SessionController: Identifiable {
             remoteProtocol: route.remoteProtocol,
             platform: route.knownPlatform,
             trustedFingerprint: trustedFingerprint,
+            allowsUnverifiedLogin: allowsUnverifiedLogin,
             keyboardLayout: WindowsKeyboardLayout.current,
             clientName: route.remoteProtocol == .rdp || credentials.username.isEmpty ? Self.deviceName : credentials.username,
             credentials: credentials,
@@ -581,6 +583,11 @@ final class SessionController: Identifiable {
         if let computerID {
             save { try $0.setTrustedFingerprint(fingerprint, for: computerID) }
         }
+        retry()
+    }
+
+    func allowUnverifiedLogin() {
+        allowsUnverifiedLogin = true
         retry()
     }
 
@@ -785,10 +792,12 @@ final class SessionController: Identifiable {
                 hasConnected = true
                 recordConnection()
             }
-            if info.fingerprint != trustedFingerprint, let computerID {
-                save { try $0.setTrustedFingerprint(info.fingerprint, for: computerID) }
+            if !info.fingerprint.isEmpty, info.fingerprint != trustedFingerprint {
+                if let computerID {
+                    save { try $0.setTrustedFingerprint(info.fingerprint, for: computerID) }
+                }
+                trustedFingerprint = info.fingerprint
             }
-            trustedFingerprint = info.fingerprint
             pipeline.setExpectsVideo(usesHighPerformance)
             let sendsClipboard = sendChangedClipboard { [weak self] sent in
                 guard let self, !sent else { return }

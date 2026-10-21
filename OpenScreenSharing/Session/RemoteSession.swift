@@ -34,6 +34,7 @@ nonisolated struct SessionFailure: Error, Equatable, Sendable {
         case closedByServer
         case unsupported
         case certificateChanged(fingerprint: String)
+        case unverifiedServer
         case highPerformance(MediaFailure.Kind)
         case drawingFailed
         case ended
@@ -219,6 +220,7 @@ nonisolated struct SessionConfiguration: Sendable {
     var remoteProtocol: RemoteProtocol
     var platform: RemotePlatform?
     var trustedFingerprint: String
+    var allowsUnverifiedLogin = false
     var keyboardLayout: Int
     var clientName: String
     var credentials: SessionCredentials

@@ -8,15 +8,15 @@ struct NewComputer: Hashable {
     var password = ""
     var server: ProbedServer
 
-    func signedIn(_ credentials: SessionCredentials, supportsHighPerformance: Bool) -> SignedInComputer {
+    func signedIn(_ credentials: SessionCredentials, check: LoginCheck) -> SignedInComputer {
         let account = credentials.account
         var saved = Computer(
             name: name, address: server.address, remoteProtocol: server.remoteProtocol, username: account?.username ?? "")
         saved.password = account?.password ?? ""
         saved.authenticates = account != nil
         saved.model = model ?? ""
-        saved.trustedFingerprint = server.fingerprint
-        saved.usesHighPerformance = supportsHighPerformance
+        saved.trustedFingerprint = check.fingerprint
+        saved.usesHighPerformance = check.supportsHighPerformance
         return SignedInComputer(computer: saved, credentials: credentials, server: server.authentication)
     }
 }
@@ -194,8 +194,10 @@ struct SetupSignInView: View {
             guard !Task.isCancelled else { return }
             task = nil
             switch result {
-            case .success(let supportsHighPerformance):
-                next(computer.signedIn(attempt, supportsHighPerformance: supportsHighPerformance))
+            case .success(let check):
+                next(computer.signedIn(attempt, check: check))
+            case .failure(let failure) where failure.kind == .unverifiedServer:
+                next(computer.signedIn(attempt, check: LoginCheck(supportsHighPerformance: false, fingerprint: "")))
             case .failure(let failure):
                 problem = SetupProblem(failure, host: computer.server.address.host, asksForUsername: asksForUsername)
                 focusedField = failure.kind == .authenticationFailed ? .password : nil

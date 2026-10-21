@@ -1,6 +1,7 @@
 package rfb
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/nekohasekai/open-screen-sharing/internal/gss"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -65,6 +67,7 @@ func (s *ServerInfo) MaximumVirtualDisplays() int {
 }
 
 type handshake struct {
+	ctx          context.Context
 	conn         net.Conn
 	stream       *stream
 	options      *Options
@@ -72,6 +75,7 @@ type handshake struct {
 	info         ServerInfo
 	securityType SecurityType
 	wrapKey      []byte
+	kerberos     *gss.Initiator
 	selected     func(SecurityType)
 }
 
@@ -165,13 +169,17 @@ func (h *handshake) readSecurityTypes() error {
 func (h *handshake) authenticate() error {
 	preferred := h.options.SecurityTypes
 	if len(preferred) == 0 {
-		preferred = SecurityAccount
+		host, _, _ := net.SplitHostPort(h.options.Address)
+		preferred = AccountSecurityTypes(host)
 	}
 	err := h.readSecurityTypes()
 	if err != nil {
 		return err
 	}
-	h.securityType, err = chooseSecurityType(h.info.SecurityTypes, preferred, h.options.AllowUnverifiedLogin)
+	h.securityType, err = h.chooseSecurityType(preferred)
+	if h.kerberos != nil {
+		defer h.kerberos.Close()
+	}
 	if err != nil {
 		return err
 	}

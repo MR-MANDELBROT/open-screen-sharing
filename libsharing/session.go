@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -206,7 +207,7 @@ func (s *Session) Connect() error {
 			return connected, nil
 		}
 	default:
-		options, err := rfbOptions(&s.options)
+		options, err := rfbOptions(&s.options, s.handler.OnServerCertificate)
 		if err != nil {
 			return err
 		}
@@ -229,12 +230,21 @@ func (s *Session) Connect() error {
 	return nil
 }
 
-func rfbOptions(o *SessionOptions) (rfb.Options, error) {
+func rfbOptions(o *SessionOptions, seen func(fingerprint string)) (rfb.Options, error) {
+	trusted := o.TrustedFingerprint
 	options := rfb.Options{
-		Address:             net.JoinHostPort(o.Host, strconv.Itoa(int(o.Port))),
-		Username:            o.Username,
-		Password:            o.Password,
-		ClientName:          o.ClientName,
+		Address:              net.JoinHostPort(o.Host, strconv.Itoa(int(o.Port))),
+		Username:             o.Username,
+		Password:             o.Password,
+		ClientName:           o.ClientName,
+		AllowUnverifiedLogin: o.AllowUnverifiedLogin,
+		VerifyServerKey: func(fingerprint string) error {
+			seen(fingerprint)
+			if trusted != "" && !strings.EqualFold(fingerprint, trusted) {
+				return E.Extend(rfb.ErrServerKeyChanged, "fingerprint ", fingerprint, " is not the trusted ", trusted)
+			}
+			return nil
+		},
 		Quality:             rfb.Quality(o.Quality),
 		Mode:                rfb.Mode(o.Mode),
 		Clipboard:           o.SharedClipboard,
@@ -246,7 +256,7 @@ func rfbOptions(o *SessionOptions) (rfb.Options, error) {
 	}
 	switch o.LoginType {
 	case LoginAccount:
-		options.SecurityTypes = rfb.SecurityAccount
+		options.SecurityTypes = rfb.AccountSecurityTypes(o.Host)
 	case LoginRequestControl:
 		options.SecurityTypes = rfb.SecurityAskPermission
 	case LoginRequestObserve:
@@ -377,7 +387,7 @@ func classifyError(err error) (int32, string) {
 		return ErrorUnsupportedServer, err.Error()
 	case errors.Is(err, rfb.ErrUnverifiedServer):
 		return ErrorUnverifiedServer, err.Error()
-	case errors.Is(err, rdp.ErrCertificateChanged):
+	case E.IsMulti(err, rdp.ErrCertificateChanged, rfb.ErrServerKeyChanged):
 		return ErrorCertificateChanged, err.Error()
 	case E.IsMulti(err, rdp.ErrSessionEnded, rdp.ErrSessionReplaced):
 		return ErrorSessionEnded, err.Error()

@@ -97,6 +97,7 @@ type Options struct {
 	SecurityTypes        []SecurityType
 	ClientName           string
 	AllowUnverifiedLogin bool
+	VerifyServerKey      func(fingerprint string) error
 
 	Quality             Quality
 	Mode                Mode

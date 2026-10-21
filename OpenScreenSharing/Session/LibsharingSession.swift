@@ -31,6 +31,7 @@ nonisolated final class LibsharingRemoteSession: @unchecked Sendable {
             case nil: LibsharingPlatformUnknown
             }
         options.trustedFingerprint = configuration.trustedFingerprint
+        options.allowUnverifiedLogin = configuration.allowsUnverifiedLogin
         options.keyboardLayout = Int32(configuration.keyboardLayout)
         options.audio = configuration.receivesAudio
         options.microphone = configuration.sendsAudio
@@ -553,6 +554,8 @@ nonisolated private final class LibsharingHandler: NSObject, LibsharingSessionHa
             case LibsharingErrorCertificateChanged:
                 let fingerprint = locked { info.fingerprint }
                 delegate.sessionPhaseChanged(.failed(SessionFailure(.certificateChanged(fingerprint: fingerprint), message: text)))
+            case LibsharingErrorUnverifiedServer:
+                delegate.sessionPhaseChanged(.failed(SessionFailure(.unverifiedServer, message: text)))
             default:
                 let started = locked { info.framebufferWidth > 0 }
                 delegate.sessionPhaseChanged(.failed(SessionFailure(started ? .ended : .other, message: text)))

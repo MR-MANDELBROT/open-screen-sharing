@@ -176,7 +176,7 @@ func Dial(ctx context.Context, options Options, handler Handler) (*Client, error
 	stop := context.AfterFunc(ctx, func() {
 		conn.Close()
 	})
-	err = client.setup()
+	err = client.setup(ctx)
 	if !stop() {
 		err = E.Errors(ctx.Err(), err)
 	}
@@ -205,9 +205,9 @@ func (c *Client) abandonMedia() {
 	}
 }
 
-func (c *Client) setup() error {
+func (c *Client) setup(ctx context.Context) error {
 	c.stream = newStream(c.conn)
-	h := &handshake{conn: c.conn, stream: c.stream, options: &c.options, logger: c.logger}
+	h := &handshake{ctx: ctx, conn: c.conn, stream: c.stream, options: &c.options, logger: c.logger}
 	err := h.negotiateVersion()
 	if err != nil {
 		return err

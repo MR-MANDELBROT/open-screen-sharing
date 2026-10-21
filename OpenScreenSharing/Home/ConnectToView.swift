@@ -219,9 +219,9 @@ struct ConnectToView: View {
             return nil
         }
         switch await ServerProber.checkLogin(server, credentials: credentials) {
-        case .success(let supportsHighPerformance):
+        case .success(let check):
             guard !Task.isCancelled else { return nil }
-            signedIn(computer.signedIn(credentials, supportsHighPerformance: supportsHighPerformance))
+            signedIn(computer.signedIn(credentials, check: check))
             return nil
         case .failure(let failure):
             return SetupProblem(failure, host: host, asksForUsername: false)
