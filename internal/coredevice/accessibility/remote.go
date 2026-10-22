@@ -145,8 +145,6 @@ func (c *RemoteClient) Close() error {
 		// only for clientNeedsAccessibility:false, then cancels DTX
 		// (0x253f9c578..0x253f9c5a8). Socket loss (0x253f9bc3c, 0x253f9bf94)
 		// leaves server -> manager -> _transportChannel -> server retained.
-		// See RE/24B5110a/AccessibilityPlatformTranslation/
-		// remote-cache-lifecycle-20261018.json.
 		if c.enabled {
 			c.closeErr = c.conn.Notify(c.owner, "clientNeedsAccessibility:", false)
 			if c.closeErr == nil {
@@ -262,8 +260,7 @@ func (c *RemoteClient) readPasscodeApplication(ctx context.Context, state *Passc
 		raw.code = &code
 	}
 	if batchRaw && candidate.code != 0 {
-		// One failing attribute sets the error of the whole batch response
-		// (24B5110a, RE/24B5110a/axAuditDaemon/probes-20261017/remoteax-passcode2.jsonl).
+		// One failing attribute sets the error of the whole batch response (24B5110a).
 		c.batchRawElementDisabled = true
 		raw.status = "response_error"
 		candidate, err = c.readPasscodeQuery(ctx, state, "candidate", requestAttributes, &app, 0, 0, map[string]any{"attributes": attributes[:len(attributes)-1]})
@@ -354,7 +351,7 @@ func (c *RemoteClient) readPasscodeField(ctx context.Context, state PasscodeStat
 		return state, nil
 	}
 	// Requests share no UI snapshot, so the field read above may already be
-	// replaced (24A446, RE/24A446/AccessibilityPlatformTranslation/batch-request-semantics.json).
+	// replaced (24A446).
 	recheck, err := c.readPasscodeQuery(ctx, &state, "responder_recheck", requestAttribute, &app, attributeNative, nativeFirstResponder, map[string]any{"parameter": int64(nativeFirstResponder)})
 	if err != nil {
 		return state, err

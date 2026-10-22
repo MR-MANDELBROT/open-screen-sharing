@@ -10,13 +10,10 @@ final class LocalBrightness {
     nonisolated private static let displayStatusKey = "com.apple.iokit.hid.displayStatus"
     private static let brightnessChangedKey = "UIBacklightLevelChangedNotification"
     // backboardd 24B5110a quantizes unentitled brightness reads to 0.05.
-    // RE: /Volumes/Solidigm/RE/24B5110a/backboardd/brightness-api-contract.json
     private static let readbackTolerance: Float = 0.0251
     // backboardd 24B5110a commits an implicit write 1.0 s after the last one and acknowledges
     // nothing; Power before that left the next wake at zero on iPad17,1, whose commit was
     // logged 1.11 s after the write.
-    // RE: /Volumes/Solidigm/RE/24B5110a/backboardd/brightness-immediate-path-audit.json
-    // RE: /Volumes/Solidigm/RE/24B5110a/backboardd/brightness-late-commit-device-evidence.json
     private static let commitDelay: TimeInterval = 1.5
     // BackBoardServices 24A446/24B5089g initializes the public getter's result to 1
     // and discards this MIG return code. Its server port is framework-owned.
@@ -40,7 +37,6 @@ final class LocalBrightness {
 
     // This checked RPC permits applications and preserves backboardd's system target.
     // Raw Set/Restore require an entitlement, and their one-way result hides rejection.
-    // RE: /Volumes/Solidigm/RE/24B5110a/backboardd/brightness-api-contract.json
     nonisolated private static let setTemporaryBrightness: (@Sendable (Float) -> Int32)? = {
         typealias ServerPort = @convention(c) () -> UInt32
         typealias SetBrightness = @convention(c) (UInt32, Float) -> Int32
@@ -264,7 +260,6 @@ final class LocalBrightness {
         }
         // On 24B5110a, Home and unlock ramps can overwrite zero after BLS reports
         // ActiveOn/nontransition, without a Darwin notification under implicit suppression.
-        // RE: /Volumes/Solidigm/RE/24B5110a/backboardd/brightness-cycle-recovery-device-evidence.json
         try await setBrightness(0, operation: operation)
         guard !operation.isCancelled else { return }
         if watched { confirmedDim = .dim(server) }
@@ -302,7 +297,6 @@ final class LocalBrightness {
             // and writes it back when exiting, unless auto-brightness was on at entry or Domino
             // mode is on. Restore the target before sending Power: Off/wake cycles otherwise
             // repeatedly back up the temporary zero.
-            // RE: /Volumes/Solidigm/RE/24B5110a/CoreBrightness/brightness-aod-backup-contract.json
             try await setBrightness(dimmed.brightness, operation: operation)
             guard await waitUntil(operation: operation, pollInterval: 0.05, {
                 guard let brightness = self.readStableBrightness() else { return false }

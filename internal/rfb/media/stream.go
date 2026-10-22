@@ -28,7 +28,7 @@ const (
 	// 0.25 s; DecoderRequestKeyFrame independently handles decoder failures
 	// (26A434 AVConference, _VideoPacketBuffer_GetNextFrame
 	// 0x1c0f30b0c..0x1c0f30b70, __VideoReceiver_DecoderRequestKeyFrame
-	// 0x1c0f51200; RE/26A434/AVConference/android-receiver-recovery-findings.txt).
+	// 0x1c0f51200).
 	keyframeInterval = 250 * time.Millisecond
 	receiveTick      = 10 * time.Millisecond
 	maxDatagram      = 65536
@@ -46,8 +46,7 @@ const (
 	// createAVCVideoStreamWithRemoteAddress: 0x100009db0..0x100009db8,
 	// WaitForDisplayReconfigureToFinish 0x10003e2b4..0x10003e354; screensharingd 756.36.5.2,
 	// macOS 27.0.1 26A434, UUID 44908B06-F788-3822-ABC4-2285001F6A8D,
-	// SendFrameBuffer 0x100021f1c..0x100021f40, 0x100023a14..0x100023a94;
-	// RE/26A434/ScreensharingAgent/media-restart-socket-close.txt).
+	// SendFrameBuffer 0x100021f1c..0x100021f40, 0x100023a14..0x100023a94).
 	restartLimit = 3 * time.Second
 )
 

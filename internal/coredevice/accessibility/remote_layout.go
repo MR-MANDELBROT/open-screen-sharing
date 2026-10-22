@@ -79,13 +79,11 @@ func (c *RemoteClient) readPasscodeLayoutForApp(ctx context.Context, app transla
 	}
 	if frame := out.AppFrame; frame != nil && frame.Width > 0 && frame.Height > 0 {
 		// On iPhone18,2 this is inside the Face ID button and 18 pt above the
-		// keypad's first hit row (24A446,
-		// RE/24A446/SpringBoardUIServices/biometric-touch/findings.json).
+		// keypad's first hit row (24A446).
 		point := LayoutPoint{X: frame.X + frame.Width*0.5, Y: frame.Y + frame.Height*0.325}
 		if c.deviceClass == "iPad" {
 			// The biometric button is centered on the screen whatever the
-			// interface orientation; hit tests use the portrait-native space
-			// (RE/24A446/UIAccessibility/hit-test-coordinate-findings.json).
+			// interface orientation; hit tests use the portrait-native space (24A446).
 			point = LayoutPoint{X: min(frame.Width, frame.Height) / 2, Y: max(frame.Width, frame.Height) / 2}
 		}
 		if finiteLayoutNumber(point.X) && finiteLayoutNumber(point.Y) {

@@ -288,9 +288,8 @@ const homePressSpacing = 500 * time.Millisecond
 
 // The iPad passcode page ignores a hardware keyboard even when its field is
 // the first responder. Home wakes the display and then asks for the unlock UI
-// (RE/24B5110a/SpringBoard/home-button-emulation-findings.txt); a touch up
-// anywhere on the biometric button skips the face scan (24A446
-// SpringBoardUIServices 0x1a7dada7c, 0x1a7dafa90).
+// (24B5110a SpringBoard); a touch up anywhere on the biometric button skips the
+// face scan (24A446 SpringBoardUIServices 0x1a7dada7c, 0x1a7dafa90).
 func (t *deviceUnlockTarget) prepareTouchPad(ctx context.Context, started time.Time) error {
 	w := t.worker
 	if t.worker.server.options.AutoUnlockPasscodeType != PasscodePIN {
@@ -469,8 +468,7 @@ func (t *deviceUnlockTarget) key(ctx context.Context, stroke asciiKeystroke) err
 	}
 	// Once the field is ready, immediate down/up transitions, each key after a
 	// lock-state read, passed ten prefix-and-clear trials on iPhone18,2 / iOS
-	// 27.2 24B5110a (RE/24B5110a/dtuhidd/unlock-timing-20261017/
-	// zero-hold-prefix10-summary.json).
+	// 27.2 24B5110a.
 	if err := input.KeyUp(ctx, stroke.usage); err != nil {
 		return err
 	}

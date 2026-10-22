@@ -97,9 +97,8 @@ func (c *RemoteClient) ReadPasscodePad(ctx context.Context) (*PasscodePad, error
 }
 
 // The passcode field's accessibility value is a localized string, not the
-// entered digits (24A446, RE/24A446/AccessibilityPlatformTranslation/
-// focused-attribute-evidence.json). The key below zero is Delete while digits
-// are entered and Cancel otherwise; only Delete carries these traits.
+// entered digits (24A446). The key below zero is Delete while digits are
+// entered and Cancel otherwise; only Delete carries these traits.
 func (c *RemoteClient) PasscodeEntered(ctx context.Context, pad *PasscodePad) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
