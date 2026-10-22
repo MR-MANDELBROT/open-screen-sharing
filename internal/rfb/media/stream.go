@@ -110,6 +110,7 @@ type leg struct {
 	sender      *srtcpSender
 	sendBuffer  []byte
 	sources     map[uint32]*receptionStats
+	clock       senderClock
 	lastHeardAt time.Time
 	heard       bool
 }
@@ -481,7 +482,7 @@ func (s *Stream) handleVideoDatagram(video *leg, assembler **videoAssembler, dat
 				return
 			}
 		}
-		*assembler = newVideoAssembler(codec, bands, s.config.Offer.options.ImmediatePlayout, s.config.Sink, func() {
+		*assembler = newVideoAssembler(codec, bands, s.config.Offer.options.ImmediatePlayout, s.config.Sink, &video.clock, func() {
 			s.requestKeyframe(video, false)
 		})
 		if answer != nil && answer.SSRC != 0 {
@@ -515,13 +516,14 @@ func (s *Stream) handleReports(target *leg, datagram []byte, now time.Time) bool
 	target.heard = true
 	s.refusedAt = time.Time{}
 	s.stats.SenderReports++
-	senderReports(compound, func(ssrc uint32, ntpMiddle uint32) {
+	senderReports(compound, func(ssrc uint32, ntpMiddle uint32, timestamp uint32) {
 		source := target.sources[ssrc]
 		if source == nil {
 			return
 		}
 		source.lastSenderReport = ntpMiddle
 		source.senderReportAt = now
+		target.clock.observe(ssrc, timestamp, now.UnixNano())
 	})
 	return true
 }

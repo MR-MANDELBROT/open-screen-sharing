@@ -354,14 +354,13 @@ nonisolated struct VideoAccessUnit: @unchecked Sendable {
     var discontinuity: Bool
     var turns: PictureTurns
     var arrival: CFTimeInterval
-    var libraryHold: TimeInterval
+    var composed: CFTimeInterval?
 }
 
 nonisolated struct FrameTiming: Sendable {
     var arrival: CFTimeInterval
-    var libraryHold: TimeInterval
-    var decode: TimeInterval
     var capture: CFTimeInterval
+    var composed: CFTimeInterval?
 }
 
 nonisolated struct DecodedVideoFrame: @unchecked Sendable {
@@ -390,12 +389,15 @@ nonisolated struct SessionStatistics: Sendable {
     var roundTripMilliseconds: Double
     var receivedBytes: Int64
     var encoding: String?
+    var packets: PacketStatistics?
     var video: VideoStreamStatistics?
 }
 
+nonisolated struct PacketStatistics: Sendable {
+    var received: Int64
+    var expected: Int64
+}
+
 nonisolated struct VideoStreamStatistics: Sendable {
-    var packets: Int64
-    var expectedPackets: Int64
-    var keyframeRequests: Int64
-    var queuingDelayMilliseconds: Double
+    var losses: Int64
 }
