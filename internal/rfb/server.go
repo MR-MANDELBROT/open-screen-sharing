@@ -55,13 +55,12 @@ type ServerOptions struct {
 	Logger           *slog.Logger
 	Handler          ServerHandler
 
-	Flags                     uint32
-	Commands                  []uint8
-	CommandBitmap             *[16]byte
-	RekeyAfterEncryptionStart bool
-	SystemCommands            []SystemCommand
-	DeviceModel               string
-	DisplayFlags              uint32
+	Flags          uint32
+	Commands       []uint8
+	CommandBitmap  *[16]byte
+	SystemCommands []SystemCommand
+	DeviceModel    string
+	DisplayFlags   uint32
 
 	Media media.ServerStreamConfig
 }

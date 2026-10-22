@@ -311,7 +311,7 @@ func (s *ServerSession) prelude() ([][]byte, error) {
 		s.logger.Debug("set encryption", "command", command)
 		switch command {
 		case 1:
-			if !s.server.options.RekeyAfterEncryptionStart && !s.writerStarted {
+			if !s.writerStarted {
 				err = s.startWriter()
 			}
 		case 2:

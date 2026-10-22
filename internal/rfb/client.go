@@ -278,8 +278,14 @@ func (c *Client) startApple() error {
 		prelude = append(prelude, autoPasteboardMessage(true)...)
 	}
 	prelude = append(prelude, 0x12, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1)
-	prelude = append(prelude, 0x12, 0, 0, 2, 0, 1, 0, 0)
-	_, err := c.conn.Write(prelude)
+	// ScreenSharing configures the session in plain text after the first
+	// SetEncryption and sends the second only after the server's keys arrive.
+	// screensharingd holds those keys while its displays sleep, and its
+	// SetEncodings handler declares user activity to wake them
+	// (ScreenSharing 776.27, macOS 27.0.1 26A434, UUID EC0B2C20-F816-3FCE-822D-F9403C09EB50,
+	// -[SSSession stConfigureSession] 0x1cc05fc10..0x1cc060590, _HandleFramebufferUpdate 0x1cc1511c4..0x1cc151e60;
+	// screensharingd 756.36.5.2, SendFrameBuffer 0x100021a5c..0x100021ae8, HandleSetEncodingsMessage 0x1000386b0).
+	err := c.writer.Write(append([][]byte{prelude}, c.firstMessages(c.prepare())...))
 	if err != nil {
 		return err
 	}
@@ -290,6 +296,10 @@ func (c *Client) startApple() error {
 			return E.Cause(err, "wait for the record layer")
 		}
 	}
+	err = c.writer.Write([][]byte{{0x12, 0, 0, 2, 0, 1, 0, 0}})
+	if err != nil {
+		return err
+	}
 	encoder := &recordEncoder{}
 	err = encoder.rekey(c.rekeyKeys)
 	if err != nil {
@@ -297,7 +307,7 @@ func (c *Client) startApple() error {
 	}
 	c.writer.SetEncoder(encoder.encode)
 	c.logger.Debug("record layer active")
-	return c.writer.Write(c.firstMessages(c.prepare()))
+	return nil
 }
 
 func (c *Client) firstMessages(displayChanges [][]byte) [][]byte {

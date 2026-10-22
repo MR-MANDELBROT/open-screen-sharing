@@ -53,7 +53,6 @@ func main() {
 	commands := flag.String("commands", "", "comma-separated client message types offered in ServerInit")
 	commandBitmap := flag.String("command-bitmap", "", "32 hex digits sent as the command bitmap without checks")
 	displayFlags := flag.String("display-flags", "", "the display's layout flags (default rfb.DisplayFlagMain)")
-	rekeyLate := flag.Bool("rekey-after-encryption-start", false, "send the record keys after the viewer's second SetEncryption")
 	model := flag.String("model", "", "model sent in encoding 1110 instead of the device's, such as Mac14,3")
 	videoPort := flag.Uint("video-port", 0, "video UDP port (default: the listen port + 1)")
 	audioPort := flag.Uint("audio-port", 0, "audio UDP port (default: the listen port + 2)")
@@ -107,12 +106,11 @@ func main() {
 		fatal(E.New("media ports ", *videoPort, " and ", *audioPort, " must be below 65536"))
 	}
 	rfbOptions := rfb.ServerOptions{
-		Name:                      *name,
-		Password:                  *password,
-		Username:                  *username,
-		NoAuthentication:          *noAuthentication,
-		RekeyAfterEncryptionStart: *rekeyLate,
-		DeviceModel:               *model,
+		Name:             *name,
+		Password:         *password,
+		Username:         *username,
+		NoAuthentication: *noAuthentication,
+		DeviceModel:      *model,
 	}
 	rfbOptions.Media.VideoPort = uint16(*videoPort)
 	rfbOptions.Media.AudioPort = uint16(*audioPort)
