@@ -15,10 +15,13 @@ import (
 // AXPTranslatorRequest request types (24A446 AccessibilityPlatformTranslation,
 // -[AXPTranslator processTranslatorRequest:] 0x24fe57a4c).
 const (
-	requestAttribute  = 2
-	requestFrontmost  = 4
-	requestAttributes = 5
-	requestHitTest    = 6
+	requestApplication = 1
+	requestAttribute   = 2
+	requestFrontmost   = 4
+	requestAttributes  = 5
+	requestHitTest     = 6
+	requestAction      = 7
+	requestTree        = 11
 )
 
 // AXPAttribute numbers (24A446 AccessibilityPlatformTranslation,
@@ -28,8 +31,10 @@ const (
 const (
 	attributeBundleIdentifier = 6
 	attributeChildren         = 8
+	attributeCustomActions    = 13
 	attributeFocusedElement   = 19
 	attributeFrame            = 21
+	attributeIdentifier       = 25
 	attributeIsEnabled        = 27
 	attributeIsValid          = 31
 	attributeIsVisible        = 32
@@ -70,6 +75,7 @@ type RemoteClient struct {
 	readError               error
 	done                    chan struct{}
 	batchRawElementDisabled bool
+	notifications           chan []translationObject
 }
 
 func DialRemote(ctx, owner context.Context, device *coredevice.Device) (_ *RemoteClient, err error) {
@@ -97,6 +103,7 @@ func DialRemote(ctx, owner context.Context, device *coredevice.Device) (_ *Remot
 	c := &RemoteClient{
 		conn: dtxConn, ctx: operation, owner: owner, cancel: cancel,
 		deviceClass: device.Info().DeviceClass, done: make(chan struct{}),
+		notifications: make(chan []translationObject, 1),
 	}
 	c.mu.Lock()
 	go c.readLoop()
@@ -212,7 +219,7 @@ func (c *RemoteClient) readPasscodeQuery(ctx context.Context, state *PasscodeSta
 	state.Diagnostics.NativeAttribute = native
 	state.Diagnostics.ResponseCode = nil
 	state.Reason = stage + "_transport_error"
-	response, err := c.query(ctx, kind, obj, attribute, params)
+	response, err := c.query(ctx, kind, obj, attribute, 0, params)
 	if err == nil {
 		state.Diagnostics.ResponseCode = &response.code
 		state.Reason = stage + "_response_error"
@@ -430,7 +437,7 @@ type remoteResponse struct {
 // AXP responses carry the request type but no identifier (24A446
 // AccessibilityPlatformTranslation -[AXPTranslatorResponse encodeWithCoder:]
 // 0x24fe59764).
-func (c *RemoteClient) query(ctx context.Context, kind uint64, obj *translationObject, attribute uint64, params any) (response remoteResponse, err error) {
+func (c *RemoteClient) query(ctx context.Context, kind uint64, obj *translationObject, attribute, action uint64, params any) (response remoteResponse, err error) {
 	var empty remoteResponse
 	if err := ctx.Err(); err != nil {
 		return empty, err
@@ -462,7 +469,7 @@ func (c *RemoteClient) query(ctx context.Context, kind uint64, obj *translationO
 		}, PrimitiveFields: []string{"pid", "isApplicationElement", "didPopuldateAppInfo"}}
 	}
 	data, err := dtx.MarshalArchive(dtx.Object{ClassName: "AXPTranslatorRequest", Fields: map[string]any{
-		"requestType": kind, "attributeType": attribute, "actionType": int64(0), "clientType": int64(2),
+		"requestType": kind, "attributeType": attribute, "actionType": action, "clientType": int64(2),
 		"translation": translation, "parameters": params,
 	}, PrimitiveFields: []string{"requestType", "attributeType", "actionType", "clientType"}})
 	if err != nil {
@@ -543,6 +550,10 @@ func (c *RemoteClient) receive(event dtx.Event) error {
 			return E.New("accessibility: invalid remote AX response metadata")
 		}
 		if notification != 0 {
+			continue
+		}
+		if kind == requestTree && code == 0 {
+			c.receiveScreenViewingNotifications(response["resultData"])
 			continue
 		}
 		c.stateMu.Lock()

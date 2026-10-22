@@ -128,12 +128,13 @@ type Server struct {
 }
 
 type attachment struct {
-	device     *coredevice.Device
-	display    *display.Client
-	pasteboard *pasteboard.Client
-	ctx        context.Context
-	owner      context.Context
-	cancel     context.CancelFunc
+	device            *coredevice.Device
+	display           *display.Client
+	pasteboard        *pasteboard.Client
+	ctx               context.Context
+	owner             context.Context
+	cancel            context.CancelFunc
+	notificationsDone chan error
 }
 
 func New(options Options) (*Server, error) {
@@ -534,6 +535,10 @@ func (s *Server) attach(a *attachment) *attachment {
 	s.attachWake = make(chan struct{})
 	s.access.Unlock()
 	go s.pollDisplay(a)
+	if !s.options.DisableInput && a.device.HasService("com.apple.accessibility.axAuditDaemon.remoteAXService") {
+		a.notificationsDone = make(chan error, 1)
+		go func() { a.notificationsDone <- s.dismissScreenViewingNotifications(a) }()
+	}
 	s.clip.update()
 	return a
 }
@@ -549,7 +554,11 @@ func (s *Server) detach(a *attachment) error {
 	inputErr := s.input.forgetAndWait()
 	buttonErr := s.buttons.close()
 	streamErr := s.streams.stopDevice(a.device)
-	return E.Errors(inputErr, buttonErr, streamErr)
+	var notificationErr error
+	if a.notificationsDone != nil {
+		notificationErr = <-a.notificationsDone
+	}
+	return E.Errors(inputErr, buttonErr, streamErr, notificationErr)
 }
 
 func (s *Server) currentDevice() *attachment {
