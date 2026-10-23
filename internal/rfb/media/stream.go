@@ -9,7 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sagernet/sing/common/buf"
+	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
+	N "github.com/sagernet/sing/common/network"
 )
 
 const (
@@ -32,6 +35,7 @@ const (
 	keyframeInterval = 250 * time.Millisecond
 	receiveTick      = 10 * time.Millisecond
 	maxDatagram      = 65536
+	readBatchSize    = 16
 
 	drainQuiet   = 150 * time.Millisecond
 	drainMinimum = 250 * time.Millisecond
@@ -102,6 +106,7 @@ type Stream struct {
 
 type leg struct {
 	conn        *net.UDPConn
+	reader      N.ConnectedPacketBatchReadWaiter
 	localSSRC   uint32
 	srtp        *srtpReceiver
 	reports     *srtcpReceiver
@@ -171,13 +176,13 @@ func (s *Stream) handlePorts(ports *Ports) error {
 			" to video ", ports.Video.Port, " and audio ", ports.Audio.Port)
 	}
 	offer := s.config.Offer
-	video, err := s.openLeg(ports.Video.Port, offer.videoSend[:], offer.videoReceive[:], offer.videoSSRC, videoReceiveBuffer)
+	video, err := s.openLeg(ports.Video.Port, offer.videoSend[:], offer.videoReceive[:], offer.videoSSRC, videoReceiveBuffer, readBatchSize)
 	if err != nil {
 		return err
 	}
 	var audio *leg
 	if ports.Audio.Enabled && ports.Audio.Port != 0 {
-		audio, err = s.openLeg(ports.Audio.Port, offer.audioSend[:], offer.audioReceive[:], offer.audioSSRC, audioReceiveBuffer)
+		audio, err = s.openLeg(ports.Audio.Port, offer.audioSend[:], offer.audioReceive[:], offer.audioSSRC, audioReceiveBuffer, 1)
 		if err != nil {
 			_ = video.conn.Close()
 			return err
@@ -196,13 +201,20 @@ func (s *Stream) handlePorts(ports *Ports) error {
 	return nil
 }
 
-func (s *Stream) openLeg(port uint16, sendKey []byte, receiveKey []byte, localSSRC uint32, buffer int) (*leg, error) {
+func (s *Stream) openLeg(port uint16, sendKey []byte, receiveKey []byte, localSSRC uint32, buffer int, batch int) (*leg, error) {
 	conn, err := dialLeg(s.config.Local, netip.AddrPortFrom(s.config.Remote, port), buffer)
 	if err != nil {
 		return nil, E.Cause(err, "media: open UDP port ", port)
 	}
+	reader, created := bufio.CreateConnectedPacketBatchReadWaiter(bufio.NewUnbindPacketConn(conn))
+	if !created {
+		_ = conn.Close()
+		return nil, E.New("media: batched UDP reads are unsupported on this platform")
+	}
+	reader.InitializeReadWaiter(N.ReadWaitOptions{MTU: maxDatagram, BatchSize: batch})
 	return &leg{
 		conn:        conn,
+		reader:      reader,
 		localSSRC:   localSSRC,
 		srtp:        newSRTPReceiver(receiveKey),
 		reports:     newSRTCPReceiver(receiveKey),
@@ -334,7 +346,6 @@ func (s *Stream) receiveVideo(video *leg) {
 	var assembler *videoAssembler
 	var appliedAnswer *Answer
 	var unitsAtAnswer uint64
-	reader := newLegReader(video.conn, readBatchSize)
 	for {
 		deadline := time.Now().Add(receiveTick)
 		if assembler != nil {
@@ -343,7 +354,7 @@ func (s *Stream) receiveVideo(video *leg) {
 			}
 		}
 		_ = video.conn.SetReadDeadline(deadline)
-		datagrams, err := reader.read()
+		datagrams, _, err := video.reader.WaitReadConnectedPackets()
 		now := time.Now()
 		if err != nil {
 			if s.isDone() {
@@ -366,8 +377,8 @@ func (s *Stream) receiveVideo(video *leg) {
 			if s.applyVideoAnswer(assembler, &appliedAnswer, &unitsAtAnswer) {
 				s.requestKeyframe(video, false)
 			}
-			if index < len(datagrams) && len(datagrams[index]) > 0 {
-				s.handleVideoDatagram(video, &assembler, datagrams[index], now)
+			if index < len(datagrams) && !datagrams[index].IsEmpty() {
+				s.handleVideoDatagram(video, &assembler, datagrams[index].Bytes(), now)
 			}
 			if assembler != nil {
 				assembler.tick(now.UnixNano())
@@ -398,6 +409,7 @@ func (s *Stream) receiveVideo(video *leg) {
 				s.access.Unlock()
 			}
 		}
+		buf.ReleaseMulti(datagrams)
 		s.access.Lock()
 		silent := !s.refusedAt.IsZero() && now.Sub(s.refusedAt) > restartLimit
 		s.access.Unlock()
@@ -530,10 +542,9 @@ func (s *Stream) handleReports(target *leg, datagram []byte, now time.Time) bool
 func (s *Stream) receiveAudio(audio *leg) {
 	defer s.wg.Done()
 	receiver := &audioReceiver{sink: s.config.Sink}
-	reader := newLegReader(audio.conn, 1)
 	for {
 		_ = audio.conn.SetReadDeadline(time.Now().Add(receiveTick))
-		datagrams, err := reader.read()
+		datagrams, _, err := audio.reader.WaitReadConnectedPackets()
 		now := time.Now()
 		if err != nil {
 			if s.isDone() {
@@ -544,7 +555,8 @@ func (s *Stream) receiveAudio(audio *leg) {
 				return
 			}
 		}
-		for _, datagram := range datagrams {
+		for _, buffer := range datagrams {
+			datagram := buffer.Bytes()
 			if isRTCP(datagram) {
 				s.handleReports(audio, datagram, now)
 			} else {
@@ -560,6 +572,7 @@ func (s *Stream) receiveAudio(audio *leg) {
 				}
 			}
 		}
+		buf.ReleaseMulti(datagrams)
 		receiver.tick(now)
 	}
 }

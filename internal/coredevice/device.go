@@ -14,6 +14,7 @@ import (
 	"github.com/nekohasekai/open-screen-sharing/internal/coredevice/xpc"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
 )
 
 const checkinLabel = "open-screen-sharing"
@@ -204,8 +205,8 @@ func (d *Device) DialShim(ctx context.Context, name string) (*rsd.PlistConn, err
 	return plistConn, nil
 }
 
-func (d *Device) ListenUDP(port uint16) (*tunnel.UDPConn, error) {
-	return d.tunnel.ListenUDP(port)
+func (d *Device) ListenUDP(port uint16, options N.ReadWaitOptions) (*tunnel.UDPConn, error) {
+	return d.tunnel.ListenUDP(port, options)
 }
 
 func (d *Device) Close() error {

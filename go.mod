@@ -9,7 +9,7 @@ require (
 	github.com/nwaples/rardecode/v2 v2.4.5
 	github.com/sagernet/asc-go v0.0.0-20260914163356-9e3d45a797c1
 	github.com/sagernet/gomobile v0.1.13
-	github.com/sagernet/sing v0.9.5-0.20260917142815-f37989cadbf0
+	github.com/sagernet/sing v0.9.7-0.20261023072922-1b1a0ff12a68
 	github.com/sagernet/sing-tun v0.9.7-0.20261002083955-3f8acd9da65b
 	github.com/ulikunitz/xz v0.5.17
 	golang.org/x/crypto v0.57.0

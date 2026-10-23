@@ -11,11 +11,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sagernet/sing/common/buf"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
 const (
 	maxSourceFailures = 3
+	forwardBatchSize  = 32
 	videoSendBuffer   = 1 << 20
 	serverReadBuffer  = 256 << 10
 )
@@ -160,9 +162,14 @@ func (s *ServerStream) HandleOffer(message []byte) error {
 	generation := s.generation
 	s.closeLaterLocked(s.detachLocked())
 	now := time.Now()
-	s.video.setKeys(&offer.Video, now)
-	if s.audio != nil {
-		s.audio.setKeys(&offer.Audio, now)
+	err = s.video.setKeys(&offer.Video, now)
+	if err == nil && s.audio != nil {
+		err = s.audio.setKeys(&offer.Audio, now)
+	}
+	if err != nil {
+		s.logger.Warn("media offer", "error", err)
+		s.stats.Errors++
+		return s.config.Send(ErrorMessage(ServerErrorBadConfiguration, 0))
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
 	s.cancelOpen = cancel
@@ -254,9 +261,9 @@ func (s *ServerStream) open(ctx context.Context, cancel context.CancelFunc, gene
 	if audio != nil {
 		s.audio.activate(&serverActive{ssrc: audioInfo.SSRC, receiverSSRC: audioInfo.ReceiverSSRC, generation: generation})
 	}
-	session.wg.Go(func() { s.forward(session, s.video, video.ReadPacket, video.PacketArrival) })
+	session.wg.Go(func() { s.forward(session, s.video, video.ReadPackets) })
 	if audio != nil {
-		session.wg.Go(func() { s.forward(session, s.audio, audio.ReadPacket, nil) })
+		session.wg.Go(func() { s.forward(session, s.audio, audio.ReadPackets) })
 	}
 	s.logger.Info("media stream started", "ssrc", info.SSRC, "width", info.Width, "height", info.Height,
 		"sound", audio != nil, "target", s.video.currentTarget())
@@ -387,57 +394,73 @@ func (s *ServerStream) Stats() ServerStreamStats {
 	return stats
 }
 
-func (s *ServerStream) forward(session *serverSession, leg *serverLeg, read func(context.Context, []byte) (int, bool, error), arrival func() time.Time) {
-	buffer := make([]byte, maxDatagram+bandPositionGrowth+authTagLength)
+func (s *ServerStream) forward(session *serverSession, leg *serverLeg, read func(context.Context, []ServerPacket) (int, error)) {
 	isVideo := leg == s.video
+	batch := 1
+	if isVideo {
+		batch = forwardBatchSize
+	}
+	packets := make([]ServerPacket, batch)
+	datagrams := make([]*buf.Buffer, 0, batch)
 	var positioner *bandPositioner
 	if isVideo && !s.config.StripSliceTrailer {
 		positioner = newBandPositioner(session.video.Info())
 	}
 	for {
-		n, rtcp, err := read(session.ctx, buffer[:maxDatagram])
+		n, err := read(session.ctx, packets)
 		if err != nil {
 			s.sourceEnded(session, leg, err)
 			return
 		}
 		now := time.Now()
-		arrived := now
-		if arrival != nil {
-			arrived = now.Add(-now.Sub(arrival()))
-		}
-		if rtcp {
-			leg.access.Lock()
-			leg.recordDeviceRTCPLocked(buffer[:n], now, arrived)
-			leg.access.Unlock()
-			continue
-		}
-		packet := buffer[:n]
-		header, err := parseRTPHeader(packet)
-		if err != nil {
-			continue
-		}
-		if isVideo {
-			if s.config.StripSliceTrailer {
-				packet = stripSliceTrailer(packet, header.payloadOffset)
-			}
-			if !s.config.KeepExtensionProfile {
-				rewriteExtensionProfile(packet)
-			}
-			if positioner != nil {
-				packet = positioner.rewrite(packet, header)
-			}
-		}
+		datagrams = datagrams[:0]
 		leg.access.Lock()
-		datagram, target, ok := leg.protectLocked(packet, header, session.generation, now)
-		if ok && isVideo {
-			leg.timePacketLocked(header, len(packet), arrived, now)
+		for _, received := range packets[:n] {
+			arrived := now
+			if !received.Arrival.IsZero() {
+				arrived = now.Add(-now.Sub(received.Arrival))
+			}
+			if received.RTCP {
+				leg.recordDeviceRTCPLocked(received.Buffer.Bytes(), now, arrived)
+				received.Buffer.Release()
+				continue
+			}
+			buffer := received.Buffer
+			packet := buffer.Bytes()
+			header, err := parseRTPHeader(packet)
+			if err != nil {
+				buffer.Release()
+				continue
+			}
+			if isVideo {
+				if s.config.StripSliceTrailer {
+					packet = stripSliceTrailer(packet, header.payloadOffset)
+				}
+				if !s.config.KeepExtensionProfile {
+					rewriteExtensionProfile(packet)
+				}
+				if positioner != nil {
+					packet = positioner.rewrite(packet, header)
+				}
+			}
+			datagram, ok := leg.protectLocked(packet, header, session.generation, now)
+			if !ok {
+				buffer.Release()
+				continue
+			}
+			if isVideo {
+				leg.timePacketLocked(header, len(packet), arrived, now)
+			}
+			buffer.Truncate(len(datagram))
+			datagrams = append(datagrams, buffer)
 		}
+		target, writer := leg.target, leg.writer
 		leg.access.Unlock()
-		if !ok {
+		if len(datagrams) == 0 {
 			continue
 		}
-		leg.send(datagram, target)
-		session.forwarded.Add(1)
+		leg.send(datagrams, target, writer)
+		session.forwarded.Add(uint64(len(datagrams)))
 	}
 }
 
@@ -496,7 +519,18 @@ func (s *ServerStream) handleClientDatagram(leg *serverLeg, datagram []byte, fro
 		return
 	}
 	leg.clientReports++
-	missed := leg.latchLocked(from)
+	missed, err := leg.latchLocked(from)
+	if err != nil {
+		leg.access.Unlock()
+		s.access.Lock()
+		s.generation++
+		s.closeLaterLocked(s.detachLocked())
+		s.stats.Errors++
+		s.logger.Warn("media stream", "error", err)
+		_ = s.config.Send(ErrorMessage(ServerErrorBadConfiguration, 0))
+		s.access.Unlock()
+		return
+	}
 	out, keyframe := leg.rewriteClientRTCPLocked(packet, now)
 	leg.access.Unlock()
 	if leg != s.video {
@@ -539,10 +573,10 @@ func (s *ServerStream) housekeep() {
 			for _, leg := range s.legs() {
 				leg.access.Lock()
 				report, ok := leg.senderReportLocked(now)
-				target := leg.target
+				target, writer := leg.target, leg.writer
 				leg.access.Unlock()
 				if ok {
-					leg.send(report, target)
+					leg.send([]*buf.Buffer{buf.As(report)}, target, writer)
 				}
 			}
 			s.video.access.Lock()
