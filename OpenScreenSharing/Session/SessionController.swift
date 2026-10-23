@@ -140,8 +140,9 @@ final class SessionController: Identifiable {
     @PerceptionIgnored private var keyboardSources: [MacInputSource] = []
     @PerceptionIgnored private var keyboardSourceID: String?
     @PerceptionIgnored private var secureInput = false
-    /// secureInput for views: the Mac reports a focused secure text field, such as a password field.
-    private(set) var isPasswordFieldFocused = false
+    /// secureInput for views. The Mac reports secure input for its whole login session, not for a field: a focused
+    /// password field turns it on, but so does Terminal with Secure Keyboard Entry or an app that leaves it on.
+    private(set) var reportsSecureInput = false
     private(set) var imageSize: CGSize = .zero
     private(set) var picture = ScreenPicture.none
     private(set) var isVideo = false
@@ -632,6 +633,10 @@ final class SessionController: Identifiable {
         remoteDragActive = false
         pointerButtons = []
         pointerModifiers = []
+        // A new connection reports secure input afresh; until then the old state must not unlock the fill panel.
+        secureInput = false
+        reportsSecureInput = false
+        isShowingPasswordFill = false
         nativeTouchIDs = []
         dragID = nil
         dropTarget = nil
@@ -990,7 +995,7 @@ final class SessionController: Identifiable {
         }
         keyboardSourceID = source
         self.secureInput = secureInput
-        if isPasswordFieldFocused != secureInput { isPasswordFieldFocused = secureInput }
+        if reportsSecureInput != secureInput { reportsSecureInput = secureInput }
         rememberKeyboardSource(source)
         guard let source, let request = keyboardSourceRequest else { return }
         switch request.step {
@@ -2295,50 +2300,75 @@ final class SessionController: Identifiable {
         tapKey(key)
     }
 
-    /// Opens the fill sheet. The on-screen keyboard goes away first, so that typing in the sheet never reaches the Mac.
+    /// Opens the fill panel. The on-screen keyboard and the toolbar go away and latched modifiers are dropped, so that
+    /// typing in the panel never reaches the Mac and the next key typed for it isn't a shortcut.
     func showPasswordFill() {
         guard isControlling else { return }
         setKeyboardVisible(false)
+        if isToolbarVisible { toggleToolbar() }
+        stickyModifiers = []
         isShowingPasswordFill = true
     }
 
-    enum PasswordFillResult: Equatable {
+    /// Gives the keyboard focus back to the session screen after a field of the fill panel had it, so that a hardware
+    /// keyboard reaches the Mac again without tapping the screen.
+    func returnKeyFocusToScreen() {
+        #if os(iOS)
+        screen?.takeKeyFocus()
+        #endif
+    }
+
+    enum CredentialFillResult: Equatable {
         case typed
         case notControlling
-        case noPasswordField
-        case modifiersHeld
+        case noSecureInput
         case unsupportedCharacters
         case failed
     }
 
-    /// Types a password from the fill sheet. It goes out only as key events, never through the clipboard, and only
-    /// while the Mac reports a focused secure text field, every character is printable ASCII (a Mac password field
-    /// takes nothing else, see typeText) and no modifier is held, latched or sticky (the keys would become shortcuts).
-    /// Nothing is typed unless all checks pass, so a password is never sent in part.
-    func fillPassword(_ password: String, pressReturn: Bool) -> PasswordFillResult {
+    /// Types a password from the fill panel. It goes out only through sendText as key presses, never the clipboard,
+    /// and only while the Mac reports secure input. That is a required condition, not a proof of a password field (see
+    /// reportsSecureInput), so the panel keeps the Mac's screen in view for checking the selected field. Every
+    /// character must be printable ASCII, as a Mac password field takes nothing else (see typeText), and all keys and
+    /// modifiers are released first, so no key becomes a shortcut. Nothing is typed unless every check passes.
+    func fillPassword(_ password: String) -> CredentialFillResult {
         guard isControlling, let session else { return .notControlling }
-        guard secureInput else { return .noPasswordField }
-        guard lockedModifiers.union(pressedModifiers).union(stickyModifiers).isEmpty else { return .modifiersHeld }
+        guard secureInput else { return .noSecureInput }
         guard !password.isEmpty, password.unicodeScalars.allSatisfy({ (0x20...0x7e).contains($0.value) }) else {
             return .unsupportedCharacters
         }
-        textCursorMayHaveMoved()
+        releaseForFill()
         do {
             try session.sendText(password)
         } catch {
             return .failed
         }
-        if pressReturn { tapKey(.returnKey) }
         return .typed
     }
 
-    /// Types a user name from the fill sheet the way the on-screen keyboard types text.
-    func fillUsername(_ username: String, pressTab: Bool) -> Bool {
-        guard isControlling, !username.isEmpty else { return false }
+    /// Types a user name from the fill panel as key presses. Unlike the on-screen keyboard it never falls back to the
+    /// clipboard: where typeText would paste (an input method on the Mac, an unknown input source, characters outside
+    /// the Basic Multilingual Plane), it types nothing.
+    func fillUsername(_ username: String) -> CredentialFillResult {
+        guard isControlling, let session else { return .notControlling }
+        let scalars = username.unicodeScalars
+        let printable = scalars.allSatisfy { $0.value >= 0x20 && $0.value != 0x7f && $0.value <= 0xffff }
+        let pastes = info.dialect == .apple && (keyboardSource?.isInputMethod ?? capabilities.contains(.keyboardSource))
+        let secureTakes = !secureInput || scalars.allSatisfy { (0x20...0x7e).contains($0.value) }
+        guard !username.isEmpty, printable, !pastes, secureTakes else { return .unsupportedCharacters }
+        releaseForFill()
+        do {
+            try session.sendText(username)
+        } catch {
+            return .failed
+        }
+        return .typed
+    }
+
+    private func releaseForFill() {
+        releaseAllKeys()
+        stickyModifiers = []
         textCursorMayHaveMoved()
-        let typed = insertText(username)
-        if pressTab { tapKey(.tab) }
-        return typed
     }
 
     private func tapKey(_ key: MacKey) {

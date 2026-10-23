@@ -99,6 +99,12 @@ struct SessionView: View {
                 .overlay(alignment: .top) {
                     FloatingToolbar(controller: controller, plan: plan, dock: dock, closes: controller.isFullScreen || !hasOwnWindow, onClose: controller.close)
                 }
+                .overlay(alignment: .bottom) {
+                    // A panel, not a sheet: the Mac's screen has to stay visible and clickable while filling.
+                    if controller.isShowingPasswordFill {
+                        PasswordFillPanel(controller: controller)
+                    }
+                }
                 .onGeometryChangeCompat(for: CGFloat.self) { proxy in
                     proxy.size.width - proxy.safeAreaInsets.leading - proxy.safeAreaInsets.trailing
                 } action: { width in
@@ -138,9 +144,6 @@ struct SessionView: View {
                             controller.cancelCredentials()
                         }
                     }
-                }
-                .sheet(isPresented: $controller.isShowingPasswordFill) {
-                    PasswordFillView(controller: controller)
                 }
                 .onAppear {
                     controller.onClose = onClose

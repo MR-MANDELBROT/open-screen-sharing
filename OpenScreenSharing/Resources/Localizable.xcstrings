@@ -15919,26 +15919,6 @@
         }
       }
     },
-    "Click the password field on the Mac. The password is typed only into a field the Mac reports as a password field." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Klicke am Mac in das Passwortfeld. Das Passwort wird nur in ein Feld getippt, das der Mac als Passwortfeld meldet."
-          }
-        }
-      }
-    },
-    "Click the user name field on the Mac first." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Klicke zuerst am Mac in das Feld für den Benutzernamen."
-          }
-        }
-      }
-    },
     "Clipboard" : {
       "localizations" : {
         "ar" : {
@@ -74780,16 +74760,6 @@
         }
       }
     },
-    "Press Return After Password" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nach dem Passwort Eingabetaste drücken"
-          }
-        }
-      }
-    },
     "Privacy & Security › Developer Mode" : {
       "localizations" : {
         "ar" : {
@@ -77826,16 +77796,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "釋放滑鼠"
-          }
-        }
-      }
-    },
-    "Release the modifier keys first." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lass zuerst die Sondertasten los."
           }
         }
       }
@@ -84850,6 +84810,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「%@」的螢幕"
+          }
+        }
+      }
+    },
+    "Select the field on the Mac above, then type. Password works only while the Mac reports secure input, as in a password field." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle oben am Mac das Feld aus und tippe dann. Passwort geht nur, solange der Mac geschützte Eingabe meldet, wie in einem Passwortfeld."
           }
         }
       }
@@ -93366,16 +93336,6 @@
         }
       }
     },
-    "Some characters couldn’t be typed." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Einige Zeichen konnten nicht getippt werden."
-          }
-        }
-      }
-    },
     "Someone at the Mac needs to accept." : {
       "localizations" : {
         "ar" : {
@@ -97024,12 +96984,12 @@
         }
       }
     },
-    "Tap the key above the keyboard to fill from your passwords. Nothing is copied to the clipboard." : {
+    "Tap a field here, then the key above the keyboard to fill from your passwords. Nothing goes through the clipboard." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tippe auf den Schlüssel über der Tastatur, um aus deinen Passwörtern auszufüllen. In die Zwischenablage wird nichts kopiert."
+            "value" : "Tippe hier in ein Feld und dann auf den Schlüssel über der Tastatur, um aus deinen Passwörtern auszufüllen. Nichts geht über die Zwischenablage."
           }
         }
       }
@@ -98554,6 +98514,16 @@
         }
       }
     },
+    "The Mac doesn’t report secure input. Select the password field and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Mac meldet keine geschützte Eingabe. Wähle das Passwortfeld aus und versuche es erneut."
+          }
+        }
+      }
+    },
     "The Mac doesn’t support file transfers" : {
       "localizations" : {
         "ar" : {
@@ -98868,22 +98838,12 @@
         }
       }
     },
-    "The Mac no longer reports a password field. Click it and try again." : {
+    "The Mac reports secure input. Check that the password field is selected, then tap Password." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Der Mac meldet kein Passwortfeld mehr. Klicke hinein und versuche es erneut."
-          }
-        }
-      }
-    },
-    "The Mac reports a focused password field." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Mac meldet ein aktives Passwortfeld."
+            "value" : "Der Mac meldet geschützte Eingabe. Prüfe, dass das Passwortfeld ausgewählt ist, und tippe dann auf Passwort."
           }
         }
       }
@@ -100104,6 +100064,16 @@
         }
       }
     },
+    "The keys couldn’t be sent." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Tasten konnten nicht gesendet werden."
+          }
+        }
+      }
+    },
     "The new language takes effect after you restart the app." : {
       "localizations" : {
         "ar" : {
@@ -100404,16 +100374,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新啟動 App 後才會套用新語言。"
-          }
-        }
-      }
-    },
-    "The password couldn’t be sent." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Passwort konnte nicht gesendet werden."
           }
         }
       }
@@ -103458,6 +103418,16 @@
         }
       }
     },
+    "This user name can’t be typed as key presses. Nothing was typed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Benutzername lässt sich nicht als Tastenanschläge tippen. Es wurde nichts getippt."
+          }
+        }
+      }
+    },
     "Tips" : {
       "localizations" : {
         "ar" : {
@@ -104370,16 +104340,6 @@
         }
       }
     },
-    "Type Password" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Passwort tippen"
-          }
-        }
-      }
-    },
     "Type Shortcut" : {
       "localizations" : {
         "ar" : {
@@ -104680,26 +104640,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "輸入快速鍵"
-          }
-        }
-      }
-    },
-    "Type User Name" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Benutzernamen tippen"
-          }
-        }
-      }
-    },
-    "Type User Name and Tab" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Benutzernamen und Tab tippen"
           }
         }
       }
