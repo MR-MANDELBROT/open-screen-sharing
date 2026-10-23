@@ -51,6 +51,7 @@ struct SessionView: View {
         controller.isToolbarVisible || controller.isZoomModeOn || !controller.isControlling || controller.isKeyboardVisible
             || controller.picture == .none
             || controller.isShowingResolution
+            || controller.isShowingPasswordFill
             || controller.isCustomizingToolbar
             || controller.credentialPrompt != nil || controller.alert != nil
     }
@@ -137,6 +138,9 @@ struct SessionView: View {
                             controller.cancelCredentials()
                         }
                     }
+                }
+                .sheet(isPresented: $controller.isShowingPasswordFill) {
+                    PasswordFillView(controller: controller)
                 }
                 .onAppear {
                     controller.onClose = onClose

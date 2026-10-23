@@ -30,6 +30,13 @@ struct KeyboardAccessoryBar: View {
                         group {
                             functionKeysMenu
                         }
+                        if SessionCommand.passwordFill.isOffered(by: controller) {
+                            group {
+                                key("Fill Password", systemImage: SessionCommand.passwordFill.systemImage) {
+                                    controller.showPasswordFill()
+                                }
+                            }
+                        }
                         if UIDevice.current.userInterfaceIdiom == .phone {
                             group {
                                 key("Hide Keyboard", systemImage: "keyboard.chevron.compact.down") {

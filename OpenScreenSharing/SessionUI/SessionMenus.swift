@@ -223,7 +223,7 @@ struct SessionMoreMenuContent: View {
                 if !commands.isEmpty {
                     Menu {
                         if category == .control {
-                            let local: [SessionCommand] = [.observe, .pointerLock, .nativeTouch, .keyboard]
+                            let local: [SessionCommand] = [.observe, .pointerLock, .nativeTouch, .keyboard, .passwordFill]
                             Section {
                                 items(commands.filter { local.contains($0) })
                             }
