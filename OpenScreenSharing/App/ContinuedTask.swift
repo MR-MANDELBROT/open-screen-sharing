@@ -46,11 +46,15 @@ final class ContinuedTask {
             let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: title, subtitle: subtitle)
             request.strategy = .fail
             do {
+                #if compiler(>=6.4)  // submitTaskRequest is in the iOS 27 SDK (Xcode 27)
                 if #available(iOS 27, *) {
                     try await BGTaskScheduler.shared.submitTaskRequest(request)
                 } else {
                     try BGTaskScheduler.shared.submit(request)
                 }
+                #else
+                try BGTaskScheduler.shared.submit(request)
+                #endif
             } catch {
                 Self.logger.error("Couldn't submit the background task \(identifier, privacy: .public): \(error, privacy: .public)")
             }

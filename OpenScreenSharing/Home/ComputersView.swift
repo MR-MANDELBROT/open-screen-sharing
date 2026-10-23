@@ -115,7 +115,17 @@ struct ComputersView: View {
             }
             .onDeleteCommand(perform: deleteSelection)
             #endif
-        } else if #available(iOS 27, macOS 27, *) {
+        } else {
+            cards(shown)
+        }
+    }
+
+    /// The reorder API is new in the iOS 27 and macOS 27 SDKs (Xcode 27, Swift 6.4); with an older Xcode the cards
+    /// are built without dragging to reorder.
+    @ViewBuilder
+    private func cards(_ shown: [Computer]) -> some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27, macOS 27, *) {
             cardGrid {
                 ForEach(shown) { computer in WithPerceptionTracking { card(computer) } }
                     .reorderable()
@@ -126,6 +136,11 @@ struct ComputersView: View {
                 ForEach(shown) { computer in WithPerceptionTracking { card(computer) } }
             }
         }
+        #else
+        cardGrid {
+            ForEach(shown) { computer in WithPerceptionTracking { card(computer) } }
+        }
+        #endif
     }
 
     private func cardGrid(@ViewBuilder cards: () -> some View) -> some View {
@@ -177,6 +192,7 @@ struct ComputersView: View {
         settings.computerOrder = shown.map(\.id)
     }
 
+    #if compiler(>=6.4)
     @available(iOS 27, macOS 27, *)
     private func move(_ difference: ReorderDifference<UUID, ReorderableSingleCollectionIdentifier>) {
         var shown = orderedComputers
@@ -189,6 +205,7 @@ struct ComputersView: View {
         shown.insert(contentsOf: moved, at: index)
         settings.computerOrder = shown.map(\.id)
     }
+    #endif
 
     private var gridColumns: [GridItem] {
         #if os(iOS)
