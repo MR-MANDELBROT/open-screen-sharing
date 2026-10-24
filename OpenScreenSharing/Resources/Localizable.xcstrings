@@ -39748,6 +39748,16 @@
         }
       }
     },
+    "Fill" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einsetzen"
+          }
+        }
+      }
+    },
     "Fill Password" : {
       "localizations" : {
         "de" : {
@@ -39764,6 +39774,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Passwort einsetzen …"
+          }
+        }
+      }
+    },
+    "Filling…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird eingesetzt …"
           }
         }
       }
@@ -67432,6 +67452,16 @@
         }
       }
     },
+    "Only English characters can be typed into a Mac password field, and a user name only as key presses. Nothing was typed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In ein Passwortfeld am Mac gehen nur englische Zeichen, und ein Benutzername nur als Tastendrücke. Es wurde nichts getippt."
+          }
+        }
+      }
+    },
     "Open Settings" : {
       "localizations" : {
         "ar" : {
@@ -73226,16 +73256,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "密碼欄位只能輸入英文字元"
-          }
-        }
-      }
-    },
-    "Password fields on the Mac take only English characters. Nothing was typed." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Passwortfelder am Mac akzeptieren nur englische Zeichen. Es wurde nichts getippt."
           }
         }
       }
@@ -84814,12 +84834,32 @@
         }
       }
     },
-    "Select the field on the Mac above, then type. Password works only while the Mac reports secure input, as in a password field." : {
+    "Select the empty user name field on the Mac, or the password field if the name is already there." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle oben am Mac das Feld aus und tippe dann. Passwort geht nur, solange der Mac geschützte Eingabe meldet, wie in einem Passwortfeld."
+            "value" : "Wähle am Mac das leere Namensfeld aus, oder das Passwortfeld, wenn der Name schon dasteht."
+          }
+        }
+      }
+    },
+    "Select the password field on the Mac, then tap Fill Password." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle am Mac das Passwortfeld aus und tippe dann auf „Passwort einsetzen“."
+          }
+        }
+      }
+    },
+    "Select the user name field on the Mac, then tap Fill." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle am Mac das Feld für den Benutzernamen aus und tippe dann auf „Einsetzen“."
           }
         }
       }
@@ -92728,6 +92768,16 @@
         }
       }
     },
+    "Sign In After Filling" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Danach anmelden"
+          }
+        }
+      }
+    },
     "Signing In…" : {
       "localizations" : {
         "ar" : {
@@ -96984,16 +97034,6 @@
         }
       }
     },
-    "Tap a field here, then the key above the keyboard to fill from your passwords. Nothing goes through the clipboard." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tippe hier in ein Feld und dann auf den Schlüssel über der Tastatur, um aus deinen Passwörtern auszufüllen. Nichts geht über die Zwischenablage."
-          }
-        }
-      }
-    },
     "Tap to return to Screen Sharing" : {
       "localizations" : {
         "ar" : {
@@ -98514,16 +98554,6 @@
         }
       }
     },
-    "The Mac doesn’t report secure input. Select the password field and try again." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Mac meldet keine geschützte Eingabe. Wähle das Passwortfeld aus und versuche es erneut."
-          }
-        }
-      }
-    },
     "The Mac doesn’t support file transfers" : {
       "localizations" : {
         "ar" : {
@@ -98838,12 +98868,12 @@
         }
       }
     },
-    "The Mac reports secure input. Check that the password field is selected, then tap Password." : {
+    "The Mac reports secure input. Check that the password field is selected." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Der Mac meldet geschützte Eingabe. Prüfe, dass das Passwortfeld ausgewählt ist, und tippe dann auf Passwort."
+            "value" : "Der Mac meldet geschützte Eingabe. Prüfe, dass das Passwortfeld ausgewählt ist."
           }
         }
       }
@@ -103418,16 +103448,6 @@
         }
       }
     },
-    "This user name can’t be typed as key presses. Nothing was typed." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieser Benutzername lässt sich nicht als Tastenanschläge tippen. Es wurde nichts getippt."
-          }
-        }
-      }
-    },
     "Tips" : {
       "localizations" : {
         "ar" : {
@@ -107680,6 +107700,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用者名稱"
+          }
+        }
+      }
+    },
+    "User name typed. Continue on the Mac, then tap Fill Password at the password field." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name eingesetzt. Weiter am Mac, dann am Passwortfeld auf „Passwort einsetzen“ tippen."
           }
         }
       }

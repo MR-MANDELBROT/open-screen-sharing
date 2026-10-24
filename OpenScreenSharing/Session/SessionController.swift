@@ -176,7 +176,37 @@ final class SessionController: Identifiable {
     private(set) var isClosing = false
     private(set) var dropTarget: DropTarget?
     var isShowingResolution = false
-    var isShowingPasswordFill = false
+    var isShowingPasswordFill = false {
+        didSet {
+            if !isShowingPasswordFill { fillGeneration += 1 }
+        }
+    }
+    enum PasswordFillFocus {
+        case none
+        case userName
+        case password
+    }
+
+    /// The fill panel field to focus; it changes with passwordFillFocusRequests (see showPasswordFill).
+    private(set) var passwordFillFocus = PasswordFillFocus.userName
+    private(set) var passwordFillFocusRequests = 0
+    /// fillCredentials is stepping through a sign-in form; the secure input it switches on and off doesn't open the panel.
+    @PerceptionIgnored private var isFillingCredentials = false
+    /// Changes when a fill must stop: the panel closed, the app went to the background, or the session ended.
+    @PerceptionIgnored private var fillGeneration = 0
+    /// Switches of secure input from off to on that the Mac reported in this session. The first report of a session
+    /// says nothing about a switch, so it doesn't count.
+    @PerceptionIgnored private(set) var secureInputSwitches = 0
+    @PerceptionIgnored private var secureInputKnown = false
+    /// When the app last sent a key or text to the Mac.
+    @PerceptionIgnored private var lastKeySentTime: CFTimeInterval = 0
+    /// When the last pointer press went to the Mac; a click into a field changes secure input a moment later.
+    @PerceptionIgnored private var lastPointerPressTime: CFTimeInterval = 0
+    /// When the last fillCredentials ended; the secure input its own Tab switched on can be reported after that.
+    @PerceptionIgnored private var lastFillEndTime: CFTimeInterval = 0
+    /// The last fillCredentials typed the user name, whatever happened after, and secureInputSwitches at that moment.
+    @PerceptionIgnored private(set) var fillTypedUserName = false
+    @PerceptionIgnored private(set) var fillSwitchesAtUserName = 0
     var isCustomizingToolbar = false
     let debugInfo = DebugInfoMonitor()
     @PerceptionIgnored private var transfers: [FileTransfer] = [] {
@@ -635,8 +665,10 @@ final class SessionController: Identifiable {
         pointerModifiers = []
         // A new connection reports secure input afresh; until then the old state must not unlock the fill panel.
         secureInput = false
+        secureInputKnown = false
         reportsSecureInput = false
         isShowingPasswordFill = false
+        fillGeneration += 1
         nativeTouchIDs = []
         dragID = nil
         dropTarget = nil
@@ -649,6 +681,7 @@ final class SessionController: Identifiable {
     func sceneDidEnterBackground() {
         guard !sceneInBackground else { return }
         sceneInBackground = true
+        fillGeneration += 1
         activeWhenBackgrounded = phase.isActive
         captureThumbnail()
         releaseAllKeys()
@@ -994,8 +1027,12 @@ final class SessionController: Identifiable {
             previousKeyboardSource = current
         }
         keyboardSourceID = source
+        let switchedOn = secureInputKnown && secureInput && !self.secureInput
+        secureInputKnown = true
         self.secureInput = secureInput
+        if switchedOn { secureInputSwitches += 1 }
         if reportsSecureInput != secureInput { reportsSecureInput = secureInput }
+        if switchedOn { secureInputSwitchedOn() }
         rememberKeyboardSource(source)
         guard let source, let request = keyboardSourceRequest else { return }
         switch request.step {
@@ -1848,6 +1885,7 @@ final class SessionController: Identifiable {
     private static let multiClickDistance: CGFloat = 4
 
     func press(_ button: PointerButtons, clickCount count: Int? = nil) {
+        lastPointerPressTime = CACurrentMediaTime()
         let now = CACurrentMediaTime()
         if let count {
             clickCount = count
@@ -2214,6 +2252,7 @@ final class SessionController: Identifiable {
 
     private func typeText(_ text: String) -> Bool {
         guard !text.isEmpty else { return true }
+        lastKeySentTime = CACurrentMediaTime()
         if secureInput {
             let typed = text.filter(\.isASCII)
             if !typed.isEmpty { try? session?.sendText(typed) }
@@ -2300,14 +2339,44 @@ final class SessionController: Identifiable {
         tapKey(key)
     }
 
-    /// Opens the fill panel. The on-screen keyboard and the toolbar go away and latched modifiers are dropped, so that
-    /// typing in the panel never reaches the Mac and the next key typed for it isn't a shortcut.
-    func showPasswordFill() {
+    /// Opens the fill panel, or focuses a field of the open one. With a field to focus, the on-screen keyboard and the
+    /// toolbar go away, so that typing in the panel never reaches the Mac. Latched modifiers are always dropped: the
+    /// panel's keys go out without them (typeFillKey). Opened on its own while the user types for the Mac (focus
+    /// .none), it leaves the keyboard focus where it is.
+    func showPasswordFill(focus: PasswordFillFocus = .userName) {
         guard isControlling else { return }
-        setKeyboardVisible(false)
-        if isToolbarVisible { toggleToolbar() }
         stickyModifiers = []
+        if focus != .none {
+            setKeyboardVisible(false)
+            if isToolbarVisible { toggleToolbar() }
+        }
+        passwordFillFocus = focus
+        passwordFillFocusRequests += 1
         isShowingPasswordFill = true
+    }
+
+    /// A key from the fill panel, without latched modifiers.
+    func typeFillKey(_ key: MacKey) {
+        guard isControlling else { return }
+        releaseForFill()
+        tap(key, modifiers: [])
+    }
+
+    /// Selecting a password field on the Mac switches secure input on, which opens the fill panel, as a Mac offers its
+    /// passwords in such a field. Only the switch counts, and a panel the user closed stays closed until the Mac switches
+    /// secure input off and on again. Bringing Terminal with Secure Keyboard Entry to the front switches it on too, so
+    /// the panel never claims a password field. It focuses its password field, so a password the user meant to type
+    /// for the Mac stays hidden there, and while the user types for the Mac it takes no focus at all.
+    private func secureInputSwitchedOn() {
+        #if os(iOS)
+        let now = CACurrentMediaTime()
+        guard isControlling, phase == .connected, !sceneInBackground, !isFillingCredentials, !isShowingPasswordFill,
+            now - lastFillEndTime > 2, !isCustomizingToolbar, !isShowingResolution, credentialPrompt == nil, alert == nil,
+            SessionCommand.passwordFill.isOffered(by: self)
+        else { return }
+        let typing = isKeyboardVisible || usesHardwareKeyboard || now - lastKeySentTime < 2
+        showPasswordFill(focus: typing ? .none : .password)
+        #endif
     }
 
     /// Gives the keyboard focus back to the session screen after a field of the fill panel had it, so that a hardware
@@ -2320,10 +2389,107 @@ final class SessionController: Identifiable {
 
     enum CredentialFillResult: Equatable {
         case typed
+        /// The user name, then the password after Tab switched secure input on, which a password field after the user
+        /// name field does but Terminal doesn't.
+        case typedAfterFieldChange
         case notControlling
         case noSecureInput
         case unsupportedCharacters
+        /// The user name went out, but Tab didn't switch secure input on, as on a first page that asks only for the
+        /// name, so the password didn't.
+        case passwordFieldNotReached
+        /// The panel closed, the app went to the background, or the session ended during the fill.
+        case cancelled
         case failed
+    }
+
+    /// The Mac reports secure input a moment after a click or key moves focus; reports younger than this may be missing.
+    private static let secureInputSettleTime: TimeInterval = 0.6
+
+    /// Fills a sign-in form from the field selected on the Mac, moving only forward. From a field without secure input
+    /// it types the user name there, presses Tab, and types the password only once the Mac reports that secure input
+    /// switched on after that Tab and stays on, as a password field after the user name field does. On a first page
+    /// that asks only for the name nothing switches: it stops after the name and puts focus back on the name field
+    /// with Shift-Tab, which is safe as no password is involved, so Return submits that page. From a field with secure
+    /// input it types only the password. The Mac reports secure input, not a password field (Terminal's Secure Keyboard
+    /// Entry turns it on too), so the panel asks the user to check that field. A click or key just before Fill can
+    /// still have its report on the way, so the fill first waits until that report is due. Nothing is submitted.
+    /// Closing the panel, leaving the app or the session stops it between keys.
+    func fillCredentials(userName: String, password: String) async -> CredentialFillResult {
+        fillTypedUserName = false
+        guard isControlling, session != nil else { return .notControlling }
+        guard !isFillingCredentials else { return .failed }
+        let generation = fillGeneration
+        func goesOn() -> Bool { !Task.isCancelled && generation == fillGeneration && isControlling }
+        guard goesOn() else { return .cancelled }
+        isFillingCredentials = true
+        defer {
+            isFillingCredentials = false
+            lastFillEndTime = CACurrentMediaTime()
+        }
+        let lastInput = max(lastPointerPressTime, lastKeySentTime)
+        let wait = Self.secureInputSettleTime - (CACurrentMediaTime() - lastInput)
+        if wait > 0 { try? await Task.sleep(seconds: wait) }
+        guard goesOn() else { return .cancelled }
+        if secureInput { return fillPassword(password) }
+        guard !userName.isEmpty else { return .noSecureInput }
+        guard typesAsUserName(userName), password.isEmpty || Self.typesAsPassword(password) else {
+            return .unsupportedCharacters
+        }
+        let typed = fillUserName(userName)
+        guard typed == .typed else { return typed }
+        fillTypedUserName = true
+        fillSwitchesAtUserName = secureInputSwitches
+        guard !password.isEmpty else { return .typed }
+        guard goesOn() else { return .cancelled }
+        let switches = secureInputSwitches
+        tap(.tab, modifiers: [])
+        guard await secureInputSwitchesOn(after: switches) else {
+            guard goesOn() else { return .cancelled }
+            tap(.tab, modifiers: [.shift])
+            return .passwordFieldNotReached
+        }
+        guard goesOn() else { return .cancelled }
+        let result = fillPassword(password)
+        return result == .typed ? .typedAfterFieldChange : result
+    }
+
+    /// Waits for the Mac to report that secure input switched on after the given count of switches, which arrives with
+    /// the keyboard source a moment after focus moves, and stayed on briefly with no further switch, so that a stray
+    /// on-then-off doesn't count.
+    private func secureInputSwitchesOn(after switches: Int, within timeout: TimeInterval = 2.5) async -> Bool {
+        let deadline = CACurrentMediaTime() + timeout
+        let generation = fillGeneration
+        func waiting() -> Bool {
+            !Task.isCancelled && generation == fillGeneration && isControlling && CACurrentMediaTime() < deadline
+        }
+        while waiting() {
+            if secureInputSwitches > switches, secureInput {
+                let seen = secureInputSwitches
+                try? await Task.sleep(seconds: 0.2)
+                if secureInput, secureInputSwitches == seen, !Task.isCancelled, generation == fillGeneration {
+                    return true
+                }
+            } else {
+                try? await Task.sleep(seconds: 0.05)
+            }
+        }
+        return false
+    }
+
+    /// A Mac password field takes printable ASCII only (see typeText).
+    static func typesAsPassword(_ password: String) -> Bool {
+        !password.isEmpty && password.unicodeScalars.allSatisfy { (0x20...0x7e).contains($0.value) }
+    }
+
+    /// A user name goes out as key presses only. Where typeText would paste (an input method on the Mac, an unknown
+    /// input source, characters outside the Basic Multilingual Plane), it doesn't go out at all.
+    func typesAsUserName(_ userName: String) -> Bool {
+        let scalars = userName.unicodeScalars
+        let printable = scalars.allSatisfy { $0.value >= 0x20 && $0.value != 0x7f && $0.value <= 0xffff }
+        let pastes = info.dialect == .apple && (keyboardSource?.isInputMethod ?? capabilities.contains(.keyboardSource))
+        let secureTakes = !secureInput || scalars.allSatisfy { (0x20...0x7e).contains($0.value) }
+        return !userName.isEmpty && printable && !pastes && secureTakes
     }
 
     /// Types a password from the fill panel. It goes out only through sendText as key presses, never the clipboard,
@@ -2334,9 +2500,7 @@ final class SessionController: Identifiable {
     func fillPassword(_ password: String) -> CredentialFillResult {
         guard isControlling, let session else { return .notControlling }
         guard secureInput else { return .noSecureInput }
-        guard !password.isEmpty, password.unicodeScalars.allSatisfy({ (0x20...0x7e).contains($0.value) }) else {
-            return .unsupportedCharacters
-        }
+        guard Self.typesAsPassword(password) else { return .unsupportedCharacters }
         releaseForFill()
         do {
             try session.sendText(password)
@@ -2347,18 +2511,13 @@ final class SessionController: Identifiable {
     }
 
     /// Types a user name from the fill panel as key presses. Unlike the on-screen keyboard it never falls back to the
-    /// clipboard: where typeText would paste (an input method on the Mac, an unknown input source, characters outside
-    /// the Basic Multilingual Plane), it types nothing.
-    func fillUsername(_ username: String) -> CredentialFillResult {
+    /// clipboard (see typesAsUserName).
+    func fillUserName(_ userName: String) -> CredentialFillResult {
         guard isControlling, let session else { return .notControlling }
-        let scalars = username.unicodeScalars
-        let printable = scalars.allSatisfy { $0.value >= 0x20 && $0.value != 0x7f && $0.value <= 0xffff }
-        let pastes = info.dialect == .apple && (keyboardSource?.isInputMethod ?? capabilities.contains(.keyboardSource))
-        let secureTakes = !secureInput || scalars.allSatisfy { (0x20...0x7e).contains($0.value) }
-        guard !username.isEmpty, printable, !pastes, secureTakes else { return .unsupportedCharacters }
+        guard typesAsUserName(userName) else { return .unsupportedCharacters }
         releaseForFill()
         do {
-            try session.sendText(username)
+            try session.sendText(userName)
         } catch {
             return .failed
         }
@@ -2366,6 +2525,7 @@ final class SessionController: Identifiable {
     }
 
     private func releaseForFill() {
+        lastKeySentTime = CACurrentMediaTime()
         releaseAllKeys()
         stickyModifiers = []
         textCursorMayHaveMoved()
@@ -2712,6 +2872,7 @@ final class SessionController: Identifiable {
     }
 
     private func send(_ key: MacKey, down: Bool) {
+        lastKeySentTime = CACurrentMediaTime()
         session?.sendKey(key, keyboardType: keyboardType, down: down)
     }
 
