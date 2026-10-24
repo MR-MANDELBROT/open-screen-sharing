@@ -126,6 +126,8 @@ type Client struct {
 	virtualDisplay        *virtualDisplayRequest
 	heldDisplay           []heldDisplayChange
 	hdr                   bool
+	displaysAsleep        bool
+	displaysWoke          chan struct{}
 	mediaStarted          bool
 	accessibilitySettings uint32
 	gestures              gestureState
@@ -494,6 +496,7 @@ func (c *Client) Close() error {
 		if err := c.SetMediaStream(false); err != nil {
 			c.logger.Debug("stop media stream while closing", "error", err)
 		}
+		c.awaitDisplaysWake()
 		c.mediaLifecycle.Lock()
 		c.closed.Store(true)
 		c.mediaLifecycle.Unlock()
@@ -503,6 +506,35 @@ func (c *Client) Close() error {
 		c.cancel(nil)
 	})
 	return c.writerError
+}
+
+// closeWakeTimeout bounds how long Close waits for sleeping displays to wake.
+const closeWakeTimeout = 2 * time.Second
+
+// A virtual display that sleeps while its session ends can stay behind in WindowServer. On macOS 27.0.1 26A434
+// `pmset displaysleepnow` turned display 19 off 7 ms after ScreensharingAgent created it, the viewer closed
+// 14 s later, the agent's -[SLVirtualDisplay destroy] and _CGXVirtualDisplayDestroy reported status 0, and the
+// display stayed online, sized for the viewer, until the Mac restarted (observed 2026-10-23). Close already sends
+// SetEncodings, whose handler declares user activity and wakes the displays (see startApple); when the Mac had
+// reported them asleep, closing only after it reports them awake lets the agent remove an awake display.
+func (c *Client) awaitDisplaysWake() {
+	c.access.Lock()
+	woke := c.displaysWoke
+	waits := c.displaysAsleep && woke != nil && c.virtualDisplay != nil && !c.preparing
+	c.access.Unlock()
+	if !waits {
+		return
+	}
+	c.logger.Debug("waiting for the displays to wake before closing")
+	timer := time.NewTimer(closeWakeTimeout)
+	defer timer.Stop()
+	select {
+	case <-woke:
+		c.logger.Debug("displays awake, closing")
+	case <-timer.C:
+		c.logger.Debug("displays did not wake before closing")
+	case <-c.ctx.Done():
+	}
 }
 
 func (c *Client) Abort() error {

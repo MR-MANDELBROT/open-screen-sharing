@@ -91,9 +91,24 @@ func (c *Client) receiveStatus() error {
 		c.access.Lock()
 		c.mode = ModeObserve
 		c.access.Unlock()
+	case StatusDisplaysSleep, StatusDisplaysWake:
+		c.noteDisplaysAsleep(status == StatusDisplaysSleep)
 	}
 	c.handler.StatusReceived(status)
 	return nil
+}
+
+// noteDisplaysAsleep records the Mac's display sleep for awaitDisplaysWake.
+func (c *Client) noteDisplaysAsleep(asleep bool) {
+	c.access.Lock()
+	defer c.access.Unlock()
+	c.displaysAsleep = asleep
+	if asleep && c.displaysWoke == nil {
+		c.displaysWoke = make(chan struct{})
+	} else if !asleep && c.displaysWoke != nil {
+		close(c.displaysWoke)
+		c.displaysWoke = nil
+	}
 }
 
 type KeyboardSource struct {
