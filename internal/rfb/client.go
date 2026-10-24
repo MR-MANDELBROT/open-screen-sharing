@@ -537,6 +537,20 @@ func (c *Client) awaitDisplaysWake() {
 	}
 }
 
+// WakeDisplays wakes the Mac's displays when it reported them asleep during a virtual display session, with the
+// same SetEncodings that Close sends. A hidden iOS app ends its session with Abort once its background time runs
+// out, without the wait in Close, so the app calls this when it hides.
+func (c *Client) WakeDisplays() error {
+	c.access.Lock()
+	wakes := c.displaysAsleep && c.virtualDisplay != nil && !c.preparing && !c.closed.Load()
+	c.access.Unlock()
+	if !wakes {
+		return nil
+	}
+	c.logger.Debug("waking the displays")
+	return c.send(setEncodingsMessage(c.encodings()))
+}
+
 func (c *Client) Abort() error {
 	c.abort(context.Canceled)
 	return nil

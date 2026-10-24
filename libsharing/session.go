@@ -168,8 +168,13 @@ func (r rfbRemote) apply(setup sessionSetup) {
 	}
 }
 
-func (r rfbRemote) setVisible(bool) error {
-	return nil
+// A hidden session may end with Abort when iOS suspends the app; a virtual display must not be asleep then
+// (rfb.Client.WakeDisplays).
+func (r rfbRemote) setVisible(visible bool) error {
+	if visible {
+		return nil
+	}
+	return r.WakeDisplays()
 }
 
 func (r rfbRemote) SendKeyCode(keyCode uint16, keyboardType int32, keysym uint32, down bool) error {
